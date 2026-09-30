@@ -1,4 +1,4 @@
-import { newId, createProp } from './schema.js';
+import { newId, createProp, createLayer } from './schema.js';
 
 function _clone(v) {
   return v === undefined ? undefined : structuredClone(v);
@@ -38,6 +38,32 @@ function _orderPath(parentId) {
 
 function _getOrder(doc, parentId) {
   return parentId ? (doc.layers[parentId]?.childOrder ?? []) : doc.order;
+}
+
+// 재귀적으로 layerId의 모든 자손 id를 수집
+function _getAllDescendants(doc, layerId) {
+  const result = new Set();
+  const stack = [layerId];
+  while (stack.length) {
+    const cur = stack.pop();
+    const layer = doc.layers[cur];
+    if (layer?.childOrder) {
+      for (const childId of layer.childOrder) {
+        if (!result.has(childId)) {
+          result.add(childId);
+          stack.push(childId);
+        }
+      }
+    }
+  }
+  return result;
+}
+
+// candidateId가 layerId 자신이거나 자손이면 true
+function _isDescendantOrSelf(doc, layerId, candidateId) {
+  if (candidateId === null) return false;
+  if (candidateId === layerId) return true;
+  return _getAllDescendants(doc, layerId).has(candidateId);
 }
 
 export function invertPatches(patches) {
@@ -104,7 +130,6 @@ export function applyCommand(doc, cmd) {
         const order = _getOrder(doc, parentId);
 
         if (layer.type === 'group' && layer.childOrder?.length) {
-          // Promote children to group's position in parent order
           const groupIdx = order.indexOf(id);
           const newOrder = [...order];
           newOrder.splice(groupIdx, 1, ...layer.childOrder);
@@ -127,13 +152,14 @@ export function applyCommand(doc, cmd) {
       const layer = doc.layers[id];
       if (!layer) break;
 
+      // 자기 자신 또는 자손으로 이동 금지
+      if (_isDescendantOrSelf(doc, id, parentId ?? null)) break;
+
       const oldParentId = layer.parentId ?? null;
 
-      // Remove from old parent order
       const oldOrder = _getOrder(doc, oldParentId);
       _pa(doc, patches, _orderPath(oldParentId), oldOrder.filter(i => i !== id));
 
-      // Add to new parent order (reads current state after removal above)
       const curNewOrder = [..._getOrder(doc, parentId)];
       const ins = (index !== undefined && index >= 0 && index <= curNewOrder.length) ? index : curNewOrder.length;
       curNewOrder.splice(ins, 0, id);
@@ -162,17 +188,36 @@ export function applyCommand(doc, cmd) {
       if (!prop) break;
 
       if (f !== undefined) {
+        // 키프레임 추가/수정 — value는 건드리지 않음
         const keys = [...(prop.keys ?? [])];
         const idx = keys.findIndex(k => k.f === f);
-        if (idx !== -1) keys[idx] = { ...keys[idx], v: value, e: ease };
-        else { keys.push({ f, v: value, e: ease }); keys.sort((a, b) => a.f - b.f); }
+        if (idx !== -1) keys[idx] = { ...keys[idx], v: value, ease };
+        else { keys.push({ f, v: value, ease }); keys.sort((a, b) => a.f - b.f); }
         _pa(doc, patches, [...propPath, 'keys'], keys);
-        _pa(doc, patches, [...propPath, 'value'], value);
       } else {
-        _pa(doc, patches, [...propPath, 'value'], value);
+        // 정적 값 — 키프레임이 있으면 오류
         if (prop.keys?.length) {
-          _pa(doc, patches, [...propPath, 'keys'], []);
+          throw new Error('키프레임이 있는 값은 f를 지정하거나 offsetProp을 사용');
         }
+        _pa(doc, patches, [...propPath, 'value'], value);
+        if (prop.keys?.length === 0) {
+          // 빈 배열이면 그대로 둠 (불필요한 patch 생략)
+        }
+      }
+      break;
+    }
+
+    case 'offsetProp': {
+      const { id, path: dotPath, delta } = cmd;
+      if (!doc.layers[id]) break;
+      const propPath = ['layers', id, ...dotPath.split('.')];
+      const prop = _get(doc, propPath);
+      if (!prop) break;
+      if (prop.keys?.length) {
+        const keys = prop.keys.map(k => ({ ...k, v: k.v + delta }));
+        _pa(doc, patches, [...propPath, 'keys'], keys);
+      } else {
+        _pa(doc, patches, [...propPath, 'value'], (prop.value ?? 0) + delta);
       }
       break;
     }
@@ -185,8 +230,8 @@ export function applyCommand(doc, cmd) {
       if (!prop) break;
       const keys = [...(prop.keys ?? [])];
       const idx = keys.findIndex(k => k.f === f);
-      if (idx !== -1) keys[idx] = { f, v, e: ease };
-      else { keys.push({ f, v, e: ease }); keys.sort((a, b) => a.f - b.f); }
+      if (idx !== -1) keys[idx] = { f, v, ease };
+      else { keys.push({ f, v, ease }); keys.sort((a, b) => a.f - b.f); }
       _pa(doc, patches, [...propPath, 'keys'], keys);
       break;
     }
@@ -245,32 +290,53 @@ export function applyCommand(doc, cmd) {
     case 'group': {
       const { ids } = cmd;
       if (!ids.length) break;
-      const parentId = doc.layers[ids[0]]?.parentId ?? null;
-      const parentOrder = _getOrder(doc, parentId);
-      const indices = ids.map(id => parentOrder.indexOf(id)).filter(i => i >= 0);
-      if (!indices.length) break;
-      const minIdx = Math.min(...indices);
-      const groupId = newId('lyr_');
-      const newParentOrder = parentOrder.filter(id => !ids.includes(id));
-      newParentOrder.splice(minIdx, 0, groupId);
 
-      const groupLayer = {
-        id: groupId, type: 'group', name: '그룹',
-        parentId: parentId ?? null,
-        visible: true, locked: false, blend: 'normal', opacity: 1,
-        transform: {
-          x: createProp(0), y: createProp(0),
-          scale: createProp(1), rotation: createProp(0), alpha: createProp(1),
-        },
-        anchor: { x: 0.5, y: 0.5 },
-        clips: [], mask: null, adjust: null, tint: null, outline: null, exit: null,
-        childOrder: [...ids], isComponent: false,
-      };
+      // ids 중 다른 id의 자손인 것 제외
+      const allDescs = new Set();
+      for (const id of ids) {
+        for (const d of _getAllDescendants(doc, id)) allDescs.add(d);
+      }
+      const filteredIds = ids.filter(id => !allDescs.has(id) && doc.layers[id]);
+      if (!filteredIds.length) break;
+
+      // 첫 번째 id의 부모 위치에 그룹 삽입
+      const firstLayer = doc.layers[filteredIds[0]];
+      const insertParentId = firstLayer?.parentId ?? null;
+      const insertOrderBefore = [..._getOrder(doc, insertParentId)];
+      const insertIdx = insertOrderBefore.indexOf(filteredIds[0]);
+
+      // insertParentId 내에서 insertIdx 앞에 있는 filteredIds 수 (삽입 위치 보정용)
+      const removedBefore = filteredIds.filter(id => {
+        const pid = doc.layers[id]?.parentId ?? null;
+        return pid === insertParentId && insertOrderBefore.indexOf(id) < insertIdx;
+      }).length;
+
+      // 각 id를 현재 부모 order에서 제거
+      for (const id of filteredIds) {
+        const pid = doc.layers[id]?.parentId ?? null;
+        const order = _getOrder(doc, pid);
+        _pa(doc, patches, _orderPath(pid), order.filter(i => i !== id));
+      }
+
+      // 그룹 레이어 생성
+      const groupLayer = createLayer('group', {
+        name: '그룹',
+        parentId: insertParentId ?? null,
+        childOrder: [...filteredIds],
+      });
+      const groupId = groupLayer.id;
+
+      // 보정된 위치에 그룹 삽입
+      const adjustedIdx = Math.max(0, insertIdx - removedBefore);
+      const curInsertOrder = [..._getOrder(doc, insertParentId)];
+      curInsertOrder.splice(adjustedIdx, 0, groupId);
+      _pa(doc, patches, _orderPath(insertParentId), curInsertOrder);
 
       _pa(doc, patches, ['layers', groupId], groupLayer);
-      _pa(doc, patches, _orderPath(parentId), newParentOrder);
-      for (const id of ids) {
-        if (doc.layers[id]) _pa(doc, patches, ['layers', id, 'parentId'], groupId);
+
+      // 자식들의 parentId 갱신
+      for (const id of filteredIds) {
+        _pa(doc, patches, ['layers', id, 'parentId'], groupId);
       }
       break;
     }
@@ -296,21 +362,63 @@ export function applyCommand(doc, cmd) {
 
     case 'duplicateLayers': {
       const { ids } = cmd;
-      for (const id of ids) {
-        const layer = doc.layers[id];
-        if (!layer) continue;
-        const dup = structuredClone(layer);
-        dup.id = newId('lyr_');
-        dup.name = layer.name + ' 복사';
-        if (dup.clips?.length) {
-          dup.clips = dup.clips.map(c => ({ ...c, id: newId('clip_') }));
+
+      // 전체 복제 대상(원본 + 자손) id 매핑 구축
+      const idMap = new Map();
+
+      function collectIds(layerId) {
+        if (!doc.layers[layerId] || idMap.has(layerId)) return;
+        idMap.set(layerId, newId('lyr_'));
+        const l = doc.layers[layerId];
+        if (l?.childOrder) {
+          for (const childId of l.childOrder) collectIds(childId);
         }
+      }
+      for (const id of ids) collectIds(id);
+
+      // 각 레이어 복제
+      for (const [origId, newLayerId] of idMap) {
+        const orig = doc.layers[origId];
+        const dup = structuredClone(orig);
+        dup.id = newLayerId;
+
+        // 최상위 복제본에만 ' 복사' 추가
+        if (ids.includes(origId)) {
+          dup.name = orig.name + ' 복사';
+        }
+
+        // clips id 재발급 (clp_ 접두사)
+        if (dup.clips?.length) {
+          dup.clips = dup.clips.map(c => ({ ...c, id: newId('clp_') }));
+        }
+
+        // 자손의 parentId를 새 id로 교체
+        if (!ids.includes(origId) && dup.parentId && idMap.has(dup.parentId)) {
+          dup.parentId = idMap.get(dup.parentId);
+        }
+
+        // childOrder를 새 id로 교체
+        if (dup.childOrder?.length) {
+          dup.childOrder = dup.childOrder.map(cid => idMap.get(cid) ?? cid);
+        }
+
+        // mask.sourceId가 복제 범위 안을 가리키면 새 id로 교체
+        if (dup.mask?.sourceId && idMap.has(dup.mask.sourceId)) {
+          dup.mask = { ...dup.mask, sourceId: idMap.get(dup.mask.sourceId) };
+        }
+
+        _pa(doc, patches, ['layers', newLayerId], dup);
+      }
+
+      // 최상위 복제본을 원본 바로 뒤에 삽입
+      for (const id of ids) {
+        if (!idMap.has(id)) continue;
+        const layer = doc.layers[id];
         const parentId = layer.parentId ?? null;
         const order = _getOrder(doc, parentId);
         const origIdx = order.indexOf(id);
         const newOrder = [...order];
-        newOrder.splice(origIdx + 1, 0, dup.id);
-        _pa(doc, patches, ['layers', dup.id], dup);
+        newOrder.splice(origIdx + 1, 0, idMap.get(id));
         _pa(doc, patches, _orderPath(parentId), newOrder);
       }
       break;

@@ -9,7 +9,10 @@
 - import는 상대 경로 + `.js` 확장자.
 - 외부 라이브러리는 `vendor/`에 파일로 둔다. 실행 중 외부 CDN에서 코드를 받지 않는다.
   (구글 폰트 CSS만 예외)
-- 백엔드 없음. Cloudflare Pages에 폴더 그대로 정적 배포.
+- 백엔드 없음. Cloudflare Pages에 정적 배포(`npm run build`가 필요한 파일만 `dist/`로 복사).
+- 같은 코드를 나중에 Tauri 2로 포장해 윈도우 설치형 앱으로도 낸다. 브라우저 전용 기능에 기대지 않는다.
+  WebP 인코딩을 캔버스(`toBlob`/`convertToBlob`)에 맡기지 않는다(사파리 엔진은 PNG를 돌려준다).
+- GitHub Actions가 push마다 테스트를 돌린다. 테스트를 깨뜨린 채로 묶음을 끝내지 않는다.
 - 개발 서버: `npm run dev` (http-server, 5173 포트, 캐시 끔). devDependencies는 테스트·서버 도구만.
 - `src/core/`는 DOM(document, window)을 쓰지 않는다. Web Worker와 테스트에서 그대로 쓸 수 있어야 한다.
   단, 캔버스는 `OffscreenCanvas` 또는 주입받은 캔버스 생성 함수로 다룬다.
