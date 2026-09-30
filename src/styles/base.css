@@ -1,0 +1,52 @@
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  font-family: var(--font-ui);
+  font-size: var(--fs-3);
+  color: var(--text);
+  background: var(--bg);
+  line-height: 1.4;
+  -webkit-font-smoothing: antialiased;
+}
+
+button {
+  font-family: inherit;
+  font-size: var(--fs-2);
+  cursor: pointer;
+  border: 1px solid var(--btnline);
+  background: var(--btn);
+  color: var(--text);
+  border-radius: var(--r-1);
+  padding: 0 var(--sp-2);
+  height: 28px;
+  white-space: nowrap;
+  transition: background var(--dur-fast), border-color var(--dur-fast);
+}
+
+button:hover {
+  border-color: var(--dim);
+}
+
+button:active {
+  background: var(--line2);
+}
+
+button.accent {
+  background: var(--acc);
+  color: var(--onacc);
+  border-color: transparent;
+  font-weight: 600;
+}
+
+button.accent:hover {
+  filter: brightness(1.08);
+}

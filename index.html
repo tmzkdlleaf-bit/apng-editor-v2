@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="ko" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#16171a">
+  <title>코코포리아 APNG 에디터</title>
+  <!-- FOUC 방지: CSS 로드 전에 저장된 테마를 적용 -->
+  <script>
+    (function(){var t=localStorage.getItem('apng2.theme');var v=t==='light'?'light':'dark';document.documentElement.setAttribute('data-theme',v);document.querySelector('meta[name="theme-color"]').setAttribute('content',v==='light'?'#eceae6':'#16171a');})();
+  </script>
+  <link rel="icon" href="data:,">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="src/styles/tokens.css">
+  <link rel="stylesheet" href="src/styles/base.css">
+  <link rel="stylesheet" href="src/styles/shell.css">
+</head>
+<body>
+  <script type="module" src="src/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,140 @@
+#app {
+  display: grid;
+  grid-template-rows: 48px 1fr;
+  grid-template-columns: 1fr 320px;
+  grid-template-areas:
+    "topbar topbar"
+    "main   inspector";
+  height: 100vh;
+  overflow: hidden;
+}
+
+[data-region="topbar"] {
+  grid-area: topbar;
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: 0 var(--sp-3);
+  height: 48px;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.topbar-left {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  flex-shrink: 0;
+}
+
+.topbar-center {
+  flex: 1;
+}
+
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  flex-shrink: 0;
+}
+
+.app-title {
+  font-size: var(--fs-4);
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.project-name {
+  font-size: var(--fs-3);
+  color: var(--text2);
+  white-space: nowrap;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sep {
+  width: 1px;
+  height: 20px;
+  background: var(--line);
+  flex-shrink: 0;
+}
+
+#main-area {
+  grid-area: main;
+  display: grid;
+  grid-template-rows: 1fr var(--timeline-height, 340px);
+  overflow: hidden;
+}
+
+[data-region="canvas"] {
+  background: var(--stage);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--faint);
+  font-size: var(--fs-2);
+}
+
+[data-region="timeline"] {
+  background: var(--tl);
+  border-top: 1px solid var(--line);
+  overflow: hidden;
+  display: grid;
+  grid-template-rows: 40px 1fr;
+  min-height: 200px;
+  max-height: 600px;
+}
+
+.timeline-head {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: 0 var(--sp-3);
+  border-bottom: 1px solid var(--line);
+  background: var(--tl);
+  flex-shrink: 0;
+}
+
+.timeline-body {
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  overflow: hidden;
+}
+
+.timeline-layers {
+  border-right: 1px solid var(--line);
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.timeline-tracks {
+  overflow: auto;
+}
+
+[data-region="inspector"] {
+  grid-area: inspector;
+  background: var(--panel);
+  border-left: 1px solid var(--line);
+  overflow-y: auto;
+}
+
+.resize-handle {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 4px;
+  cursor: ns-resize;
+  background: transparent;
+  z-index: 10;
+}
+
+.resize-handle:hover,
+.resize-handle.dragging {
+  background: var(--acc);
+  opacity: 0.5;
+}
