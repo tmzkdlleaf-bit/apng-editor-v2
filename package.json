@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "http-server . -p 5173 -c-1 --cors",
     "test": "playwright test",
+    "perf": "playwright test --config=playwright.perf.config.js",
     "build": "node scripts/build.mjs"
   },
   "devDependencies": {
