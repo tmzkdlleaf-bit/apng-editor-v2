@@ -5,7 +5,11 @@ import { ease } from './easing.js';
 //   'before': 시작 전 t=0, 끝난 뒤 적용 안 함
 //   'after' : 시작 전 적용 안 함, 끝난 뒤 t=1
 //   'none'  : 구간 밖 적용 안 함
-export function evalClips(layer, f, ctx) {
+//
+// opts.seamProbe=true: 루프 클립 중 ctx.frameCount까지 걸쳐 있는 것은
+// "끝 이후" 분기에서 hold 대신 자연 연장 위상을 사용한다 (이음매 감지용).
+export function evalClips(layer, f, ctx, opts = {}) {
+  const { seamProbe = false } = opts;
   let dx = 0, dy = 0, dRotation = 0, mScale = 1, mAlpha = 1;
 
   for (const clip of (layer.clips ?? [])) {
@@ -41,8 +45,14 @@ export function evalClips(layer, f, ctx) {
         t = clipEase ? ease(clipEase, rawT) : rawT;
       }
     } else {
-      if (hold === 'both' || hold === 'after') t = 1;
-      else continue;
+      if (seamProbe && loop && ctx.frameCount !== undefined && (start + length) >= ctx.frameCount) {
+        const rawT = cycle > 0 ? ((f - start) % cycle) / cycle : 0;
+        t = clipEase ? ease(clipEase, rawT) : rawT;
+      } else if (hold === 'both' || hold === 'after') {
+        t = 1;
+      } else {
+        continue;
+      }
     }
 
     const result = motion.evaluate(t, params, { width: ctx.width, height: ctx.height });

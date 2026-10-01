@@ -351,6 +351,75 @@ test.describe('P3 - 애니메이션 평가', () => {
     expect(ok).toBe('ok');
   });
 
+  test('[P3보완] checkLoopSeam: 페이드인 clip(0~6, loop=false) → alpha 항목', async ({ page }) => {
+    const ok = await page.evaluate(async () => {
+      const { checkLoopSeam } = await import('/src/core/anim/seam.js');
+
+      // alpha 0→1 페이드인 모션 (비-루프)
+      const doc = {
+        meta: { frameCount: 24, width: 100, height: 100 },
+        camera: { x: {value:0}, y: {value:0}, zoom: {value:1} },
+        order: ['lyr_fade'],
+        layers: {
+          'lyr_fade': {
+            type: 'image', name: 'fade',
+            visible: true, locked: false, blend: 'normal', opacity: 1,
+            transform: {
+              x: {value:0}, y: {value:0}, scale: {value:1},
+              rotation: {value:0}, alpha: {value:1},
+            },
+            anchor: {x:0.5, y:0.5},
+            clips: [{
+              id: 'clp_f1', motionId: 'fade-test',
+              start: 0, length: 6, cycle: 6,
+              loop: false, gain: 1, hold: 'both', params: {},
+            }],
+            mask: null, adjust: null, tint: null, outline: null, exit: null,
+          },
+        },
+        assets: {},
+      };
+
+      const motions = new Map([['fade-test', { evaluate: (t) => ({ alpha: t }) }]]);
+      const issues = checkLoopSeam(doc, motions);
+      const hasAlpha = issues.some(i => i.prop === 'alpha');
+      return hasAlpha ? 'ok' : `alpha 항목 없음: ${JSON.stringify(issues)}`;
+    });
+    expect(ok).toBe('ok');
+  });
+
+  test('[P3보완] checkLoopSeam: 키프레임 y 0→100(f=23) → y 항목', async ({ page }) => {
+    const ok = await page.evaluate(async () => {
+      const { checkLoopSeam } = await import('/src/core/anim/seam.js');
+
+      const doc = {
+        meta: { frameCount: 24, width: 100, height: 100 },
+        camera: { x: {value:0}, y: {value:0}, zoom: {value:1} },
+        order: ['lyr_key'],
+        layers: {
+          'lyr_key': {
+            type: 'image', name: 'key',
+            visible: true, locked: false, blend: 'normal', opacity: 1,
+            transform: {
+              x: {value:0},
+              y: { value: 0, keys: [{f:0, v:0, ease:'linear'}, {f:23, v:100}] },
+              scale: {value:1}, rotation: {value:0}, alpha: {value:1},
+            },
+            anchor: {x:0.5, y:0.5},
+            clips: [],
+            mask: null, adjust: null, tint: null, outline: null, exit: null,
+          },
+        },
+        assets: {},
+      };
+
+      const issues = checkLoopSeam(doc, new Map());
+      const hasY = issues.some(i => i.prop === 'y');
+      return hasY ? 'ok' : `y 항목 없음: ${JSON.stringify(issues)}`;
+    });
+    expect(ok).toBe('ok');
+  });
+
   // ── 8. 클립 삭제 후 기본값 복원 ──
 
   test('클립 삭제 후 evalTransform이 Prop 기본값과 같다', async ({ page }) => {

@@ -2,7 +2,8 @@ import { evalProp } from './prop.js';
 import { evalClips } from './clip.js';
 
 // 레이어 자신의 변환값만 반환. 부모→자식 행렬 합성은 P4 렌더에서 처리.
-export function evalTransform(doc, layerId, f, motions) {
+// opts: evalClips에 그대로 전달 (seamProbe 등).
+export function evalTransform(doc, layerId, f, motions, opts = {}) {
   const layer = doc.layers[layerId];
   if (!layer) return { x: 0, y: 0, scale: 1, rotation: 0, alpha: 1 };
 
@@ -22,7 +23,7 @@ export function evalTransform(doc, layerId, f, motions) {
     alpha:    evalProp(transform.alpha,    f),
   };
 
-  const clips = evalClips(layer, f, ctx);
+  const clips = evalClips(layer, f, ctx, opts);
 
   return {
     x:        base.x        + clips.x,
