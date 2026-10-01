@@ -18,7 +18,6 @@ export function renderExit(ctx, src, worldTr, layer, f, width, height, pool) {
   const cols     = Math.ceil(srcW / cellSize);
   const rows     = Math.ceil(srcH / cellSize);
 
-  // 결정론적 셀 파라미터: seed + 크기가 같으면 항상 같은 배열
   const rng = createRng(seed + rows * 1000 + cols);
   const cellParams = [];
   for (let r = 0; r < rows; r++) {
@@ -38,13 +37,16 @@ export function renderExit(ctx, src, worldTr, layer, f, width, height, pool) {
   const tc  = tmp.getContext('2d');
   tc.drawImage(src, 0, 0, srcW, srcH);
 
-  const upDist = Math.min(srcW, srcH) * 1.4;
-  const totalAlpha = layer.opacity * worldTr.alpha;
+  const upDist   = Math.min(srcW, srcH) * 1.4;
+  const opacity  = layer.opacity ?? 1;
+  const wAlpha   = worldTr.alpha ?? 1;
+  const totalAlpha = opacity * wAlpha;
 
   ctx.save();
-  ctx.translate(width / 2 + worldTr.x, height / 2 + worldTr.y);
-  ctx.rotate(worldTr.rotation * Math.PI / 180);
-  ctx.scale(worldTr.scale, worldTr.scale);
+  // x, y = 캔버스 앵커 좌표 (왼쪽 위 원점)
+  ctx.translate(worldTr.x ?? 0, worldTr.y ?? 0);
+  ctx.rotate((worldTr.rotation ?? 0) * Math.PI / 180);
+  ctx.scale(worldTr.scale ?? 1, worldTr.scale ?? 1);
 
   let idx = 0;
   for (let r = 0; r < rows; r++) {

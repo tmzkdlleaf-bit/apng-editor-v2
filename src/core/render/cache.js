@@ -2,17 +2,21 @@
 const DEFAULT_MAX_PX = 64 * 1024 * 1024; // 64메가픽셀
 
 export function createCache(createCanvas, maxPx = DEFAULT_MAX_PX) {
-  // Map 순서 = 삽입/접근 순서 (앞 = 오래됨)
   const _map = new Map(); // key → { canvas, px }
   let _totalPx = 0;
-  let adjustCount = 0;   // 이번 renderFrame에서 applyAdjust를 실제로 수행한 횟수
+  let _adjustCount = 0;
+  let _lastHits = 0;
+  let _lastMisses = 0;
 
   function get(key) {
-    if (!_map.has(key)) return null;
+    if (!_map.has(key)) {
+      _lastMisses++;
+      return null;
+    }
     const entry = _map.get(key);
-    // LRU: 최근 접근을 뒤로 이동
     _map.delete(key);
     _map.set(key, entry);
+    _lastHits++;
     return entry.canvas;
   }
 
@@ -25,7 +29,6 @@ export function createCache(createCanvas, maxPx = DEFAULT_MAX_PX) {
     const px = canvas.width * canvas.height;
     _totalPx += px;
     _map.set(key, { canvas, px });
-    // 상한 초과 시 가장 오래된 항목 퇴거
     const iter = _map.keys();
     while (_totalPx > maxPx && _map.size > 1) {
       const oldest = iter.next().value;
@@ -41,7 +44,6 @@ export function createCache(createCanvas, maxPx = DEFAULT_MAX_PX) {
       _totalPx = 0;
       return;
     }
-    // 레이어 id를 포함하는 키 모두 삭제
     for (const key of [..._map.keys()]) {
       if (key.startsWith(layerId + ':')) {
         const e = _map.get(key);
@@ -51,9 +53,19 @@ export function createCache(createCanvas, maxPx = DEFAULT_MAX_PX) {
     }
   }
 
-  function resetAdjustCount() { adjustCount = 0; }
-  function incAdjustCount()   { adjustCount++;    }
-  function getAdjustCount()   { return adjustCount; }
+  function resetFrameStats() {
+    _adjustCount = 0;
+    _lastHits = 0;
+    _lastMisses = 0;
+  }
 
-  return { get, set, invalidate, resetAdjustCount, incAdjustCount, getAdjustCount };
+  function incAdjustCount() { _adjustCount++; }
+  function getAdjustCount() { return _adjustCount; }
+  function getLastHits()    { return _lastHits; }
+  function getLastMisses()  { return _lastMisses; }
+
+  // 하위 호환 유지
+  function resetAdjustCount() { _adjustCount = 0; }
+
+  return { get, set, invalidate, resetFrameStats, resetAdjustCount, incAdjustCount, getAdjustCount, getLastHits, getLastMisses };
 }

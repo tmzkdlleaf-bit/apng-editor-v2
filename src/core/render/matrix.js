@@ -21,13 +21,21 @@ export function applyToCtx(ctx, m) {
   ctx.transform(m[0], m[1], m[2], m[3], m[4], m[5]);
 }
 
-// 레이어 변환: x/y는 캔버스 중심으로부터의 오프셋
-export function layerMatrix(tr, canvasW, canvasH) {
+// ctx에 worldTr 변환 적용 (translate → rotate → scale 순)
+// x, y = 앵커 캔버스 좌표 (왼쪽 위 원점, px)
+export function applyTransform(ctx, worldTr) {
+  ctx.translate(worldTr.x ?? 0, worldTr.y ?? 0);
+  ctx.rotate((worldTr.rotation ?? 0) * Math.PI / 180);
+  ctx.scale(worldTr.scale ?? 1, worldTr.scale ?? 1);
+}
+
+// 레이어 행렬: x, y = 캔버스 앵커 좌표 (왼쪽 위 원점)
+export function layerMatrix(tr) {
   const rad = (tr.rotation ?? 0) * Math.PI / 180;
   const cos = Math.cos(rad), sin = Math.sin(rad);
   const s   = tr.scale ?? 1;
-  const tx  = canvasW / 2 + (tr.x ?? 0);
-  const ty  = canvasH / 2 + (tr.y ?? 0);
+  const tx  = tr.x ?? 0;
+  const ty  = tr.y ?? 0;
   return [s * cos, s * sin, -s * sin, s * cos, tx, ty];
 }
 
@@ -41,19 +49,19 @@ export function cameraMatrix(cam, width, height) {
   return [zoom, 0, 0, zoom, tx, ty];
 }
 
-// 부모→자식 변환 합성 (두 evalTransform 결과 합성)
-// 자식의 x/y는 부모 로컬 좌표계 기준 오프셋.
-// pivot 없음(부모 원점 = 부모의 canvas center 위치).
+// 부모→자식 변환 합성 (그룹 계층 구조용)
+// x/y는 절대 캔버스 좌표. 부모 위치를 기준으로 상대 오프셋을 계산하고
+// 부모 회전·축척을 적용한 뒤 부모 위치에 더한다.
 export function composeTransforms(parent, child) {
   const rad = (parent.rotation ?? 0) * Math.PI / 180;
   const cos = Math.cos(rad), sin = Math.sin(rad);
   const s   = parent.scale  ?? 1;
-  const cx  = child.x       ?? 0;
-  const cy  = child.y       ?? 0;
+  const rx  = (child.x  ?? 0) - (parent.x ?? 0);
+  const ry  = (child.y  ?? 0) - (parent.y ?? 0);
 
   return {
-    x:        (parent.x        ?? 0) + s * (cx * cos - cy * sin),
-    y:        (parent.y        ?? 0) + s * (cx * sin + cy * cos),
+    x:        (parent.x        ?? 0) + s * (rx * cos - ry * sin),
+    y:        (parent.y        ?? 0) + s * (rx * sin + ry * cos),
     scale:    s * (child.scale    ?? 1),
     rotation: (parent.rotation ?? 0) + (child.rotation ?? 0),
     alpha:    (parent.alpha    ?? 1) * (child.alpha    ?? 1),

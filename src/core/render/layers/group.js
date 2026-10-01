@@ -1,31 +1,20 @@
 // 그룹 레이어 렌더러 — 오프스크린 캔버스에 자식 그린 뒤 합성
-
-function _blendOp(blend) {
-  const MAP = {
-    normal:'source-over', multiply:'multiply', screen:'screen', overlay:'overlay',
-    darken:'darken', lighten:'lighten', 'color-dodge':'color-dodge', 'color-burn':'color-burn',
-    'hard-light':'hard-light', 'soft-light':'soft-light', difference:'difference', exclusion:'exclusion',
-  };
-  return MAP[blend] ?? 'source-over';
-}
+import { blendToComposite } from '../blend.js';
 
 export function renderGroupLayer(outputCtx, layer, worldTr, totalAlpha, rctx, renderLayerFn) {
   const { doc, pool, width, height, f } = rctx;
 
-  const offscreen  = pool.borrow(width, height);
-  const offCtx     = offscreen.getContext('2d');
+  const offscreen = pool.borrow(width, height);
+  const offCtx    = offscreen.getContext('2d');
 
-  // 그룹 자체 카메라 없음; 자식을 그룹의 worldTr 기준으로 합성
+  // 자식에게 넘기는 parentTr: 위치·회전·축척은 그대로, alpha=1 (불투명도는 합성할 때만 적용)
+  const childParentTr = { ...worldTr, alpha: 1 };
+
   const childOrder = layer.childOrder ?? [];
-
   for (const childId of childOrder) {
     const child = doc.layers[childId];
-    if (!child || child.hidden) continue;
-
-    // 자식 변환을 부모(worldTr)와 합성
-    // renderLayerFn은 자식의 고유 변환을 이미 rctx에서 evalTransform으로 얻으므로
-    // 여기서는 composeTransforms 결과를 parentTr로 넘긴다.
-    renderLayerFn(offCtx, child, worldTr, rctx);
+    if (!child || child.visible === false) continue;
+    renderLayerFn(offCtx, child, childParentTr, rctx);
   }
 
   // 그룹 마스크
@@ -45,10 +34,11 @@ export function renderGroupLayer(outputCtx, layer, worldTr, totalAlpha, rctx, re
     }
   }
 
+  // totalAlpha = worldTr.alpha * layer.opacity (한 번만 적용)
   outputCtx.save();
   outputCtx.setTransform(1, 0, 0, 1, 0, 0);
   outputCtx.globalAlpha = totalAlpha;
-  outputCtx.globalCompositeOperation = _blendOp(layer.blend);
+  outputCtx.globalCompositeOperation = blendToComposite(layer.blend);
   outputCtx.drawImage(offscreen, 0, 0);
   outputCtx.restore();
   pool.release(offscreen);

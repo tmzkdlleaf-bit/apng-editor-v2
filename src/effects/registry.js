@@ -1,10 +1,8 @@
-// 이펙트 레지스트리 — effectId → { name, evaluate } 맵
-const _registry = new Map();
+// 이펙트 레지스트리 — 정적 import Map (id → 모듈)
+import testDots from './test-dots.js';
 
-export function registerEffect(id, effect) {
-  _registry.set(id, effect);
-}
+export const effects = new Map([
+  [testDots.id, testDots],
+]);
 
-export function getEffects() {
-  return _registry;
-}
+// 추가 이펙트는 이 파일에 import해서 등록

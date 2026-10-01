@@ -1,14 +1,6 @@
-// 이펙트 레이어 — registry에서 evaluate를 찾아 호출
+// 이펙트 레이어 — registry에서 render를 찾아 호출
 import { createRng } from '../rng.js';
-
-function _blendOp(blend) {
-  const MAP = {
-    normal:'source-over', multiply:'multiply', screen:'screen', overlay:'overlay',
-    darken:'darken', lighten:'lighten', 'color-dodge':'color-dodge', 'color-burn':'color-burn',
-    'hard-light':'hard-light', 'soft-light':'soft-light', difference:'difference', exclusion:'exclusion',
-  };
-  return MAP[blend] ?? 'source-over';
-}
+import { blendToComposite } from '../blend.js';
 
 export function renderEffectLayer(outputCtx, layer, worldTr, totalAlpha, rctx) {
   const { effects, pool, width, height, f, frameCount } = rctx;
@@ -16,7 +8,7 @@ export function renderEffectLayer(outputCtx, layer, worldTr, totalAlpha, rctx) {
 
   const effectId = layer.effectId;
   const effect   = effects.get?.(effectId);
-  if (!effect?.evaluate) return;
+  if (!effect?.render) return;
 
   const tmp  = pool.borrow(width, height);
   const tmpC = tmp.getContext('2d');
@@ -25,12 +17,21 @@ export function renderEffectLayer(outputCtx, layer, worldTr, totalAlpha, rctx) {
   const seed = (layer.seed ?? 1) >>> 0;
   const rng  = createRng(seed);
 
-  effect.evaluate(tmpC, f, layer.params ?? {}, { width, height, frameCount, rng });
+  // 효과 계약: render(ctx, { f, frameCount, w, h, rng, sources, scale }, params)
+  effect.render(tmpC, {
+    f,
+    frameCount,
+    w: width,
+    h: height,
+    rng,
+    sources: [],
+    scale: 1,
+  }, layer.params ?? {});
 
   outputCtx.save();
   outputCtx.setTransform(1, 0, 0, 1, 0, 0);
   outputCtx.globalAlpha = totalAlpha;
-  outputCtx.globalCompositeOperation = _blendOp(layer.blend);
+  outputCtx.globalCompositeOperation = blendToComposite(layer.blend);
   outputCtx.drawImage(tmp, 0, 0);
   outputCtx.restore();
   pool.release(tmp);

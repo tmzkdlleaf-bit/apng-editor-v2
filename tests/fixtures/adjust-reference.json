@@ -1,0 +1,92 @@
+{
+  "description": "adjust.js applyLevels/applyHSL/applyCurves 기준값 (회귀 테스트용)",
+  "cases": [
+    {
+      "name": "levels: inBlack=50 inWhite=200",
+      "input": [
+        128,
+        64,
+        32,
+        255
+      ],
+      "levels": {
+        "inBlack": 50,
+        "inWhite": 200
+      },
+      "expected": [
+        133,
+        24,
+        0,
+        255
+      ]
+    },
+    {
+      "name": "hsl: saturation=-100 (완전 탈포화)",
+      "input": [
+        200,
+        100,
+        50,
+        255
+      ],
+      "hsl": {
+        "saturation": -100
+      },
+      "expected": [
+        125,
+        125,
+        125,
+        255
+      ]
+    },
+    {
+      "name": "curves: rgb 중간 밝게 (0,0)→(128,200)→(255,255)",
+      "input": [
+        100,
+        100,
+        100,
+        255
+      ],
+      "curves": {
+        "rgb": [
+          [
+            0,
+            0
+          ],
+          [
+            128,
+            200
+          ],
+          [
+            255,
+            255
+          ]
+        ]
+      },
+      "expected": [
+        156,
+        156,
+        156,
+        255
+      ]
+    },
+    {
+      "name": "levels: 투명 픽셀은 변환 안 함",
+      "input": [
+        128,
+        64,
+        32,
+        0
+      ],
+      "levels": {
+        "inBlack": 0,
+        "inWhite": 128
+      },
+      "expected": [
+        128,
+        64,
+        32,
+        0
+      ]
+    }
+  ]
+}

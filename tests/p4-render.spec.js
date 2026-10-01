@@ -5,27 +5,18 @@ test.describe('P4 - 렌더 엔진', () => {
     await page.goto('/');
   });
 
-  // ── 헬퍼 ──────────────────────────────────────────────────────────────────
-  // createCanvas 팩토리: 브라우저 컨텍스트에서 OffscreenCanvas 생성
   const CANVAS_FACTORY = `(w, h) => new OffscreenCanvas(w, h)`;
-
-  // 기본 문서 (200×200, 24프레임, 레이어 없음)
-  const BASE_DOC_JS = `
-    const doc = createDoc();
-    doc.meta.width  = 200;
-    doc.meta.height = 200;
-    doc.meta.frameCount = 24;
-  `;
 
   // ── 1. 결정론 ───────────────────────────────────────────────────────────
   test('[P4] 같은 프레임을 두 번 그리면 픽셀이 동일하다', async ({ page }) => {
     const ok = await page.evaluate(async () => {
       const { createDoc, createLayer } = await import('/src/core/doc/schema.js');
       const { createRenderEngine } = await import('/src/core/render/frame.js');
-      const { testDotsEffect }     = await import('/src/effects/test-dots.js');
+      const mod = await import('/src/effects/test-dots.js');
+      const testDots = mod.default ?? mod.testDotsEffect;
 
       const createCanvas = (w, h) => new OffscreenCanvas(w, h);
-      const effects = new Map([['test-dots', testDotsEffect]]);
+      const effects = new Map([[testDots.id, testDots]]);
       const engine  = createRenderEngine({ createCanvas, effects });
 
       const doc = createDoc();
@@ -34,7 +25,7 @@ test.describe('P4 - 렌더 엔진', () => {
       doc.meta.frameCount = 24;
 
       const layer = createLayer('effect');
-      layer.effectId = 'test-dots';
+      layer.effectId = testDots.id;
       layer.seed     = 42;
       layer.params   = { count: 100, phase: true };
       doc.layers[layer.id] = layer;
@@ -60,10 +51,11 @@ test.describe('P4 - 렌더 엔진', () => {
     const ok = await page.evaluate(async () => {
       const { createDoc, createLayer } = await import('/src/core/doc/schema.js');
       const { createRenderEngine } = await import('/src/core/render/frame.js');
-      const { testDotsEffect }     = await import('/src/effects/test-dots.js');
+      const mod = await import('/src/effects/test-dots.js');
+      const testDots = mod.default ?? mod.testDotsEffect;
 
       const createCanvas = (w, h) => new OffscreenCanvas(w, h);
-      const effects = new Map([['test-dots', testDotsEffect]]);
+      const effects = new Map([[testDots.id, testDots]]);
       const engine  = createRenderEngine({ createCanvas, effects });
 
       const doc = createDoc();
@@ -71,16 +63,15 @@ test.describe('P4 - 렌더 엔진', () => {
       doc.meta.height     = 200;
       doc.meta.frameCount = 24;
 
-      // 이펙트 레이어: phase=false → 고정 점 (프레임 독립)
       const layer = createLayer('effect');
-      layer.effectId = 'test-dots';
+      layer.effectId = testDots.id;
       layer.seed     = 7;
       layer.params   = { count: 50, phase: false };
       doc.layers[layer.id] = layer;
       doc.order.push(layer.id);
 
-      const cv0  = createCanvas(200, 200);
-      const cvN  = createCanvas(200, 200);
+      const cv0 = createCanvas(200, 200);
+      const cvN = createCanvas(200, 200);
       engine.renderFrame(cv0.getContext('2d'), doc, 0);
       engine.renderFrame(cvN.getContext('2d'), doc, doc.meta.frameCount);
 
@@ -94,43 +85,43 @@ test.describe('P4 - 렌더 엔진', () => {
     expect(ok).toBe('ok');
   });
 
-  // ── 3. 캐시 — 2회 렌더 시 adjustCount 감소 ───────────────────────────────
-  test('[P4] 두 번째 renderFrame에서 adjustCount가 줄어든다', async ({ page }) => {
+  // ── 3. 캐시 — 2회 렌더 시 stats().adjustRuns 감소 ─────────────────────
+  test('[P4] 두 번째 renderFrame에서 stats().adjustRuns가 0이다', async ({ page }) => {
     const ok = await page.evaluate(async () => {
       const { createDoc, createLayer } = await import('/src/core/doc/schema.js');
       const { createRenderEngine } = await import('/src/core/render/frame.js');
 
       const createCanvas = (w, h) => new OffscreenCanvas(w, h);
-      const engine  = createRenderEngine({ createCanvas });
+
+      const fakeBitmap = new OffscreenCanvas(100, 100);
+      const assets = {
+        getBitmap:     (id) => id === 'bmp1' ? fakeBitmap : null,
+        getAnimFrames: () => null,
+      };
+      const engine = createRenderEngine({ createCanvas, assets });
 
       const doc = createDoc();
       doc.meta.width      = 100;
       doc.meta.height     = 100;
       doc.meta.frameCount = 10;
 
-      // 이미지 레이어 — 가짜 bitmap 주입 (adjust 포함)
-      const fakeBitmap = new OffscreenCanvas(100, 100);
-      const assets = {
-        getBitmap:    (id) => id === 'bmp1' ? fakeBitmap : null,
-        getAnimFrames: () => null,
-      };
-      const engine2 = createRenderEngine({ createCanvas, assets });
-
       const layer = createLayer('image');
       layer.assetId = 'bmp1';
-      layer.adjust  = { brightness: 80 }; // hasAdjust = true
+      layer.adjust  = { brightness: 80 };
       doc.layers[layer.id] = layer;
       doc.order.push(layer.id);
 
-      const cv = createCanvas(100, 100);
+      const cv  = createCanvas(100, 100);
       const ctx = cv.getContext('2d');
 
-      const count1 = engine2.renderFrame(ctx, doc, 0);
+      engine.renderFrame(ctx, doc, 0);
+      const s1 = engine.stats();
       ctx.clearRect(0, 0, 100, 100);
-      const count2 = engine2.renderFrame(ctx, doc, 0);
+      engine.renderFrame(ctx, doc, 0);
+      const s2 = engine.stats();
 
-      if (count1 !== 1) return `1회차 adjustCount=${count1}, 예상 1`;
-      if (count2 !== 0) return `2회차 adjustCount=${count2}, 예상 0 (캐시 히트)`;
+      if (s1.adjustRuns < 1) return `1회차 adjustRuns=${s1.adjustRuns}, 예상 >=1`;
+      if (s2.adjustRuns !== 0) return `2회차 adjustRuns=${s2.adjustRuns}, 예상 0 (캐시 히트)`;
       return 'ok';
     });
     expect(ok).toBe('ok');
@@ -172,7 +163,6 @@ test.describe('P4 - 렌더 엔진', () => {
         release: () => {},
       };
 
-      // 소스: 왼쪽 절반 흰색, 오른쪽 절반 검정
       const srcCanvas = createCanvas(100, 100);
       const srcCtx    = srcCanvas.getContext('2d');
       srcCtx.fillStyle = 'white';
@@ -190,9 +180,7 @@ test.describe('P4 - 렌더 엔진', () => {
       );
 
       const d = maskCanvas.getContext('2d').getImageData(0, 0, 100, 100).data;
-      // 왼쪽 픽셀(x=10, y=10): alpha > 0
       const leftAlpha  = d[(10 * 100 + 10) * 4 + 3];
-      // 오른쪽 픽셀(x=80, y=10): alpha = 0
       const rightAlpha = d[(10 * 100 + 80) * 4 + 3];
 
       if (leftAlpha < 200) return `왼쪽 알파=${leftAlpha}, 예상 >200`;

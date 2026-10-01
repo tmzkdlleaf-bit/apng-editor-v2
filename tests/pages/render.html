@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>렌더 엔진 시험 페이지</title>
+  <style>
+    body { margin: 0; background: #1a1a1a; color: #eee; font-family: sans-serif; padding: 16px; }
+    h1 { font-size: 16px; margin: 0 0 12px; }
+    canvas { border: 1px solid #444; display: block; }
+    .controls { margin-top: 12px; display: flex; align-items: center; gap: 12px; }
+    input[type=range] { width: 300px; }
+    .info { font-size: 13px; color: #aaa; }
+    #error { color: #f88; margin-top: 8px; font-size: 13px; white-space: pre; }
+  </style>
+</head>
+<body>
+<h1>렌더 엔진 시험 — 이미지2 · 글자1 · 도형2 · 그룹1 · test-dots1 · test-float 클립1</h1>
+<canvas id="cv" width="400" height="400"></canvas>
+<div class="controls">
+  <label>프레임: <input id="slider" type="range" min="0" max="23" value="0"></label>
+  <span class="info" id="info">f=0</span>
+</div>
+<div id="error"></div>
+
+<script type="module">
+import { createDoc, createLayer } from '/src/core/doc/schema.js';
+import { createRenderEngine }     from '/src/core/render/frame.js';
+import testDots                   from '/src/effects/test-dots.js';
+import _motions                   from '/src/motions/registry.js';
+
+const errEl   = document.getElementById('error');
+const infoEl  = document.getElementById('info');
+const slider  = document.getElementById('slider');
+const canvas  = document.getElementById('cv');
+const ctx     = canvas.getContext('2d');
+const W = 400, H = 400, FRAMES = 24;
+
+function log(e) { errEl.textContent = e?.stack ?? String(e); }
+
+let engine, doc;
+
+try {
+  const effects = new Map([[testDots.id, testDots]]);
+  const createCanvas = (w, h) => new OffscreenCanvas(w, h);
+
+  // 비트맵 에셋 (코드로 생성)
+  function makeBitmap(w, h, color1, color2) {
+    const bm = new OffscreenCanvas(w, h);
+    const bc = bm.getContext('2d');
+    bc.fillStyle = color1; bc.fillRect(0, 0, w, h);
+    bc.fillStyle = color2; bc.fillRect(w*0.2, h*0.2, w*0.6, h*0.6);
+    return bm;
+  }
+  const bitmaps = {
+    img0: makeBitmap(120, 120, '#336699', '#99ccff'),
+    img1: makeBitmap(100, 80,  '#993366', '#ffaacc'),
+  };
+  const assets = {
+    getBitmap:     (id) => bitmaps[id] ?? null,
+    getAnimFrames: () => null,
+  };
+
+  engine = createRenderEngine({ createCanvas, effects, assets, motions: _motions });
+
+  doc = createDoc();
+  doc.meta.width      = W;
+  doc.meta.height     = H;
+  doc.meta.frameCount = FRAMES;
+  doc.meta.background = { type: 'solid', color: '#222233' };
+
+  // ── 이미지 2 ──────────────────────────────────────────────────────────
+  {
+    const lyr = createLayer('image');
+    lyr.assetId = 'img0';
+    lyr.transform.x.value = 100;
+    lyr.transform.y.value = 120;
+    doc.layers[lyr.id] = lyr;
+    doc.order.push(lyr.id);
+  }
+  {
+    const lyr = createLayer('image');
+    lyr.assetId = 'img1';
+    lyr.transform.x.value = 280;
+    lyr.transform.y.value = 100;
+    lyr.adjust = { brightness: 120 };
+    doc.layers[lyr.id] = lyr;
+    doc.order.push(lyr.id);
+  }
+
+  // ── 글자 1 ────────────────────────────────────────────────────────────
+  {
+    const lyr = createLayer('text');
+    lyr.text  = '안녕하세요\n렌더 시험';
+    lyr.color = '#ffee44';
+    lyr.size  = 28;
+    lyr.font  = 'sans-serif';
+    lyr.transform.x.value = W / 2;
+    lyr.transform.y.value = 300;
+    doc.layers[lyr.id] = lyr;
+    doc.order.push(lyr.id);
+  }
+
+  // ── 도형 2 ────────────────────────────────────────────────────────────
+  {
+    const lyr = createLayer('shape');
+    lyr.shape = { kind: 'rect', w: 60, h: 60, radius: 10, fill: '#44aaff', stroke: null };
+    lyr.transform.x.value = 60;
+    lyr.transform.y.value = 330;
+    doc.layers[lyr.id] = lyr;
+    doc.order.push(lyr.id);
+  }
+  {
+    const lyr = createLayer('shape');
+    lyr.shape = { kind: 'ellipse', w: 50, h: 50, fill: '#ff6644', stroke: { color: '#ffffff', width: 2 } };
+    lyr.transform.x.value = 340;
+    lyr.transform.y.value = 330;
+    doc.layers[lyr.id] = lyr;
+    doc.order.push(lyr.id);
+  }
+
+  // ── 그룹 1 (자식: 도형 + 글자) ──────────────────────────────────────
+  {
+    const child1 = createLayer('shape');
+    child1.shape = { kind: 'polygon', w: 40, h: 40, sides: 6, fill: '#44ff88', stroke: null };
+    child1.transform.x.value = 200;
+    child1.transform.y.value = 220;
+
+    const child2 = createLayer('text');
+    child2.text  = '그룹';
+    child2.color = '#ffffff';
+    child2.size  = 16;
+    child2.font  = 'sans-serif';
+    child2.transform.x.value = 200;
+    child2.transform.y.value = 240;
+
+    const group = createLayer('group');
+    group.childOrder = [child1.id, child2.id];
+    group.opacity = 0.85;
+    group.transform.x.value = 0;
+    group.transform.y.value = 0;
+
+    child1.parentId = group.id;
+    child2.parentId = group.id;
+    doc.layers[child1.id] = child1;
+    doc.layers[child2.id] = child2;
+    doc.layers[group.id]  = group;
+    doc.order.push(group.id);
+  }
+
+  // ── test-dots 1 ──────────────────────────────────────────────────────
+  {
+    const lyr = createLayer('effect');
+    lyr.effectId = testDots.id;
+    lyr.seed     = 42;
+    lyr.params   = { count: 120, radius: 3, color: '#ffffff', phase: true };
+    doc.layers[lyr.id] = lyr;
+    doc.order.push(lyr.id);
+  }
+
+  // ── test-float 클립 (도형 y에 부유 모션) ─────────────────────────────
+  {
+    const floatMotion = _motions.get('test-float');
+    if (floatMotion) {
+      const lyr = createLayer('shape');
+      lyr.shape = { kind: 'rect', w: 30, h: 30, fill: '#cc44ff', stroke: null };
+      lyr.transform.x.value = W / 2;
+      lyr.transform.y.value = 180;
+      lyr.clips = [{
+        id: 'clp_float1',
+        motionId: 'test-float',
+        start: 0,
+        length: FRAMES,
+        cycle: FRAMES,
+        params: { amplitude: 30 },
+        gain: 1,
+        ease: null,
+        hold: 'both',
+        loop: true,
+      }];
+      doc.layers[lyr.id] = lyr;
+      doc.order.push(lyr.id);
+    }
+  }
+
+  function render(f) {
+    try {
+      engine.renderFrame(ctx, doc, f);
+      const s = engine.stats();
+      infoEl.textContent = `f=${f}  adj=${s.adjustRuns}  hits=${s.cacheHits}  ${s.lastMs.toFixed(1)}ms`;
+    } catch (e) { log(e); }
+  }
+
+  slider.addEventListener('input', () => render(Number(slider.value)));
+  render(0);
+
+} catch (e) { log(e); }
+</script>
+</body>
+</html>
