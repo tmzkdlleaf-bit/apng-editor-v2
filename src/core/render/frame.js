@@ -110,13 +110,18 @@ export function createRenderEngine(opts = {}) {
       ctx.restore();
     }
 
-    const { frameCount } = doc.meta;
-
     // view 있으면 doc 좌표 (view.x, view.y)를 캔버스 (0, 0)에 대응
     // composeTransforms는 scale=1 시 camTr.x 오프셋 영향 없으므로 ctx.translate 사용
     if (view) {
       ctx.translate(-view.x * renderScale, -view.y * renderScale);
     }
+
+    const { frameCount } = doc.meta;
+
+    // scope=full 이펙트·마스크·퇴장 효과 등 전체 캔버스 중간체는 문서 전체 크기를 써야 함
+    // rctx.docWidth/docHeight = doc.meta.width/height × renderScale
+    const docWidth  = Math.max(1, Math.round(doc.meta.width  * renderScale));
+    const docHeight = Math.max(1, Math.round(doc.meta.height * renderScale));
 
     const cam   = evalCamera(doc, f);
     const camTr = {
@@ -132,6 +137,8 @@ export function createRenderEngine(opts = {}) {
       f,
       width,
       height,
+      docWidth,
+      docHeight,
       frameCount,
       motions:      motions      ?? null,
       effects:      effects      ?? null,

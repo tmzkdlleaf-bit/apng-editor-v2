@@ -4,7 +4,7 @@ import { applyTransform } from '../matrix.js';
 import { blendToComposite } from '../blend.js';
 
 export function renderEffectLayer(outputCtx, layer, worldTr, totalAlpha, rctx) {
-  const { effects, pool, width, height, f, frameCount, renderScale = 1 } = rctx;
+  const { effects, pool, docWidth, docHeight, width, height, f, frameCount, renderScale = 1 } = rctx;
   if (!effects) return;
 
   const effectId = layer.effectId;
@@ -14,11 +14,12 @@ export function renderEffectLayer(outputCtx, layer, worldTr, totalAlpha, rctx) {
   const scope = layer.scope ?? 'full';
   const box   = layer.box;
 
-  // 로컬 렌더 크기:
-  //   full  → 렌더 해상도(rctx.width×rctx.height), 위치 이동만 적용
-  //   box   → 박스 문서 좌표 그대로(worldTr.scale이 renderScale 포함), 전체 변환 적용
-  const ew = (scope === 'box' && box) ? Math.max(1, Math.round(box.w ?? width)) : width;
-  const eh = (scope === 'box' && box) ? Math.max(1, Math.round(box.h ?? height)) : height;
+  // scope=full: 문서 전체 픽셀 크기 — 점 밀도·위치가 뷰 크기에 종속되지 않아야 함
+  // scope=box : box.w/h를 문서 단위로 사용 (worldTr.scale이 renderScale 포함)
+  const fullW = docWidth  ?? width;
+  const fullH = docHeight ?? height;
+  const ew = (scope === 'box' && box) ? Math.max(1, Math.round(box.w ?? 100)) : fullW;
+  const eh = (scope === 'box' && box) ? Math.max(1, Math.round(box.h ?? 100)) : fullH;
 
   const seed = (layer.seed ?? 1) >>> 0;
   const rng  = createRng(seed);
@@ -39,16 +40,16 @@ export function renderEffectLayer(outputCtx, layer, worldTr, totalAlpha, rctx) {
   const hasMask = !!(layer.mask && rctx.renderMask);
 
   if (hasMask) {
-    const tmp  = pool.borrow(width, height);
+    // 마스크 경로: docWidth×docHeight 작업 캔버스에 내용 + 마스크를 합성 후 blit
+    // tmp는 항상 전체 문서 크기 — mask가 view 기준이 되면 위치 불일치
+    const tmp  = pool.borrow(fullW, fullH);
     const tmpC = tmp.getContext('2d');
 
     tmpC.save();
     if (scope === 'full') {
-      // full: 위치 이동만 적용 (콘텐츠가 이미 렌더 해상도이므로 스케일 제외)
       tmpC.translate(worldTr.x ?? 0, worldTr.y ?? 0);
       tmpC.drawImage(contentCanvas, 0, 0);
     } else {
-      // box: 전체 변환 적용, 중심에 그리기
       applyTransform(tmpC, worldTr);
       tmpC.drawImage(contentCanvas, -ew / 2, -eh / 2);
     }
@@ -57,7 +58,7 @@ export function renderEffectLayer(outputCtx, layer, worldTr, totalAlpha, rctx) {
     const { sourceId, mode = 'alpha', invert = false, feather = 0 } = layer.mask;
     const sourceLayer = rctx.doc.layers[sourceId];
     if (sourceLayer) {
-      const maskCanvas = rctx.renderMask(sourceLayer, f, width, height, { mode, invert, feather });
+      const maskCanvas = rctx.renderMask(sourceLayer, f, fullW, fullH, { mode, invert, feather });
       if (maskCanvas) {
         tmpC.setTransform(1, 0, 0, 1, 0, 0);
         tmpC.globalAlpha = 1;
@@ -68,15 +69,16 @@ export function renderEffectLayer(outputCtx, layer, worldTr, totalAlpha, rctx) {
       }
     }
 
+    // setTransform 리셋 없음 — outputCtx의 view 오프셋 translate 유지
+    // tmp 안에 이미 worldTr이 반영됐으므로 추가 변환 없이 (0,0)에 그림
     outputCtx.save();
-    outputCtx.setTransform(1, 0, 0, 1, 0, 0);
     outputCtx.globalAlpha = totalAlpha;
     outputCtx.globalCompositeOperation = blendToComposite(layer.blend);
     outputCtx.drawImage(tmp, 0, 0);
     outputCtx.restore();
     pool.release(tmp);
   } else {
-    // 마스크 없음: 변환 적용 후 직접 출력
+    // 마스크 없음: outputCtx에 직접 변환 후 그리기
     outputCtx.save();
     outputCtx.globalAlpha = totalAlpha;
     outputCtx.globalCompositeOperation = blendToComposite(layer.blend);

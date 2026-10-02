@@ -2,12 +2,16 @@
 import { blendToComposite } from '../blend.js';
 
 export function renderGroupLayer(outputCtx, layer, worldTr, totalAlpha, rctx, renderLayerFn) {
-  const { doc, pool, width, height, f } = rctx;
+  const { doc, pool, docWidth, docHeight, width, height, f } = rctx;
 
-  const offscreen = pool.borrow(width, height);
+  // 전체 문서 크기 오프스크린: 자식이 어떤 위치에 있어도 잘리지 않음
+  const offW = docWidth  ?? width;
+  const offH = docHeight ?? height;
+
+  const offscreen = pool.borrow(offW, offH);
   const offCtx    = offscreen.getContext('2d');
 
-  // 자식에게 넘기는 parentTr: 위치·회전·축척은 그대로, alpha=1 (불투명도는 합성할 때만 적용)
+  // 자식에게 넘기는 parentTr: 위치·회전·축척은 그대로, alpha=1
   const childParentTr = { ...worldTr, alpha: 1 };
 
   const childOrder = layer.childOrder ?? [];
@@ -22,7 +26,7 @@ export function renderGroupLayer(outputCtx, layer, worldTr, totalAlpha, rctx, re
     const { sourceId, mode = 'alpha', invert = false, feather = 0 } = layer.mask;
     const sourceLayer = doc.layers[sourceId];
     if (sourceLayer) {
-      const maskCanvas = rctx.renderMask(sourceLayer, f, width, height, { mode, invert, feather });
+      const maskCanvas = rctx.renderMask(sourceLayer, f, offW, offH, { mode, invert, feather });
       if (maskCanvas) {
         offCtx.setTransform(1, 0, 0, 1, 0, 0);
         offCtx.globalAlpha = 1;
@@ -34,9 +38,8 @@ export function renderGroupLayer(outputCtx, layer, worldTr, totalAlpha, rctx, re
     }
   }
 
-  // totalAlpha = worldTr.alpha * layer.opacity (한 번만 적용)
+  // setTransform 리셋 없음 — outputCtx의 view 오프셋 translate 유지
   outputCtx.save();
-  outputCtx.setTransform(1, 0, 0, 1, 0, 0);
   outputCtx.globalAlpha = totalAlpha;
   outputCtx.globalCompositeOperation = blendToComposite(layer.blend);
   outputCtx.drawImage(offscreen, 0, 0);

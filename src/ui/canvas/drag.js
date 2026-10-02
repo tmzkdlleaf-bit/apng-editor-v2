@@ -3,14 +3,13 @@ import { screenToDoc, localToScreen } from './transform.js';
 import { computeSnap } from './snap.js';
 import { buildPropCmd, getStartValue } from './edit-prop.js';
 
-const HANDLE_RADIUS = 10; // 핸들 감지 반경 (화면 픽셀)
-const CORNERS = [[-1, -1], [1, -1], [1, 1], [-1, 1]]; // 코너 부호 (hw, hh 곱할 값)
+const HANDLE_RADIUS = 10;
+const CORNERS = [[-1, -1], [1, -1], [1, 1], [-1, 1]];
 
 function _dist(x1, y1, x2, y2) {
   return Math.sqrt((x1 - x2) ** 2 + (y1 - y2) ** 2);
 }
 
-// 월드 델타를 부모 로컬 공간으로 역변환 (그룹 자식 이동 시)
 function _worldDeltaToLocal(ddx, ddy, parentWorldTr) {
   if (!parentWorldTr) return { dx: ddx, dy: ddy };
   const rad = -(parentWorldTr.rotation ?? 0) * Math.PI / 180;
@@ -22,7 +21,22 @@ function _worldDeltaToLocal(ddx, ddy, parentWorldTr) {
   };
 }
 
-export function initDrag(overlayCanvas, store, editorState, onSnapLines, onDraftMode = () => {}, shouldDraft = () => false) {
+// 세계 좌표 → 부모 로컬 좌표 역변환 (그룹 자식 크기 조절 위치 보정용)
+// composeTransforms: worldTr.x = parent.x + parent.scale * ((child.x - parent.x)*cos - (child.y - parent.y)*sin)
+// 역산: child.x = parent.x + (dx*cos + dy*sin) / parent.scale  where dx = world.x - parent.x
+function _worldToChildLocal(worldX, worldY, parentTr) {
+  const pRad = (parentTr.rotation ?? 0) * Math.PI / 180;
+  const pCos = Math.cos(pRad), pSin = Math.sin(pRad);
+  const pS   = parentTr.scale ?? 1;
+  const dx   = worldX - parentTr.x;
+  const dy   = worldY - parentTr.y;
+  return {
+    x: parentTr.x + (dx * pCos + dy * pSin) / pS,
+    y: parentTr.y + (dy * pCos - dx * pSin) / pS,
+  };
+}
+
+export function initDrag(overlayCanvas, store, editorState, onSnapLines, onDraftMode = () => {}, shouldDraft = () => false, assets = null) {
   let _drag = null;
   let _draftActive = false;
 
@@ -43,32 +57,28 @@ export function initDrag(overlayCanvas, store, editorState, onSnapLines, onDraft
     return screenToDoc(cx, cy, es.zoom, es.panX, es.panY, W, H, doc.meta.width, doc.meta.height);
   }
 
-  // 핸들 위치 히트 검사
   function _checkHandleHit(cx, cy) {
     const es = editorState.get();
     const { selection, f, zoom, panX, panY } = es;
 
-    // 단일 선택: 레이어 핸들
     if (selection.length === 1) {
       const id  = selection[0];
       const doc = store.get();
       const layer = doc.layers[id];
       if (!layer) return null;
       const worldTr = getDocWorldTr(doc, id, f);
-      const bounds  = getLayerBounds(layer);
+      const bounds  = getLayerBounds(layer, assets);
       if (!worldTr || !bounds) return null;
 
       const { W, H } = _cssSize();
       const { width: docW, height: docH } = doc.meta;
       const { hw, hh, ox = 0, oy = 0 } = bounds;
 
-      // 회전 핸들
       const rotH = localToScreen(ox, oy - hh - 20, worldTr, zoom, panX, panY, W, H, docW, docH);
       if (_dist(cx, cy, rotH.x, rotH.y) <= HANDLE_RADIUS) {
         return { type: 'rotate', id };
       }
 
-      // 코너 핸들
       for (let i = 0; i < 4; i++) {
         const [sx, sy] = CORNERS[i];
         const sp = localToScreen(ox + sx * hw, oy + sy * hh, worldTr, zoom, panX, panY, W, H, docW, docH);
@@ -79,7 +89,6 @@ export function initDrag(overlayCanvas, store, editorState, onSnapLines, onDraft
       return null;
     }
 
-    // 다중 선택: AABB 코너 핸들
     if (selection.length > 1) {
       const doc = store.get();
       const { f, zoom, panX, panY } = es;
@@ -91,7 +100,7 @@ export function initDrag(overlayCanvas, store, editorState, onSnapLines, onDraft
         const layer = doc.layers[id];
         if (!layer) continue;
         const worldTr = getDocWorldTr(doc, id, f);
-        const bounds  = getLayerBounds(layer);
+        const bounds  = getLayerBounds(layer, assets);
         if (!worldTr || !bounds) continue;
         const { hw, hh, ox = 0, oy = 0 } = bounds;
         for (const [lx, ly] of [[ox-hw,oy-hh],[ox+hw,oy-hh],[ox+hw,oy+hh],[ox-hw,oy+hh]]) {
@@ -133,7 +142,7 @@ export function initDrag(overlayCanvas, store, editorState, onSnapLines, onDraft
     const { f, groupEdit, selection } = es;
     const docPos = _toDoc(cx, cy);
 
-    const layerId = hitTest(doc, docPos.x, docPos.y, f, groupEdit);
+    const layerId = hitTest(doc, docPos.x, docPos.y, f, groupEdit, assets);
     if (!layerId) {
       if (!e.shiftKey) editorState.set({ selection: [] });
       return;
@@ -192,7 +201,6 @@ export function initDrag(overlayCanvas, store, editorState, onSnapLines, onDraft
     const docPos = _toDoc(cx, cy);
 
     if (handleHit.type === 'aabb-corner') {
-      // 다중 선택 AABB 크기 조절
       const { aabb, cornerIdx } = handleHit;
       const ids = es.selection;
       const oppIdx = (cornerIdx + 2) % 4;
@@ -203,8 +211,6 @@ export function initDrag(overlayCanvas, store, editorState, onSnapLines, onDraft
       const [pivotSX, pivotSY] = aabbCorners[oppIdx];
       const [dragSX, dragSY]   = aabbCorners[cornerIdx];
 
-      // pivot을 doc 좌표로 변환 (AABB가 CSS픽셀 기준)
-      const { W, H } = _cssSize();
       const pivotDoc  = _toDoc(pivotSX, pivotSY);
       const dragScrDX = dragSX - pivotSX;
       const dragScrDY = dragSY - pivotSY;
@@ -237,7 +243,7 @@ export function initDrag(overlayCanvas, store, editorState, onSnapLines, onDraft
     if (!layer) return;
 
     const worldTr = getDocWorldTr(doc, id, f);
-    const bounds  = getLayerBounds(layer);
+    const bounds  = getLayerBounds(layer, assets);
     if (!worldTr || !bounds) return;
 
     if (handleHit.type === 'rotate') {
@@ -262,13 +268,11 @@ export function initDrag(overlayCanvas, store, editorState, onSnapLines, onDraft
       const cos = Math.cos(rad), sin = Math.sin(rad);
       const s   = worldTr.scale ?? 1;
 
-      // 피벗 = 반대쪽 코너
       const pivotLx = ox + osx * hw;
       const pivotLy = oy + osy * hh;
       const pivotDocX = worldTr.x + s * (pivotLx * cos - pivotLy * sin);
       const pivotDocY = worldTr.y + s * (pivotLx * sin + pivotLy * cos);
 
-      // 드래그 코너
       const dragLx = ox + csx * hw;
       const dragLy = oy + csy * hh;
       const dragDocX = worldTr.x + s * (dragLx * cos - dragLy * sin);
@@ -278,13 +282,15 @@ export function initDrag(overlayCanvas, store, editorState, onSnapLines, onDraft
       const origCornerDY = dragDocY - pivotDocY;
       const origDist = Math.sqrt(origCornerDX ** 2 + origCornerDY ** 2) || 1;
 
-      // Shift용: 레이어 실제 중심 (anchor 오프셋 고려)
       const centerLx = ox, centerLy = oy;
       const centerDocX = worldTr.x + s * (centerLx * cos - centerLy * sin);
       const centerDocY = worldTr.y + s * (centerLx * sin + centerLy * cos);
       const centerCornerDX = dragDocX - centerDocX;
       const centerCornerDY = dragDocY - centerDocY;
       const origCenterDist = Math.sqrt(centerCornerDX ** 2 + centerCornerDY ** 2) || 1;
+
+      // 그룹 자식이면 부모 world transform 저장 (위치 보정 역변환용)
+      const parentWorldTr = layer.parentId ? getDocWorldTr(doc, layer.parentId, f) : null;
 
       _drag = {
         type: 'scale',
@@ -295,6 +301,7 @@ export function initDrag(overlayCanvas, store, editorState, onSnapLines, onDraft
         origAnchorDocX:  worldTr.x,
         origAnchorDocY:  worldTr.y,
         isRoot:          !layer.parentId,
+        parentWorldTr,
         pivotDocX, pivotDocY,
         origDist,
         dirX: origCornerDX / origDist,
@@ -352,7 +359,6 @@ export function initDrag(overlayCanvas, store, editorState, onSnapLines, onDraft
 
       let finalX, finalY;
       if (parentWorldTr) {
-        // 그룹 자식: world 좌표로 snap 후 local로 역변환
         const rad = (parentWorldTr.rotation ?? 0) * Math.PI / 180;
         const cos = Math.cos(rad), sin = Math.sin(rad);
         const sv  = parentWorldTr.scale ?? 1;
@@ -389,7 +395,7 @@ export function initDrag(overlayCanvas, store, editorState, onSnapLines, onDraft
 
   function _onScaleMove(docPos, f, autoKey, shiftKey) {
     const {
-      id, origLocalScale, origAnchorDocX, origAnchorDocY, isRoot,
+      id, origLocalScale, origAnchorDocX, origAnchorDocY, isRoot, parentWorldTr,
       pivotDocX, pivotDocY, origDist, dirX, dirY,
       centerDocX, centerDocY, origCenterDist, centerDirX, centerDirY,
     } = _drag;
@@ -411,16 +417,21 @@ export function initDrag(overlayCanvas, store, editorState, onSnapLines, onDraft
 
     if (isRoot) {
       if (shiftKey) {
-        // Shift: anchor(=레이어 중심) 고정
         cmds.push(buildPropCmd(currentDoc, id, 'transform.x', origAnchorDocX, f, autoKey));
         cmds.push(buildPropCmd(currentDoc, id, 'transform.y', origAnchorDocY, f, autoKey));
       } else {
-        // 피벗(반대쪽 코너) 기준 위치 보정
         const newAnchorX = ePivotX + k * (origAnchorDocX - ePivotX);
         const newAnchorY = ePivotY + k * (origAnchorDocY - ePivotY);
         cmds.push(buildPropCmd(currentDoc, id, 'transform.x', newAnchorX, f, autoKey));
         cmds.push(buildPropCmd(currentDoc, id, 'transform.y', newAnchorY, f, autoKey));
       }
+    } else if (parentWorldTr) {
+      // 그룹 자식: 원하는 세계 좌표 → 부모 로컬 좌표로 역변환
+      const newWorldX = shiftKey ? origAnchorDocX : (ePivotX + k * (origAnchorDocX - ePivotX));
+      const newWorldY = shiftKey ? origAnchorDocY : (ePivotY + k * (origAnchorDocY - ePivotY));
+      const localPos = _worldToChildLocal(newWorldX, newWorldY, parentWorldTr);
+      cmds.push(buildPropCmd(currentDoc, id, 'transform.x', localPos.x, f, autoKey));
+      cmds.push(buildPropCmd(currentDoc, id, 'transform.y', localPos.y, f, autoKey));
     }
 
     store.preview({ type: 'batch', cmds });
@@ -439,12 +450,11 @@ export function initDrag(overlayCanvas, store, editorState, onSnapLines, onDraft
 
     const currentDoc = store.get();
     const cmds = [];
-    for (const { id, scale: origScale, x: origX, y: origY, worldTr } of origScales) {
+    for (const { id, scale: origScale, x: origX, y: origY } of origScales) {
       const layer = currentDoc.layers[id];
       if (!layer || layer.locked) continue;
       cmds.push(buildPropCmd(currentDoc, id, 'transform.scale', origScale * k, f, autoKey));
       if (!layer.parentId) {
-        // pivot을 doc 좌표로 고정
         const pivotDoc = _drag.pivotDoc;
         cmds.push(buildPropCmd(currentDoc, id, 'transform.x', pivotDoc.x + k * (origX - pivotDoc.x), f, autoKey));
         cmds.push(buildPropCmd(currentDoc, id, 'transform.y', pivotDoc.y + k * (origY - pivotDoc.y), f, autoKey));
@@ -458,7 +468,6 @@ export function initDrag(overlayCanvas, store, editorState, onSnapLines, onDraft
 
     const currentAngle = Math.atan2(docPos.y - centerDocY, docPos.x - centerDocX);
     let diff = currentAngle - _drag.lastAngle;
-    // [-π, π] 범위로 감싸 경계 넘을 때 점프 방지
     if (diff > Math.PI)  diff -= 2 * Math.PI;
     if (diff < -Math.PI) diff += 2 * Math.PI;
     _drag.lastAngle = currentAngle;

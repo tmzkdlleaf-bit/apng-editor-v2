@@ -42,6 +42,18 @@ export function createDemoDoc() {
   return doc;
 }
 
+// 프로그램으로 색칠한 100×100 캔버스 → data URL
+function _makeAssetDataUrl(bg, fg) {
+  const c = document.createElement('canvas');
+  c.width = c.height = 100;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, 100, 100);
+  ctx.fillStyle = fg;
+  ctx.fillRect(20, 20, 60, 60);
+  return c.toDataURL();
+}
+
 // P4 스타일 768×768 데모 (?demo=1) — 성능 측정 기준과 동일 구성
 // 이미지10 + 글자3 + effect3
 export function createLargeDemo() {
@@ -56,7 +68,6 @@ export function createLargeDemo() {
   doc.layers[bg.id] = bg;
   doc.order.push(bg.id);
 
-  // 사각형, 원 (UI 조작 테스트용)
   const rect = createLayer('shape');
   rect.name = '사각형';
   rect.shape = { kind: 'rect', w: 100, h: 100, fill: '#f0a35e', stroke: null };
@@ -73,21 +84,29 @@ export function createLargeDemo() {
   doc.layers[circle.id] = circle;
   doc.order.push(circle.id);
 
-  // image 레이어 10개 (assetId 없음 — 빈 이미지로 렌더)
-  // 중심 위치: 5열×2행, 75 + col*140 / 75 + row*140 (스텝 140)
-  // 에지(±50)가 스냅 임계(docCenter=384 기준 ±12px)에 걸리지 않도록 140 스텝 사용
-  // 최대 y bound = 215+50 = 265, 사각형(250,300)·원(520,380)과 겹치지 않음
+  // 이미지 에셋: 프로그램으로 생성한 100×100 컬러 캔버스
+  const assetColors = [
+    ['#c0392b', '#e74c3c'], ['#27ae60', '#2ecc71'], ['#2980b9', '#3498db'],
+    ['#8e44ad', '#9b59b6'], ['#d35400', '#e67e22'], ['#16a085', '#1abc9c'],
+    ['#2c3e50', '#34495e'], ['#7f8c8d', '#95a5a6'], ['#c0392b', '#f39c12'],
+    ['#1a5276', '#2471a3'],
+  ];
+
+  // image 레이어 10개
+  // 중심 위치: 5열×2행, step=140
   for (let i = 0; i < 10; i++) {
     const img = createLayer('image');
     img.name = `이미지${i + 1}`;
     img.assetId = String(i);
-    img.w = 100;
-    img.h = 100;
     img.transform.x.value = 75 + (i % 5) * 140;
     img.transform.y.value = 75 + Math.floor(i / 5) * 140;
     if (i < 5) img.adjust = { brightness: 80 };
     doc.layers[img.id] = img;
     doc.order.push(img.id);
+
+    // doc.assets에 data URL 저장 (structuredClone 가능)
+    const [bgColor, fgColor] = assetColors[i];
+    doc.assets[String(i)] = { dataUrl: _makeAssetDataUrl(bgColor, fgColor) };
   }
 
   // text 레이어 3개

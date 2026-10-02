@@ -3,6 +3,9 @@ import { docToScreen, screenToDoc, docOrigin } from './transform.js';
 import { drawOverlay } from './gizmo.js';
 import { initDrag } from './drag.js';
 import { initView } from './view.js';
+import { createAssets } from '../assets.js';
+import { effects as effectsRegistry } from '../../effects/registry.js';
+import motionRegistry from '../../motions/registry.js';
 
 export function initStage(containerEl, store, editorState) {
   containerEl.innerHTML = '';
@@ -16,23 +19,36 @@ export function initStage(containerEl, store, editorState) {
   containerEl.appendChild(sceneCanvas);
   containerEl.appendChild(overlayCanvas);
 
+  // 에셋 어댑터: doc.assets → canvas 비트맵
+  const assets = createAssets(store, (_assetId) => {
+    // 비트맵 디코딩 완료 시 씬 재렌더
+    requestScene();
+  });
+
   const engine = createRenderEngine({
     createCanvas: (w, h) => {
       const c = document.createElement('canvas');
       c.width = w; c.height = h;
       return c;
     },
+    effects: effectsRegistry,
+    motions: motionRegistry,
+    assets,
   });
 
   let _sceneRenderCount = 0;
   let _sceneReq  = false;
   let _overlayReq = false;
   let _draftMode = false;
-  let _autoDraft = false;   // 마지막 렌더가 느렸을 때 자동 설정
+  let _autoDraft = false;
   let _lastRenderMs = 0;
   let _snapLines = [];
   let _offscreen  = null;
-  let _cssW = 1, _cssH = 1; // CSS 크기 (좌표 계산용)
+  let _cssW = 1, _cssH = 1;
+
+  // 드래그 지연 측정
+  let _lastPointerMoveTime = 0;
+  let _latencies = [];
 
   function _getOffscreen(w, h) {
     if (!_offscreen || _offscreen.width !== w || _offscreen.height !== h) {
@@ -59,6 +75,13 @@ export function initStage(containerEl, store, editorState) {
     _sceneReq = false;
     _sceneRenderCount++;
 
+    // 드래그 지연 측정: rAF 시작 시점과 마지막 pointermove 시점의 차이
+    if (_lastPointerMoveTime > 0) {
+      const latency = performance.now() - _lastPointerMoveTime;
+      if (latency < 200) _latencies.push(latency);
+      _lastPointerMoveTime = 0;
+    }
+
     const dpr  = window.devicePixelRatio || 1;
     const doc  = store.get();
     const es   = editorState.get();
@@ -70,10 +93,8 @@ export function initStage(containerEl, store, editorState) {
     const ctx = sceneCanvas.getContext('2d');
     ctx.clearRect(0, 0, sceneCanvas.width, sceneCanvas.height);
 
-    // 체커보드 (문서 영역만)
     _drawChecker(ctx, zoom, panX, panY, _cssW, _cssH, docW, docH, dpr);
 
-    // 가시 문서 영역 계산 (viewport culling)
     const { ox, oy } = docOrigin(zoom, panX, panY, _cssW, _cssH, docW, docH);
     const visDocX0 = Math.max(0, (-ox) / zoom);
     const visDocY0 = Math.max(0, (-oy) / zoom);
@@ -82,7 +103,6 @@ export function initStage(containerEl, store, editorState) {
 
     if (visDocX1 <= visDocX0 || visDocY1 <= visDocY0) return;
 
-    // 오프스크린 캔버스: 가시 영역만, 물리 픽셀
     const offW = Math.max(1, Math.ceil((visDocX1 - visDocX0) * zoom * dpr));
     const offH = Math.max(1, Math.ceil((visDocY1 - visDocY0) * zoom * dpr));
     const offscreen = _getOffscreen(offW, offH);
@@ -102,7 +122,6 @@ export function initStage(containerEl, store, editorState) {
     _lastRenderMs = elapsed;
     if (elapsed > 16 && !_draftMode) _autoDraft = true;
 
-    // 오프스크린을 씬 캔버스에 블릿
     const blitX = Math.max(0, ox) * dpr;
     const blitY = Math.max(0, oy) * dpr;
     ctx.drawImage(offscreen, blitX, blitY);
@@ -115,7 +134,6 @@ export function initStage(containerEl, store, editorState) {
     const dpr = window.devicePixelRatio || 1;
 
     const ctx = overlayCanvas.getContext('2d');
-    // CSS 크기 기준으로 그리기 (dpr 배율이 ctx에 적용되어 있음)
     ctx.save();
     ctx.scale(dpr, dpr);
     drawOverlay(ctx, doc, es, _snapLines, _cssW, _cssH);
@@ -147,7 +165,6 @@ export function initStage(containerEl, store, editorState) {
     ctx.restore();
   }
 
-  // 뷰 변환 헬퍼 (외부 공개 — CSS 좌표 기준)
   function _docToScreen(docX, docY) {
     const es  = editorState.get();
     const doc = store.get();
@@ -171,29 +188,30 @@ export function initStage(containerEl, store, editorState) {
     if (!on) { _autoDraft = false; requestScene(); }
   }
 
-  // 드래그 종료 시 auto-draft 해제
   function _onDraftMode(on) {
     setDraftMode(on);
     if (!on) _autoDraft = false;
   }
 
-  const drag = initDrag(overlayCanvas, store, editorState, _onSnapLines, _onDraftMode, () => _lastRenderMs > 16);
+  // pointermove 시각 기록 (capture phase, passive)
+  overlayCanvas.addEventListener('pointermove', () => {
+    _lastPointerMoveTime = performance.now();
+  }, { capture: true, passive: true });
+
+  const drag = initDrag(overlayCanvas, store, editorState, _onSnapLines, _onDraftMode, () => _lastRenderMs > 16, assets);
   const cleanupView = initView(containerEl, overlayCanvas, store, editorState);
 
-  // 스토어 변경 → scene + overlay 재렌더
   store.subscribe({ any: true }, () => {
     requestScene();
     requestOverlay();
   });
 
-  // 에디터 상태 변경
   editorState.subscribe((patch) => {
     const needsScene = 'zoom' in patch || 'panX' in patch || 'panY' in patch || 'f' in patch;
     if (needsScene) requestScene();
     requestOverlay();
   });
 
-  // ResizeObserver: 캔버스 크기 동기화 (dpr 포함)
   const ro = new ResizeObserver(entries => {
     for (const e of entries) {
       const { width, height } = e.contentRect;
@@ -204,13 +222,11 @@ export function initStage(containerEl, store, editorState) {
       _cssW = w;
       _cssH = h;
 
-      // 물리 픽셀 크기
       const pw = Math.round(w * dpr);
       const ph = Math.round(h * dpr);
       sceneCanvas.width   = pw; sceneCanvas.height  = ph;
       overlayCanvas.width  = pw; overlayCanvas.height = ph;
 
-      // CSS 표시 크기
       sceneCanvas.style.width   = w + 'px'; sceneCanvas.style.height  = h + 'px';
       overlayCanvas.style.width  = w + 'px'; overlayCanvas.style.height = h + 'px';
     }
@@ -226,12 +242,19 @@ export function initStage(containerEl, store, editorState) {
     sceneCanvas,
     overlayCanvas,
     engine,
+    assets,
     docToScreen:  _docToScreen,
     screenToDoc:  _screenToDoc,
     requestScene,
     requestOverlay,
     setDraftMode,
     isDragging: () => drag.isDragging(),
+    getLatencyStats() {
+      if (!_latencies.length) return null;
+      const avg = _latencies.reduce((a, b) => a + b, 0) / _latencies.length;
+      const max = Math.max(..._latencies);
+      return { avg, max, count: _latencies.length };
+    },
     get sceneRenderCount() { return _sceneRenderCount; },
     get offscreenCanvas() { return _offscreen; },
     destroy() {

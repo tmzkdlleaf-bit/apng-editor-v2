@@ -1,7 +1,7 @@
 import { evalTransform } from '../../core/anim/evaluate.js';
 import { composeTransforms } from '../../core/render/matrix.js';
+import { measureTextBounds } from '../../core/render/layers/text.js';
 
-// 레이어의 문서 공간 worldTr (카메라 제외, 부모 포함)
 export function getDocWorldTr(doc, layerId, f) {
   const layer = doc.layers[layerId];
   if (!layer) return null;
@@ -22,10 +22,10 @@ export function getDocWorldTr(doc, layerId, f) {
   return tr;
 }
 
-// 레이어 로컬 공간 기준 반폭/반높이 + anchor 오프셋 (ox, oy)
-// null: 선택 불가 (effect scope=full, group은 자식 재귀로 처리)
-// ox, oy: 피벗(transform 위치)에서 레이어 중심까지 오프셋 = (0.5 - anchor.x) * w
-export function getLayerBounds(layer) {
+// 레이어 반폭/반높이 + anchor 오프셋 (ox, oy)
+// assets 제공 시 image/anim 실제 비트맵 크기 사용, 없으면 null 반환 (판정 없음)
+// assets 미제공 시 기본값 사용 (기즈모 등 표시용)
+export function getLayerBounds(layer, assets) {
   const type = layer.type;
   const ax = layer.anchor?.x ?? 0.5;
   const ay = layer.anchor?.y ?? 0.5;
@@ -36,14 +36,22 @@ export function getLayerBounds(layer) {
     w = layer.shape?.w ?? 100;
     h = layer.shape?.h ?? 100;
   } else if (type === 'text') {
-    const sz = layer.size ?? 48;
-    const lines = String(layer.text ?? '').split('\n');
-    const maxLen = Math.max(1, ...lines.map(l => l.length));
-    w = sz * 1.8 * maxLen;
-    h = lines.length * sz * (layer.lineHeight ?? 1.2);
+    // renderer와 동일한 추정값 사용 (measureTextBounds export)
+    const bounds = measureTextBounds(layer);
+    w = bounds.w; h = bounds.h;
   } else if (type === 'image' || type === 'anim') {
-    w = layer.w ?? 100;
-    h = layer.h ?? 100;
+    if (assets) {
+      const bm = type === 'image'
+        ? assets.getBitmap?.(layer.assetId)
+        : assets.getAnimFrames?.(layer.assetId)?.[0];
+      if (!bm) return null;
+      w = bm.width ?? bm.naturalWidth ?? 0;
+      h = bm.height ?? bm.naturalHeight ?? 0;
+      if (!w || !h) return null;
+    } else {
+      // assets 없음 (기즈모 표시용 폴백)
+      w = 100; h = 100;
+    }
   } else if (type === 'effect') {
     if (layer.scope === 'box' && layer.box) {
       w = layer.box.w ?? 100;
@@ -65,7 +73,6 @@ export function getLayerBounds(layer) {
   };
 }
 
-// worldTr 역변환: 문서 좌표 → 레이어 로컬 좌표
 function _worldToLocal(worldX, worldY, worldTr) {
   const dx = worldX - (worldTr.x ?? 0);
   const dy = worldY - (worldTr.y ?? 0);
@@ -78,8 +85,7 @@ function _worldToLocal(worldX, worldY, worldTr) {
   };
 }
 
-// 그룹 자식 재귀 히트 검사 (그룹 id 반환하지 않고 hit 여부만)
-function _hitGroupChildren(doc, groupId, docX, docY, f) {
+function _hitGroupChildren(doc, groupId, docX, docY, f, assets) {
   const group = doc.layers[groupId];
   if (!group) return false;
   const children = group.childOrder ?? [];
@@ -89,12 +95,12 @@ function _hitGroupChildren(doc, groupId, docX, docY, f) {
     if (!child || child.visible === false) continue;
     if (child.type === 'effect' && (!child.scope || child.scope === 'full')) continue;
     if (child.type === 'group') {
-      if (_hitGroupChildren(doc, cid, docX, docY, f)) return true;
+      if (_hitGroupChildren(doc, cid, docX, docY, f, assets)) return true;
       continue;
     }
     const worldTr = getDocWorldTr(doc, cid, f);
     if (!worldTr) continue;
-    const bounds = getLayerBounds(child);
+    const bounds = getLayerBounds(child, assets);
     if (!bounds) continue;
     const local = _worldToLocal(docX, docY, worldTr);
     if (Math.abs(local.x - (bounds.ox ?? 0)) <= bounds.hw && Math.abs(local.y - (bounds.oy ?? 0)) <= bounds.hh) return true;
@@ -102,9 +108,8 @@ function _hitGroupChildren(doc, groupId, docX, docY, f) {
   return false;
 }
 
-// doc 공간의 점 (docX, docY)에서 최상위 레이어 id 반환
-// groupEditId: 그룹 편집 중이면 해당 그룹 id
-export function hitTest(doc, docX, docY, f, groupEditId = null) {
+// assets: { getBitmap, getAnimFrames } (선택) — image/anim 실제 비트맵 크기 판정용
+export function hitTest(doc, docX, docY, f, groupEditId = null, assets = null) {
   const order = groupEditId
     ? (doc.layers[groupEditId]?.childOrder ?? [])
     : doc.order;
@@ -114,18 +119,16 @@ export function hitTest(doc, docX, docY, f, groupEditId = null) {
     const layer = doc.layers[id];
     if (!layer || layer.visible === false || layer.locked) continue;
 
-    // effect scope=full: 선택 불가
     if (layer.type === 'effect' && (!layer.scope || layer.scope === 'full')) continue;
 
-    // 그룹: 자식을 재귀적으로 확인 (그룹 편집 외부에서만)
     if (layer.type === 'group' && !groupEditId) {
-      if (_hitGroupChildren(doc, id, docX, docY, f)) return id;
+      if (_hitGroupChildren(doc, id, docX, docY, f, assets)) return id;
       continue;
     }
 
     const worldTr = getDocWorldTr(doc, id, f);
     if (!worldTr) continue;
-    const bounds = getLayerBounds(layer);
+    const bounds = getLayerBounds(layer, assets);
     if (!bounds) continue;
     const local = _worldToLocal(docX, docY, worldTr);
     if (Math.abs(local.x - (bounds.ox ?? 0)) <= bounds.hw && Math.abs(local.y - (bounds.oy ?? 0)) <= bounds.hh) return id;

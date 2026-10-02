@@ -3,7 +3,6 @@ import { applyTransform } from '../matrix.js';
 import { blendToComposite } from '../blend.js';
 import { renderExit } from '../exit.js';
 
-// 외곽선: 실루엣을 여러 각도로 그려 외곽선 효과 (ctx.filter 미사용)
 function _drawOutline(ctx, sil, steps, ow) {
   for (let i = 0; i < steps; i++) {
     const angle = (i / steps) * Math.PI * 2;
@@ -11,7 +10,6 @@ function _drawOutline(ctx, sil, steps, ow) {
   }
 }
 
-// 색 덮기: source-atop으로 color를 strength만큼 합성
 function _applyTint(ctx, w, h, tint) {
   const { color, strength = 1 } = tint;
   const amt = Math.max(0, Math.min(1, strength));
@@ -41,7 +39,7 @@ function _applyMask(tmpC, maskOpts, rctx, f, w, h) {
 }
 
 export function renderImageLayer(outputCtx, layer, worldTr, totalAlpha, rctx) {
-  const { assets, pool, cache, width, height, f } = rctx;
+  const { assets, pool, cache, docWidth, docHeight, width, height, f } = rctx;
   const bitmap = assets.getBitmap?.(layer.assetId);
   if (!bitmap) return;
 
@@ -58,7 +56,6 @@ export function renderImageLayer(outputCtx, layer, worldTr, totalAlpha, rctx) {
   const ay = layer.anchor?.y ?? 0.5;
   const blur = layer.adjust?.blur ?? 0;
 
-  // 캐시 키: assetId + adjust + tint + outline + blur
   const cacheKey = `${layer.id}:img:${layer.assetId}:${JSON.stringify([layer.adjust, layer.tint, layer.outline, blur])}`;
   let contentCanvas = cache.get(cacheKey);
 
@@ -71,7 +68,6 @@ export function renderImageLayer(outputCtx, layer, worldTr, totalAlpha, rctx) {
     if (hasAdjust(layer.adjust)) {
       const id = ccx.getImageData(0, 0, bW, bH);
       applyAdjust(id, layer.adjust);
-      // blur는 출력 좌표계 기준이어야 하므로 캐시 후 별도 처리
       ccx.putImageData(id, 0, 0);
       cache.incAdjustCount();
     }
@@ -85,7 +81,6 @@ export function renderImageLayer(outputCtx, layer, worldTr, totalAlpha, rctx) {
   const hasOutline = (layer.outline?.width ?? 0) > 0;
   const hasBlur    = blur > 0;
 
-  // 단순 경로: 마스크·외곽선·블러 없음 → 직접 출력 캔버스에 그리기
   if (!hasOutline && !hasBlur && !layer.mask) {
     outputCtx.save();
     applyTransform(outputCtx, worldTr);
@@ -96,15 +91,17 @@ export function renderImageLayer(outputCtx, layer, worldTr, totalAlpha, rctx) {
     return;
   }
 
-  // 복잡한 경로: 작업 캔버스에 그린 뒤 합성
-  const tmp  = pool.borrow(width, height);
+  // 복잡한 경로: 전체 문서 크기 작업 캔버스 — view 오프셋과 독립적으로 위치 계산
+  const tmpW = docWidth  ?? width;
+  const tmpH = docHeight ?? height;
+  const tmp  = pool.borrow(tmpW, tmpH);
   const tmpC = tmp.getContext('2d');
 
   if (hasOutline) {
     const steps = Math.max(4, Math.round((layer.outline.quality ?? 2)) * 8);
     const ow    = layer.outline.width ?? 2;
     const color = layer.outline.color ?? '#ffffff';
-    const sil   = pool.borrow(width, height);
+    const sil   = pool.borrow(tmpW, tmpH);
     const silC  = sil.getContext('2d');
     silC.save();
     applyTransform(silC, worldTr);
@@ -112,7 +109,7 @@ export function renderImageLayer(outputCtx, layer, worldTr, totalAlpha, rctx) {
     silC.restore();
     silC.globalCompositeOperation = 'source-in';
     silC.fillStyle = color;
-    silC.fillRect(0, 0, width, height);
+    silC.fillRect(0, 0, tmpW, tmpH);
     silC.globalCompositeOperation = 'source-over';
     _drawOutline(tmpC, sil, steps, ow);
     pool.release(sil);
@@ -124,15 +121,15 @@ export function renderImageLayer(outputCtx, layer, worldTr, totalAlpha, rctx) {
   tmpC.restore();
 
   if (hasBlur) {
-    const id = tmpC.getImageData(0, 0, width, height);
+    const id = tmpC.getImageData(0, 0, tmpW, tmpH);
     applyBlur(id, blur * (worldTr.scale ?? 1));
     tmpC.putImageData(id, 0, 0);
   }
 
-  if (layer.mask) _applyMask(tmpC, layer.mask, rctx, f, width, height);
+  if (layer.mask) _applyMask(tmpC, layer.mask, rctx, f, tmpW, tmpH);
 
+  // setTransform 리셋 없음 — outputCtx의 view 오프셋 translate 유지
   outputCtx.save();
-  outputCtx.setTransform(1, 0, 0, 1, 0, 0);
   outputCtx.globalAlpha = totalAlpha;
   outputCtx.globalCompositeOperation = blendToComposite(layer.blend);
   outputCtx.drawImage(tmp, 0, 0);

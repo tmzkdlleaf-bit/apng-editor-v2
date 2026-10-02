@@ -2,7 +2,6 @@ import { applyAdjust, hasAdjust, applyBlur } from '../adjust.js';
 import { applyTransform } from '../matrix.js';
 import { blendToComposite } from '../blend.js';
 
-// 애니메이션 소스의 재생 프레임 계산 (old/src/core/render/layer-image.js:95 이식)
 function _animSourceFrameIndex(timing, srcFrameCount, frameIndex, frameCount) {
   const { mode = 'loop', speed = 1, offset = 0 } = timing ?? {};
   const n = Math.max(1, srcFrameCount);
@@ -12,13 +11,12 @@ function _animSourceFrameIndex(timing, srcFrameCount, frameIndex, frameCount) {
     const t = frameCount <= 1 ? 0 : frameIndex / (frameCount - 1);
     return Math.max(0, Math.min(n - 1, Math.round(t * (n - 1))));
   }
-  // loop (default)
   const idx = Math.floor(frameIndex * speed + offset);
   return ((idx % n) + n) % n;
 }
 
 export function renderAnimLayer(outputCtx, layer, worldTr, totalAlpha, rctx) {
-  const { assets, pool, cache, width, height, f, frameCount } = rctx;
+  const { assets, pool, cache, docWidth, docHeight, width, height, f, frameCount } = rctx;
   const frames = assets.getAnimFrames?.(layer.assetId);
   if (!frames || !frames.length) return;
 
@@ -77,7 +75,10 @@ export function renderAnimLayer(outputCtx, layer, worldTr, totalAlpha, rctx) {
     return;
   }
 
-  const tmp  = pool.borrow(width, height);
+  // 복잡한 경로: 전체 문서 크기 작업 캔버스
+  const tmpW = docWidth  ?? width;
+  const tmpH = docHeight ?? height;
+  const tmp  = pool.borrow(tmpW, tmpH);
   const tmpC = tmp.getContext('2d');
 
   tmpC.save();
@@ -86,7 +87,7 @@ export function renderAnimLayer(outputCtx, layer, worldTr, totalAlpha, rctx) {
   tmpC.restore();
 
   if (blur > 0) {
-    const id = tmpC.getImageData(0, 0, width, height);
+    const id = tmpC.getImageData(0, 0, tmpW, tmpH);
     applyBlur(id, blur * (worldTr.scale ?? 1));
     tmpC.putImageData(id, 0, 0);
   }
@@ -95,7 +96,7 @@ export function renderAnimLayer(outputCtx, layer, worldTr, totalAlpha, rctx) {
     const { sourceId, mode = 'alpha', invert = false, feather = 0 } = layer.mask;
     const sourceLayer = rctx.doc.layers[sourceId];
     if (sourceLayer) {
-      const maskCanvas = rctx.renderMask(sourceLayer, f, width, height, { mode, invert, feather });
+      const maskCanvas = rctx.renderMask(sourceLayer, f, tmpW, tmpH, { mode, invert, feather });
       if (maskCanvas) {
         tmpC.setTransform(1, 0, 0, 1, 0, 0);
         tmpC.globalAlpha = 1;
@@ -107,8 +108,8 @@ export function renderAnimLayer(outputCtx, layer, worldTr, totalAlpha, rctx) {
     }
   }
 
+  // setTransform 리셋 없음 — outputCtx의 view 오프셋 translate 유지
   outputCtx.save();
-  outputCtx.setTransform(1, 0, 0, 1, 0, 0);
   outputCtx.globalAlpha = totalAlpha;
   outputCtx.globalCompositeOperation = blendToComposite(layer.blend);
   outputCtx.drawImage(tmp, 0, 0);

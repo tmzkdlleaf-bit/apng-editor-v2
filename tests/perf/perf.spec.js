@@ -75,6 +75,7 @@ test.describe('P4 성능 측정', () => {
         const lyr = createLayer('effect');
         lyr.effectId = testDots.id;
         lyr.seed     = i + 1;
+        lyr.scope    = 'full';
         lyr.params   = { count: 200, phase: true };
         doc.layers[lyr.id] = lyr;
         doc.order.push(lyr.id);
@@ -129,7 +130,6 @@ test.describe('P4 성능 측정', () => {
       let baseline;
       try { baseline = JSON.parse(readFileSync(BASELINE_PATH, 'utf8')); } catch (_) { baseline = null; }
       if (baseline?.result) {
-        // userAgent 불일치 → 경고만 (실패 아님)
         if (baseline.result.userAgent && baseline.result.userAgent !== result.userAgent) {
           console.warn(`[perf] 경고: 기기 다름 — 기준(${baseline.result.userAgent.slice(0,40)}) vs 현재(${result.userAgent.slice(0,40)})`);
         }
@@ -172,5 +172,60 @@ test.describe('P4 성능 측정', () => {
 
     expect(result.offW).toBeLessThanOrEqual(result.screenW * result.dpr + 2);
     expect(result.offH).toBeLessThanOrEqual(result.screenH * result.dpr + 2);
+  });
+
+  // ── 드래그 지연 측정 ────────────────────────────────────────────────
+  test('[perf] 드래그 지연: pointer move → rendered frame', async ({ page }) => {
+    await page.goto('/?demo=1');
+    await page.waitForFunction(() => !!(window.__store && window.__stage));
+    await page.waitForTimeout(200);
+
+    // 사각형 레이어 선택
+    const selected = await page.evaluate(() => {
+      const store = window.__store;
+      const doc   = store.get();
+      const layer = Object.values(doc.layers).find(l => l.name === '사각형');
+      if (layer) {
+        window.__editorState.set({ selection: [layer.id] });
+        return true;
+      }
+      return false;
+    });
+
+    if (!selected) {
+      console.warn('[perf] 사각형 레이어 없음 — 드래그 지연 측정 건너뜀');
+      return;
+    }
+
+    // 오버레이 캔버스 위치 계산
+    const overlayBox = await page.locator('.stage-overlay').boundingBox();
+    if (!overlayBox) return;
+
+    const cx = overlayBox.x + overlayBox.width  / 2;
+    const cy = overlayBox.y + overlayBox.height / 2;
+
+    // 드래그 시뮬레이션
+    await page.mouse.move(cx, cy);
+    await page.mouse.down();
+    for (let i = 0; i < 20; i++) {
+      await page.mouse.move(cx + i * 3, cy + i * 2);
+      await page.waitForTimeout(16);
+    }
+    await page.mouse.up();
+    await page.waitForTimeout(100);
+
+    const latency = await page.evaluate(() => window.__stage.getLatencyStats());
+
+    if (latency && latency.count > 0) {
+      const table = [
+        `드래그 지연 (${latency.count}건):`,
+        `  평균 ${latency.avg.toFixed(1)}ms / 최대 ${latency.max.toFixed(1)}ms`,
+      ];
+      console.log('\n[perf]\n' + table.join('\n'));
+      // 합리적인 상한 (브라우저 환경 고려)
+      expect(latency.avg).toBeLessThan(100);
+    } else {
+      console.warn('[perf] 드래그 지연 측정 데이터 없음');
+    }
   });
 });
