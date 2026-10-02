@@ -73,11 +73,119 @@
 [data-region="canvas"] {
   background: var(--stage);
   overflow: hidden;
+  position: relative;
+}
+
+.stage-scene,
+.stage-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: block;
+}
+
+.stage-overlay {
+  touch-action: none;
+}
+
+.stage-zoom {
+  position: absolute;
+  bottom: var(--sp-2);
+  right: var(--sp-3);
+  font-size: var(--fs-1);
+  color: var(--dim);
+  pointer-events: none;
+  user-select: none;
+}
+
+.stage-tools {
+  position: absolute;
+  top: var(--sp-2);
+  left: var(--sp-2);
+  display: flex;
+  gap: var(--sp-1);
+  z-index: 10;
+}
+
+.stage-tools button {
+  width: 28px;
+  height: 28px;
+  font-size: var(--fs-2);
+  border-radius: var(--r-1);
+  background: var(--btn);
+  border: 1px solid var(--btnline);
+  color: var(--text2);
+  cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--faint);
+}
+
+.stage-tools button.active {
+  background: var(--toolon);
+  color: var(--acc);
+  border-color: var(--accline);
+}
+
+/* 숫자 칸 */
+.num-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
   font-size: var(--fs-2);
+}
+
+.num-label {
+  color: var(--dim);
+  cursor: ew-resize;
+  user-select: none;
+  padding: 0 var(--sp-1);
+}
+
+.num-label:hover {
+  color: var(--text2);
+}
+
+.num-input {
+  width: 52px;
+  background: var(--input);
+  border: 1px solid var(--btnline);
+  border-radius: var(--r-1);
+  color: var(--text);
+  font-size: var(--fs-2);
+  padding: 2px var(--sp-1);
+  text-align: right;
+}
+
+.num-input:focus {
+  outline: none;
+  border-color: var(--acc);
+}
+
+.num-unit {
+  color: var(--dim);
+  font-size: var(--fs-1);
+}
+
+.num-kf {
+  width: 8px;
+  height: 8px;
+  background: var(--acc);
+  clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);
+  cursor: pointer;
+}
+
+/* 슬라이더 칸 */
+.slider-field {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.slider-range {
+  flex: 1;
+  min-width: 80px;
+  accent-color: var(--acc);
 }
 
 [data-region="timeline"] {

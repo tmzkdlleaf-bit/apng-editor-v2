@@ -1,4 +1,6 @@
 import { toggle as toggleTheme, current as currentTheme } from './theme.js';
+import { initStage } from '../canvas/stage.js';
+import { initKeys } from '../keys.js';
 
 const TL_KEY = 'apng2.timelineHeight';
 const TL_DEFAULT = 340;
@@ -28,7 +30,7 @@ function setTlHeight(mainArea, h) {
   saveTlHeight(clamped);
 }
 
-export function init() {
+export function init(store, editorState) {
   const app = document.createElement('div');
   app.id = 'app';
 
@@ -55,7 +57,7 @@ export function init() {
     </div>
 
     <div id="main-area">
-      <div data-region="canvas">캔버스 영역</div>
+      <div data-region="canvas"></div>
 
       <div data-region="timeline" style="position:relative;">
         <div class="resize-handle" id="tl-resize"></div>
@@ -89,6 +91,10 @@ export function init() {
     themeBtn.textContent = currentTheme() === 'dark' ? '라이트' : '다크';
   });
 
+  // 되돌리기 / 다시하기 버튼
+  app.querySelector('[data-action="undo"]').addEventListener('click', () => store.undo());
+  app.querySelector('[data-action="redo"]').addEventListener('click', () => store.redo());
+
   const handle = app.querySelector('#tl-resize');
   const tlRegion = app.querySelector('[data-region="timeline"]');
 
@@ -115,4 +121,13 @@ export function init() {
     dragging = false;
     handle.classList.remove('dragging');
   });
+
+  // 캔버스 스테이지
+  const canvasRegion = app.querySelector('[data-region="canvas"]');
+  const stage = initStage(canvasRegion, store, editorState);
+
+  // 키보드 단축키
+  initKeys(store, editorState);
+
+  return stage;
 }
