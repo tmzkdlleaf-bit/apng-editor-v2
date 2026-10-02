@@ -22,7 +22,7 @@ function _drawShape(ctx, shape) {
       ctx.lineTo( w / 2,  h / 2 - ry);
       ctx.arcTo(  w / 2,  h / 2,  w / 2 - rx,  h / 2, ry);
       ctx.lineTo(-w / 2 + rx,  h / 2);
-      ctx.arcTo(-w / 2,  h / 2, -w / 2,  h / 2 - ry, rx);
+      ctx.arcTo(-w / 2,  h / 2, -w / 2,  h / 2 - ry, ry);
       ctx.lineTo(-w / 2, -h / 2 + ry);
       ctx.arcTo(-w / 2, -h / 2, -w / 2 + rx, -h / 2, rx);
       ctx.closePath();
@@ -48,7 +48,7 @@ function _drawShape(ctx, shape) {
   }
 
   if (fill && kind !== 'line') {
-    ctx.fillStyle = fill; // fill은 색 문자열
+    ctx.fillStyle = fill;
     ctx.fill();
   }
 
@@ -62,29 +62,67 @@ function _drawShape(ctx, shape) {
 }
 
 export function renderShapeLayer(outputCtx, layer, worldTr, totalAlpha, rctx) {
-  const { pool, width, height, f } = rctx;
+  const { pool, cache, width, height, f } = rctx;
+  const shape = layer.shape ?? {};
 
+  // 콘텐츠 캐시 키 (프레임 무관 — 도형 속성만)
+  const cacheKey = `${layer.id}:shape:${shape.kind}:${shape.w}:${shape.h}:${shape.fill}` +
+    `:${JSON.stringify(shape.stroke)}:${shape.radius ?? 0}:${shape.sides ?? 6}`;
+
+  let contentCanvas = cache?.get(cacheKey);
+  if (!contentCanvas) {
+    // 획 두께의 절반만큼 여백 추가 (획이 경계 밖으로 나오지 않도록)
+    const strokePad = shape.stroke?.width ? Math.ceil(shape.stroke.width / 2) + 2 : 1;
+    const cw = Math.max(1, Math.ceil((shape.w ?? 100) + strokePad * 2));
+    const ch = Math.max(1, Math.ceil((shape.h ?? 100) + strokePad * 2));
+
+    const cc  = pool.borrow(cw, ch);
+    const ccx = cc.getContext('2d');
+    ccx.save();
+    ccx.translate(cw / 2, ch / 2);
+    _drawShape(ccx, shape);
+    ccx.restore();
+
+    contentCanvas = cc;
+    cache?.set(cacheKey, contentCanvas); // 풀에 반환하지 않음 — 캐시가 소유
+  }
+
+  const cw = contentCanvas.width;
+  const ch = contentCanvas.height;
+
+  const hasMask = !!(layer.mask && rctx.renderMask);
+
+  if (!hasMask) {
+    // 마스크 없음: 직접 출력 (작업 캔버스 불필요)
+    outputCtx.save();
+    applyTransform(outputCtx, worldTr);
+    outputCtx.globalAlpha = totalAlpha;
+    outputCtx.globalCompositeOperation = blendToComposite(layer.blend);
+    outputCtx.drawImage(contentCanvas, -cw / 2, -ch / 2);
+    outputCtx.restore();
+    return;
+  }
+
+  // 마스크 있음: 작업 캔버스에 그린 뒤 합성
   const tmp  = pool.borrow(width, height);
   const tmpC = tmp.getContext('2d');
 
   tmpC.save();
   applyTransform(tmpC, worldTr);
-  _drawShape(tmpC, layer.shape ?? {});
+  tmpC.drawImage(contentCanvas, -cw / 2, -ch / 2);
   tmpC.restore();
 
-  if (layer.mask && rctx.renderMask) {
-    const { sourceId, mode = 'alpha', invert = false, feather = 0 } = layer.mask;
-    const sourceLayer = rctx.doc.layers[sourceId];
-    if (sourceLayer) {
-      const maskCanvas = rctx.renderMask(sourceLayer, f, width, height, { mode, invert, feather });
-      if (maskCanvas) {
-        tmpC.setTransform(1, 0, 0, 1, 0, 0);
-        tmpC.globalAlpha = 1;
-        tmpC.globalCompositeOperation = 'destination-in';
-        tmpC.drawImage(maskCanvas, 0, 0);
-        tmpC.globalCompositeOperation = 'source-over';
-        pool.release(maskCanvas);
-      }
+  const { sourceId, mode = 'alpha', invert = false, feather = 0 } = layer.mask;
+  const sourceLayer = rctx.doc.layers[sourceId];
+  if (sourceLayer) {
+    const maskCanvas = rctx.renderMask(sourceLayer, f, width, height, { mode, invert, feather });
+    if (maskCanvas) {
+      tmpC.setTransform(1, 0, 0, 1, 0, 0);
+      tmpC.globalAlpha = 1;
+      tmpC.globalCompositeOperation = 'destination-in';
+      tmpC.drawImage(maskCanvas, 0, 0);
+      tmpC.globalCompositeOperation = 'source-over';
+      pool.release(maskCanvas);
     }
   }
 

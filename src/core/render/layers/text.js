@@ -86,9 +86,67 @@ function _lineStartX(ctx, line, letterSpacing, align) {
   return -totalW / 2;
 }
 
-export function renderTextLayer(outputCtx, layer, worldTr, totalAlpha, rctx) {
-  const { pool, width, height, f, frameCount } = rctx;
+// 정적 텍스트용 콘텐츠 캐시 키
+function _textCacheKey(layer) {
+  return `${layer.id}:text:${layer.text}:${layer.size}:${layer.weight}:${layer.font}` +
+    `:${layer.color}:${layer.align}:${layer.lineHeight}:${layer.letterSpacing}` +
+    `:${JSON.stringify(layer.stroke)}:${JSON.stringify(layer.shadow)}`;
+}
 
+// 콘텐츠 캔버스 크기 추정 (중심에 텍스트가 들어갈 여유 크기)
+function _textContentSize(layer) {
+  const text      = String(layer.text ?? '');
+  const lines     = text.split('\n');
+  const fontSize  = layer.size ?? 48;
+  const lineH     = layer.lineHeight ?? 1.2;
+  const lSpacing  = layer.letterSpacing ?? 0;
+  const maxLen    = Math.max(1, ...lines.map(l => l.length));
+  const strokePad = layer.stroke?.width ? Math.ceil(layer.stroke.width) + 4 : 4;
+  const shadowPad = layer.shadow
+    ? Math.abs(layer.shadow.offsetX ?? 0) + Math.abs(layer.shadow.offsetY ?? 0) + 4
+    : 0;
+  const pad = strokePad + shadowPad;
+  // 문자 폭 추정: 1.8×fontSize (CJK 포함 보수적 추정)
+  const cw = Math.max(1, Math.ceil(fontSize * 1.8 * maxLen + lSpacing * maxLen + pad * 2));
+  const ch = Math.max(1, Math.ceil(lines.length * fontSize * lineH + pad * 2));
+  return { cw, ch };
+}
+
+export function renderTextLayer(outputCtx, layer, worldTr, totalAlpha, rctx) {
+  const { pool, cache, width, height, f, frameCount } = rctx;
+
+  const isStatic = !layer.reveal && !layer.charAnim;
+  const hasMask  = !!(layer.mask && rctx.renderMask);
+
+  // 정적 텍스트 + 마스크 없음: 콘텐츠 캐시 + 직접 출력 (작업 캔버스 불필요)
+  if (isStatic && !hasMask) {
+    const cacheKey = _textCacheKey(layer);
+    let contentCanvas = cache?.get(cacheKey);
+    if (!contentCanvas) {
+      const { cw, ch } = _textContentSize(layer);
+      const cc  = pool.borrow(cw, ch);
+      const ccx = cc.getContext('2d');
+      ccx.save();
+      ccx.translate(cw / 2, ch / 2);
+      _drawLines(ccx, layer, f, frameCount);
+      ccx.restore();
+      contentCanvas = cc;
+      cache?.set(cacheKey, contentCanvas); // 풀에 반환하지 않음 — 캐시가 소유
+    }
+
+    const cw = contentCanvas.width;
+    const ch = contentCanvas.height;
+
+    outputCtx.save();
+    applyTransform(outputCtx, worldTr);
+    outputCtx.globalAlpha = totalAlpha;
+    outputCtx.globalCompositeOperation = blendToComposite(layer.blend);
+    outputCtx.drawImage(contentCanvas, -cw / 2, -ch / 2);
+    outputCtx.restore();
+    return;
+  }
+
+  // 동적 텍스트(reveal/charAnim) 또는 마스크 있음: 작업 캔버스 경로
   const tmp  = pool.borrow(width, height);
   const tmpC = tmp.getContext('2d');
 

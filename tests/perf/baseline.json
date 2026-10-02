@@ -1,0 +1,20 @@
+{
+  "timestamp": "2026-10-02T10:53:03.468Z",
+  "result": {
+    "frames": 24,
+    "runs": 3,
+    "times": [
+      50.29999999701977,
+      55.30000001192093,
+      50.69999998807907
+    ],
+    "avgTotalMs": 52.09999999900659,
+    "maxTotalMs": 55.30000001192093,
+    "avgPerFrame": 2.170833333291941,
+    "maxPerFrame": 2.304166667163372,
+    "cacheHitRate": 0.9895833333333334,
+    "canvasSize": "768×768",
+    "layers": "이미지10(보정5) + 글자3 + test-dots3",
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko)"
+  }
+}

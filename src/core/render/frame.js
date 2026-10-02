@@ -49,7 +49,7 @@ export function createRenderEngine(opts = {}) {
   function renderFrame(ctx, doc, f, frameOpts = {}) {
     const t0 = (typeof performance !== 'undefined') ? performance.now() : 0;
     const { scale = 1, quality = 'final' } = frameOpts;
-    const { width, height, frameCount } = doc.meta;
+    const { width, height } = doc.meta;
 
     cache.resetFrameStats();
 
@@ -66,7 +66,7 @@ export function createRenderEngine(opts = {}) {
       workCtx    = workCanvas.getContext('2d');
     }
 
-    _doRender(workCtx, doc, f, renderW, renderH);
+    _doRender(workCtx, doc, f, renderW, renderH, renderScale);
 
     // draft or scale≠1: workCanvas → ctx (scaled)
     if (workCanvas) {
@@ -85,7 +85,7 @@ export function createRenderEngine(opts = {}) {
     _lastMs = (typeof performance !== 'undefined') ? performance.now() - t0 : 0;
   }
 
-  function _doRender(ctx, doc, f, width, height) {
+  function _doRender(ctx, doc, f, width, height, renderScale = 1) {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, width, height);
 
@@ -103,12 +103,12 @@ export function createRenderEngine(opts = {}) {
 
     const { frameCount } = doc.meta;
 
-    // 카메라 변환: 최상위 parentTr로 사용
+    // 카메라 변환에 renderScale 포함: 모든 레이어 위치가 렌더 해상도에 맞게 배율됨
     const cam   = evalCamera(doc, f);
     const camTr = {
-      x:        cam.x    ?? 0,
-      y:        cam.y    ?? 0,
-      scale:    cam.zoom ?? 1,
+      x:        (cam.x    ?? 0) * renderScale,
+      y:        (cam.y    ?? 0) * renderScale,
+      scale:    (cam.zoom ?? 1) * renderScale,
       rotation: 0,
       alpha:    1,
     };
@@ -119,11 +119,13 @@ export function createRenderEngine(opts = {}) {
       width,
       height,
       frameCount,
-      motions: motions ?? null,
-      effects: effects ?? null,
-      assets:  assets  ?? { getBitmap: () => null, getAnimFrames: () => null },
+      motions:      motions      ?? null,
+      effects:      effects      ?? null,
+      assets:       assets       ?? { getBitmap: () => null, getAnimFrames: () => null },
       pool,
       cache,
+      createCanvas,
+      renderScale,
       renderMask: null,
     };
 
