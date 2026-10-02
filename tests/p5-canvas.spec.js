@@ -569,6 +569,203 @@ test.describe('P5 캔버스 조작', () => {
     expect(result.offH).toBeLessThanOrEqual(result.screenH + 1);
   });
 
+  // ── P5 보완2 테스트 ───────────────────────────────────────────────────
+
+  // ── 16. view 파라미터 — 크롭 픽셀이 전체 렌더와 일치 ──────────────────
+  test('[렌더] view 크롭 — 같은 영역 픽셀 일치', async ({ page }) => {
+    const result = await page.evaluate(async () => {
+      const { createRenderEngine } = await import('/src/core/render/frame.js');
+      const { createDoc, createLayer } = await import('/src/core/doc/schema.js');
+
+      const doc = createDoc({ width: 200, height: 200, fps: 12, frameCount: 1 });
+      const shape = createLayer('shape');
+      shape.shape = { kind: 'rect', w: 80, h: 80, fill: '#ff4400', stroke: null };
+      shape.transform.x.value = 100;
+      shape.transform.y.value = 100;
+      doc.layers[shape.id] = shape;
+      doc.order.push(shape.id);
+
+      const engine = createRenderEngine({ createCanvas: (w, h) => new OffscreenCanvas(w, h) });
+
+      // 전체 렌더
+      const fullCanvas = new OffscreenCanvas(200, 200);
+      engine.renderFrame(fullCanvas.getContext('2d'), doc, 0, { scale: 1 });
+
+      // view 크롭 렌더 (중앙 100×100 영역)
+      const viewCanvas = new OffscreenCanvas(100, 100);
+      engine.renderFrame(viewCanvas.getContext('2d'), doc, 0, { scale: 1, view: { x: 50, y: 50, w: 100, h: 100 } });
+
+      // 비교: full의 (50,50)~(100,100) == view의 (0,0)~(50,50)
+      const fullData = fullCanvas.getContext('2d').getImageData(50, 50, 50, 50);
+      const viewData = viewCanvas.getContext('2d').getImageData(0, 0, 50, 50);
+
+      let diff = 0;
+      for (let i = 0; i < fullData.data.length; i++) {
+        diff += Math.abs(fullData.data[i] - viewData.data[i]);
+      }
+      return { diff, fullSample: Array.from(fullData.data.slice(0, 4)), viewSample: Array.from(viewData.data.slice(0, 4)) };
+    });
+    expect(result.diff).toBe(0);
+  });
+
+  // ── 17. view + scale(dpr) — 물리 픽셀 정확도 ─────────────────────────
+  test('[렌더] view + scale 2× — 픽셀 크기 정확', async ({ page }) => {
+    const result = await page.evaluate(async () => {
+      const { createRenderEngine } = await import('/src/core/render/frame.js');
+      const { createDoc, createLayer } = await import('/src/core/doc/schema.js');
+
+      const doc = createDoc({ width: 100, height: 100, fps: 12, frameCount: 1 });
+      const shape = createLayer('shape');
+      shape.shape = { kind: 'rect', w: 100, h: 100, fill: '#ffffff', stroke: null };
+      shape.transform.x.value = 50;
+      shape.transform.y.value = 50;
+      doc.layers[shape.id] = shape;
+      doc.order.push(shape.id);
+
+      const engine = createRenderEngine({ createCanvas: (w, h) => new OffscreenCanvas(w, h) });
+
+      // scale=2, view=전체 → 200×200 픽셀 출력
+      const cv = new OffscreenCanvas(200, 200);
+      engine.renderFrame(cv.getContext('2d'), doc, 0, { scale: 2, view: { x: 0, y: 0, w: 100, h: 100 } });
+
+      const data = cv.getContext('2d').getImageData(0, 0, 200, 200);
+      // 흰색으로 채워져야 함
+      const r0 = data.data[0];
+      const r100 = data.data[(100 * 200 + 100) * 4];
+      return { r0, r100, width: cv.width, height: cv.height };
+    });
+    expect(result.width).toBe(200);
+    expect(result.height).toBe(200);
+    expect(result.r0).toBe(255);
+    expect(result.r100).toBe(255);
+  });
+
+  // ── 18. 회전 atan2 감기 — 180° 경계 연속 ────────────────────────────
+  test('[회전] atan2 감기 — 180° 경계 연속 회전 (논리 검증)', async ({ page }) => {
+    const result = await page.evaluate(() => {
+      // 170° → -170° 이동 시 올바른 diff = +20° (경계 넘어 순방향)
+      const startAngle = 170 * Math.PI / 180;
+      let lastAngle = startAngle;
+      let accRot = 0;
+
+      const steps = [-160, -140, -120, -100].map(d => d * Math.PI / 180);
+      for (const currentAngle of steps) {
+        let diff = currentAngle - lastAngle;
+        if (diff > Math.PI)  diff -= 2 * Math.PI;
+        if (diff < -Math.PI) diff += 2 * Math.PI;
+        lastAngle = currentAngle;
+        accRot += diff;
+      }
+
+      return { accRotDeg: accRot * 180 / Math.PI };
+    });
+    // 170° → -100°: 순방향 90° 이동
+    expect(result.accRotDeg).toBeCloseTo(90, 0);
+  });
+
+  // ── 19. batch mergeKey — 방향키 연속 → 기록 1건 ──────────────────────
+  test('[키보드] 방향키 5회 연속 → 되돌리기 1건', async ({ page }) => {
+    const pos = await layerScreenPos(page, '사각형');
+    await page.mouse.click(pos.x, pos.y);
+
+    const origX = await page.evaluate(() =>
+      Object.values(window.__store.get().layers).find(l => l.name === '사각형').transform.x.value
+    );
+
+    for (let i = 0; i < 5; i++) {
+      await page.keyboard.press('ArrowRight');
+    }
+
+    const movedX = await page.evaluate(() =>
+      Object.values(window.__store.get().layers).find(l => l.name === '사각형').transform.x.value
+    );
+    expect(movedX).toBeCloseTo(origX + 5, 1);
+
+    // 되돌리기 1건으로 5px 모두 복원
+    await page.evaluate(() => window.__store.undo());
+    const restoredX = await page.evaluate(() =>
+      Object.values(window.__store.get().layers).find(l => l.name === '사각형').transform.x.value
+    );
+    expect(restoredX).toBeCloseTo(origX, 1);
+
+    const canUndoAfter = await page.evaluate(() => window.__store.canUndo());
+    expect(canUndoAfter).toBe(false);
+  });
+
+  // ── 20. Ctrl+V → 새 레이어 선택 ─────────────────────────────────────
+  test('[키보드] Ctrl+V 붙여넣기 → 새 레이어 자동 선택', async ({ page }) => {
+    const pos = await layerScreenPos(page, '사각형');
+    await page.mouse.click(pos.x, pos.y);
+
+    const origId = await page.evaluate(() => window.__editorState.get().selection[0]);
+    expect(origId).toBeTruthy();
+
+    await page.keyboard.press('Control+c');
+    await page.keyboard.press('Control+v');
+    await page.waitForTimeout(100);
+
+    const newSel = await page.evaluate(() => window.__editorState.get().selection);
+    expect(newSel.length).toBeGreaterThan(0);
+    expect(newSel).not.toContain(origId);
+
+    const exists = await page.evaluate((ids) =>
+      ids.every(id => !!window.__store.get().layers[id])
+    , newSel);
+    expect(exists).toBe(true);
+  });
+
+  // ── 21. V/H/G 대소문자 무관 ──────────────────────────────────────────
+  test('[키보드] V/H/G 대소문자 무관', async ({ page }) => {
+    await page.keyboard.press('v');
+    const t1 = await page.evaluate(() => window.__editorState.get().tool);
+    expect(t1).toBe('select');
+
+    await page.keyboard.press('h');
+    const t2 = await page.evaluate(() => window.__editorState.get().tool);
+    expect(t2).toBe('hand');
+
+    await page.keyboard.press('V');
+    const t3 = await page.evaluate(() => window.__editorState.get().tool);
+    expect(t3).toBe('select');
+
+    await page.evaluate(() => window.__editorState.set({ grid: false }));
+    await page.keyboard.press('G');
+    const grid1 = await page.evaluate(() => window.__editorState.get().grid);
+    expect(grid1).toBe(true);
+
+    await page.keyboard.press('g');
+    const grid2 = await page.evaluate(() => window.__editorState.get().grid);
+    expect(grid2).toBe(false);
+  });
+
+  // ── 22. 다중 선택 AABB 핸들 표시 ─────────────────────────────────────
+  test('[다중선택] 2개 선택 → AABB 코너 핸들 표시', async ({ page }) => {
+    const posRect   = await layerScreenPos(page, '사각형');
+    const posCircle = await layerScreenPos(page, '원');
+
+    await page.mouse.click(posRect.x, posRect.y);
+    await page.keyboard.down('Shift');
+    await page.mouse.click(posCircle.x, posCircle.y);
+    await page.keyboard.up('Shift');
+
+    const selCount = await page.evaluate(() => window.__editorState.get().selection.length);
+    expect(selCount).toBe(2);
+
+    // 오버레이 캔버스에 픽셀이 찍혔는지 (핸들이 렌더됨)
+    await page.waitForTimeout(100);
+    const hasPixels = await page.evaluate(() => {
+      const canvas = document.querySelector('.stage-overlay');
+      if (!canvas) return false;
+      const ctx = canvas.getContext('2d');
+      const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+      for (let i = 3; i < data.length; i += 4) {
+        if (data[i] > 0) return true;
+      }
+      return false;
+    });
+    expect(hasPixels).toBe(true);
+  });
+
   // ── 15. 그룹 자식 히트 테스트 ────────────────────────────────────────
   test('[히트] 그룹 자식 클릭 → 그룹 선택', async ({ page }) => {
     // addLayer 명령으로 그룹+자식 생성 (문서 중앙 384,384에 배치 — 화면 안)

@@ -63,8 +63,11 @@ export function drawOverlay(ctx, doc, es, snapLines = [], W, H) {
         const worldTr = getDocWorldTr(doc, id, f);
         const bounds  = getLayerBounds(layer);
         if (worldTr && bounds) {
-          const { hw, hh } = bounds;
-          const corners = [[-hw, -hh], [hw, -hh], [hw, hh], [-hw, hh]];
+          const { hw, hh, ox = 0, oy = 0 } = bounds;
+          const corners = [
+            [ox - hw, oy - hh], [ox + hw, oy - hh],
+            [ox + hw, oy + hh], [ox - hw, oy + hh],
+          ];
           const sp = corners.map(([lx, ly]) =>
             localToScreen(lx, ly, worldTr, zoom, panX, panY, W, H, docW, docH));
 
@@ -87,8 +90,8 @@ export function drawOverlay(ctx, doc, es, snapLines = [], W, H) {
           }
 
           // 회전 핸들 (위쪽 중앙에서 20px 위)
-          const rotHandle = localToScreen(0, -hh - 20, worldTr, zoom, panX, panY, W, H, docW, docH);
-          const topMid    = localToScreen(0, -hh,      worldTr, zoom, panX, panY, W, H, docW, docH);
+          const rotHandle = localToScreen(ox, oy - hh - 20, worldTr, zoom, panX, panY, W, H, docW, docH);
+          const topMid    = localToScreen(ox, oy - hh,      worldTr, zoom, panX, panY, W, H, docW, docH);
           ctx.strokeStyle = '#3a9dff';
           ctx.lineWidth = 1;
           ctx.beginPath();
@@ -102,7 +105,7 @@ export function drawOverlay(ctx, doc, es, snapLines = [], W, H) {
         }
       }
     } else {
-      // 다중 선택: 통합 AABB (축 정렬 경계 상자)
+      // 다중 선택: 통합 AABB + 코너 핸들
       let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
       for (const id of selection) {
         const layer = doc.layers[id];
@@ -110,8 +113,8 @@ export function drawOverlay(ctx, doc, es, snapLines = [], W, H) {
         const worldTr = getDocWorldTr(doc, id, f);
         const bounds  = getLayerBounds(layer);
         if (!worldTr || !bounds) continue;
-        const { hw, hh } = bounds;
-        for (const [lx, ly] of [[-hw,-hh],[hw,-hh],[hw,hh],[-hw,hh]]) {
+        const { hw, hh, ox = 0, oy = 0 } = bounds;
+        for (const [lx, ly] of [[ox-hw,oy-hh],[ox+hw,oy-hh],[ox+hw,oy+hh],[ox-hw,oy+hh]]) {
           const sp = localToScreen(lx, ly, worldTr, zoom, panX, panY, W, H, docW, docH);
           if (sp.x < minX) minX = sp.x;
           if (sp.y < minY) minY = sp.y;
@@ -124,6 +127,17 @@ export function drawOverlay(ctx, doc, es, snapLines = [], W, H) {
         ctx.setLineDash([4, 3]);
         ctx.strokeRect(minX, minY, maxX - minX, maxY - minY);
         ctx.setLineDash([]);
+
+        // 코너 핸들 (흰색)
+        ctx.fillStyle = '#ffffff';
+        ctx.strokeStyle = '#3a9dff';
+        ctx.lineWidth = 1.5;
+        for (const [cx, cy] of [[minX,minY],[maxX,minY],[maxX,maxY],[minX,maxY]]) {
+          ctx.beginPath();
+          ctx.rect(cx - 4, cy - 4, 8, 8);
+          ctx.fill();
+          ctx.stroke();
+        }
       }
     }
     ctx.restore();

@@ -43,35 +43,44 @@ export function createRenderEngine(opts = {}) {
   // ctx: CanvasRenderingContext2D (또는 OffscreenCanvasRenderingContext2D)
   // doc: 문서 스냅샷
   // f:   프레임 번호 (0-based; f=frameCount도 허용, 루프 보장)
-  // opts: { scale=1, quality='final' }
-  //   scale:   출력 캔버스 크기 = 문서 크기 × scale
+  // opts: { scale=1, quality='final', view? }
+  //   scale:   출력 캔버스 크기 = 문서 크기(또는 view 크기) × scale
   //   quality: 'final' | 'draft' (draft는 절반 해상도로 렌더 후 확대)
+  //   view:    { x, y, w, h } doc 좌표 가시 영역 — 지정 시 해당 영역만 렌더
   function renderFrame(ctx, doc, f, frameOpts = {}) {
     const t0 = (typeof performance !== 'undefined') ? performance.now() : 0;
-    const { scale = 1, quality = 'final' } = frameOpts;
+    const { scale = 1, quality = 'final', view } = frameOpts;
     const { width, height } = doc.meta;
 
     cache.resetFrameStats();
 
-    // draft: 절반 해상도로 렌더 후 upscale
     const renderScale = (quality === 'draft') ? scale * 0.5 : scale;
-    const renderW     = Math.max(1, Math.round(width  * renderScale));
-    const renderH     = Math.max(1, Math.round(height * renderScale));
 
-    let workCtx      = ctx;
-    let workCanvas   = null;
+    // view 있으면 view 영역만, 없으면 전체 문서 크기
+    const renderW = view
+      ? Math.max(1, Math.ceil(view.w * renderScale))
+      : Math.max(1, Math.round(width  * renderScale));
+    const renderH = view
+      ? Math.max(1, Math.ceil(view.h * renderScale))
+      : Math.max(1, Math.round(height * renderScale));
 
-    if (renderScale !== 1 || quality === 'draft') {
+    let workCtx    = ctx;
+    let workCanvas = null;
+
+    if (renderScale !== 1 || quality === 'draft' || view) {
       workCanvas = pool.borrow(renderW, renderH);
       workCtx    = workCanvas.getContext('2d');
     }
 
-    _doRender(workCtx, doc, f, renderW, renderH, renderScale);
+    _doRender(workCtx, doc, f, renderW, renderH, renderScale, view);
 
-    // draft or scale≠1: workCanvas → ctx (scaled)
     if (workCanvas) {
-      const outW = Math.max(1, Math.round(width  * scale));
-      const outH = Math.max(1, Math.round(height * scale));
+      const outW = view
+        ? Math.max(1, Math.ceil(view.w * scale))
+        : Math.max(1, Math.round(width  * scale));
+      const outH = view
+        ? Math.max(1, Math.ceil(view.h * scale))
+        : Math.max(1, Math.round(height * scale));
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.clearRect(0, 0, outW, outH);
       ctx.drawImage(workCanvas, 0, 0, outW, outH);
@@ -85,7 +94,7 @@ export function createRenderEngine(opts = {}) {
     _lastMs = (typeof performance !== 'undefined') ? performance.now() - t0 : 0;
   }
 
-  function _doRender(ctx, doc, f, width, height, renderScale = 1) {
+  function _doRender(ctx, doc, f, width, height, renderScale = 1, view) {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, width, height);
 
@@ -103,11 +112,16 @@ export function createRenderEngine(opts = {}) {
 
     const { frameCount } = doc.meta;
 
-    // 카메라 변환에 renderScale 포함: 모든 레이어 위치가 렌더 해상도에 맞게 배율됨
+    // view 있으면 doc 좌표 (view.x, view.y)를 캔버스 (0, 0)에 대응
+    // composeTransforms는 scale=1 시 camTr.x 오프셋 영향 없으므로 ctx.translate 사용
+    if (view) {
+      ctx.translate(-view.x * renderScale, -view.y * renderScale);
+    }
+
     const cam   = evalCamera(doc, f);
     const camTr = {
-      x:        (cam.x    ?? 0) * renderScale,
-      y:        (cam.y    ?? 0) * renderScale,
+      x:        (cam.x ?? 0) * renderScale,
+      y:        (cam.y ?? 0) * renderScale,
       scale:    (cam.zoom ?? 1) * renderScale,
       rotation: 0,
       alpha:    1,

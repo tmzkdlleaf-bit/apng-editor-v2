@@ -46,16 +46,26 @@ export function initKeys(store, editorState, getDragging = () => false) {
     if (ctrl && e.key.toLowerCase() === 'v') {
       if (!_clipboard.length) return;
       e.preventDefault();
-      store.apply({ type: 'duplicateLayers', ids: [..._clipboard] });
+      const patches = store.apply({ type: 'duplicateLayers', ids: [..._clipboard] });
+      // 최상위 복사본 id 추출 (parentId가 새 레이어가 아닌 것)
+      const allNew = patches
+        .filter(p => p.path.length === 2 && p.path[0] === 'layers' && p.before === undefined)
+        .map(p => p.path[1]);
+      const allNewSet = new Set(allNew);
+      const topNew = allNew.filter(id => {
+        const layer = store.get().layers[id];
+        return layer && !allNewSet.has(layer.parentId ?? null);
+      });
+      if (topNew.length) editorState.set({ selection: topNew });
       return;
     }
 
     // ── 도구 전환 ──────────────────────────────────────────────────────
-    if (!ctrl && e.key === 'v') { editorState.set({ tool: 'select' }); return; }
-    if (!ctrl && e.key === 'h') { editorState.set({ tool: 'hand' });   return; }
+    if (!ctrl && e.key.toLowerCase() === 'v') { editorState.set({ tool: 'select' }); return; }
+    if (!ctrl && e.key.toLowerCase() === 'h') { editorState.set({ tool: 'hand' });   return; }
 
     // ── 그리드 토글 ────────────────────────────────────────────────────
-    if (!ctrl && e.key === 'g') {
+    if (!ctrl && e.key.toLowerCase() === 'g') {
       editorState.set({ grid: !es.grid });
       return;
     }

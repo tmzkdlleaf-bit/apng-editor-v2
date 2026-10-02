@@ -22,35 +22,47 @@ export function getDocWorldTr(doc, layerId, f) {
   return tr;
 }
 
-// 레이어 로컬 공간 기준 반폭/반높이
+// 레이어 로컬 공간 기준 반폭/반높이 + anchor 오프셋 (ox, oy)
 // null: 선택 불가 (effect scope=full, group은 자식 재귀로 처리)
+// ox, oy: 피벗(transform 위치)에서 레이어 중심까지 오프셋 = (0.5 - anchor.x) * w
 export function getLayerBounds(layer) {
   const type = layer.type;
+  const ax = layer.anchor?.x ?? 0.5;
+  const ay = layer.anchor?.y ?? 0.5;
+
+  let w, h;
+
   if (type === 'shape') {
-    return { hw: (layer.shape?.w ?? 100) / 2, hh: (layer.shape?.h ?? 100) / 2 };
-  }
-  if (type === 'text') {
+    w = layer.shape?.w ?? 100;
+    h = layer.shape?.h ?? 100;
+  } else if (type === 'text') {
     const sz = layer.size ?? 48;
     const lines = String(layer.text ?? '').split('\n');
     const maxLen = Math.max(1, ...lines.map(l => l.length));
-    return {
-      hw: sz * 1.8 * maxLen / 2,
-      hh: lines.length * sz * (layer.lineHeight ?? 1.2) / 2,
-    };
-  }
-  if (type === 'image' || type === 'anim') {
-    return { hw: (layer.w ?? 100) / 2, hh: (layer.h ?? 100) / 2 };
-  }
-  if (type === 'effect') {
+    w = sz * 1.8 * maxLen;
+    h = lines.length * sz * (layer.lineHeight ?? 1.2);
+  } else if (type === 'image' || type === 'anim') {
+    w = layer.w ?? 100;
+    h = layer.h ?? 100;
+  } else if (type === 'effect') {
     if (layer.scope === 'box' && layer.box) {
-      return { hw: (layer.box.w ?? 100) / 2, hh: (layer.box.h ?? 100) / 2 };
+      w = layer.box.w ?? 100;
+      h = layer.box.h ?? 100;
+    } else {
+      return null; // scope=full: 선택 불가
     }
-    return null; // scope=full: 선택 불가
-  }
-  if (type === 'group') {
+  } else if (type === 'group') {
     return null; // hitTest에서 자식 재귀 처리
+  } else {
+    w = 100; h = 100;
   }
-  return { hw: 50, hh: 50 };
+
+  return {
+    hw: w / 2,
+    hh: h / 2,
+    ox: (0.5 - ax) * w,
+    oy: (0.5 - ay) * h,
+  };
 }
 
 // worldTr 역변환: 문서 좌표 → 레이어 로컬 좌표
@@ -85,7 +97,7 @@ function _hitGroupChildren(doc, groupId, docX, docY, f) {
     const bounds = getLayerBounds(child);
     if (!bounds) continue;
     const local = _worldToLocal(docX, docY, worldTr);
-    if (Math.abs(local.x) <= bounds.hw && Math.abs(local.y) <= bounds.hh) return true;
+    if (Math.abs(local.x - (bounds.ox ?? 0)) <= bounds.hw && Math.abs(local.y - (bounds.oy ?? 0)) <= bounds.hh) return true;
   }
   return false;
 }
@@ -116,7 +128,7 @@ export function hitTest(doc, docX, docY, f, groupEditId = null) {
     const bounds = getLayerBounds(layer);
     if (!bounds) continue;
     const local = _worldToLocal(docX, docY, worldTr);
-    if (Math.abs(local.x) <= bounds.hw && Math.abs(local.y) <= bounds.hh) return id;
+    if (Math.abs(local.x - (bounds.ox ?? 0)) <= bounds.hw && Math.abs(local.y - (bounds.oy ?? 0)) <= bounds.hh) return id;
   }
   return null;
 }

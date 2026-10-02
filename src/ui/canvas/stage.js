@@ -29,6 +29,7 @@ export function initStage(containerEl, store, editorState) {
   let _overlayReq = false;
   let _draftMode = false;
   let _autoDraft = false;   // 마지막 렌더가 느렸을 때 자동 설정
+  let _lastRenderMs = 0;
   let _snapLines = [];
   let _offscreen  = null;
   let _cssW = 1, _cssH = 1; // CSS 크기 (좌표 계산용)
@@ -91,14 +92,14 @@ export function initStage(containerEl, store, editorState) {
     const quality = (_draftMode || _autoDraft) ? 'draft' : 'final';
     const t0 = performance.now();
 
-    offCtx.save();
-    // 가시 doc 영역을 (0,0)부터 그리도록 평행이동
-    offCtx.scale(dpr, dpr);
-    offCtx.translate(-visDocX0 * zoom, -visDocY0 * zoom);
-    engine.renderFrame(offCtx, doc, f, { scale: zoom, quality });
-    offCtx.restore();
+    engine.renderFrame(offCtx, doc, f, {
+      scale: zoom * dpr,
+      quality,
+      view: { x: visDocX0, y: visDocY0, w: visDocX1 - visDocX0, h: visDocY1 - visDocY0 },
+    });
 
     const elapsed = performance.now() - t0;
+    _lastRenderMs = elapsed;
     if (elapsed > 16 && !_draftMode) _autoDraft = true;
 
     // 오프스크린을 씬 캔버스에 블릿
@@ -176,7 +177,7 @@ export function initStage(containerEl, store, editorState) {
     if (!on) _autoDraft = false;
   }
 
-  const drag = initDrag(overlayCanvas, store, editorState, _onSnapLines, _onDraftMode);
+  const drag = initDrag(overlayCanvas, store, editorState, _onSnapLines, _onDraftMode, () => _lastRenderMs > 16);
   const cleanupView = initView(containerEl, overlayCanvas, store, editorState);
 
   // 스토어 변경 → scene + overlay 재렌더

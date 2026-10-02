@@ -7,6 +7,7 @@ function _mergeKey(cmd) {
   if (cmd.type === 'setProp')  return `setProp:${cmd.id}:${cmd.path}`;
   if (cmd.type === 'setMeta')  return `setMeta:${Object.keys(cmd.patch).sort().join(',')}`;
   if (cmd.type === 'setLayer') return `setLayer:${cmd.id}:${Object.keys(cmd.patch).sort().join(',')}`;
+  if (cmd.type === 'batch')    return 'batch:' + cmd.cmds.map(_mergeKey).filter(Boolean).join(',');
   return null;
 }
 
@@ -91,8 +92,11 @@ export function createStore(initDoc) {
 
     const invPatches = invertPatches(patches);
     const ts = Date.now();
-    const mk = merge ? _mergeKey(cmd) : null;
-    const last = _undo[_undo.length - 1];
+    // 항상 mergeKey를 계산해 undo 레코드에 저장: merge=false인 첫 press도
+    // 키를 저장해야 그 뒤 merge=true 요청이 같은 레코드에 합칠 수 있다
+    const cmdMk = _mergeKey(cmd);
+    const mk    = merge ? cmdMk : null;  // merge 여부 판단용 (merge=false면 합치지 않음)
+    const last  = _undo[_undo.length - 1];
     // redo 기록이 있으면 merge하지 않음
     const canMerge = mk && last && last.mergeKey === mk
       && (ts - last.timestamp) < MERGE_WINDOW_MS
@@ -108,7 +112,7 @@ export function createStore(initDoc) {
       };
     } else {
       _redo.length = 0;
-      _undo.push({ patches, invPatches, label: cmd.type, mergeKey: mk, timestamp: ts, selectionSnapshot });
+      _undo.push({ patches, invPatches, label: cmd.type, mergeKey: cmdMk, timestamp: ts, selectionSnapshot });
       if (_undo.length > HISTORY_LIMIT) _undo.shift();
     }
 
