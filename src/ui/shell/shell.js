@@ -2,10 +2,10 @@ import { toggle as toggleTheme, current as currentTheme } from './theme.js';
 import { initStage } from '../canvas/stage.js';
 import { initKeys } from '../keys.js';
 
-const TL_KEY = 'apng2.timelineHeight';
+const TL_KEY     = 'apng2.timelineHeight';
 const TL_DEFAULT = 340;
-const TL_MIN = 200;
-const TL_MAX = 600;
+const TL_MIN     = 200;
+const TL_MAX     = 600;
 
 function getStoredTlHeight() {
   try {
@@ -17,11 +17,7 @@ function getStoredTlHeight() {
 }
 
 function saveTlHeight(h) {
-  try {
-    localStorage.setItem(TL_KEY, String(h));
-  } catch {
-    // storage unavailable
-  }
+  try { localStorage.setItem(TL_KEY, String(h)); } catch {}
 }
 
 function setTlHeight(mainArea, h) {
@@ -91,43 +87,34 @@ export function init(store, editorState) {
     themeBtn.textContent = currentTheme() === 'dark' ? '라이트' : '다크';
   });
 
-  // 되돌리기 / 다시하기 버튼
   app.querySelector('[data-action="undo"]').addEventListener('click', () => store.undo());
   app.querySelector('[data-action="redo"]').addEventListener('click', () => store.redo());
 
-  const handle = app.querySelector('#tl-resize');
+  const handle   = app.querySelector('#tl-resize');
   const tlRegion = app.querySelector('[data-region="timeline"]');
 
-  let dragging = false;
-  let startY = 0;
-  let startH = 0;
-
+  let dragging = false, startY = 0, startH = 0;
   handle.addEventListener('mousedown', (e) => {
-    dragging = true;
-    startY = e.clientY;
+    dragging = true; startY = e.clientY;
     startH = tlRegion.getBoundingClientRect().height;
     handle.classList.add('dragging');
     e.preventDefault();
   });
-
   document.addEventListener('mousemove', (e) => {
     if (!dragging) return;
-    const delta = startY - e.clientY;
-    setTlHeight(mainArea, startH + delta);
+    setTlHeight(mainArea, startH + (startY - e.clientY));
   });
-
   document.addEventListener('mouseup', () => {
     if (!dragging) return;
     dragging = false;
     handle.classList.remove('dragging');
   });
 
-  // 캔버스 스테이지
   const canvasRegion = app.querySelector('[data-region="canvas"]');
   const stage = initStage(canvasRegion, store, editorState);
 
-  // 키보드 단축키
-  initKeys(store, editorState);
+  // stage.isDragging()을 keys.js에 전달 — Esc 중 드래그 감지용
+  initKeys(store, editorState, () => stage.isDragging());
 
   return stage;
 }

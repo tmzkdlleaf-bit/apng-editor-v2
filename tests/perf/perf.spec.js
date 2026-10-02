@@ -26,7 +26,6 @@ test.describe('P4 성능 측정', () => {
       const createCanvas = (w, h) => new OffscreenCanvas(w, h);
       const effects = new Map([[testDots.id, testDots]]);
 
-      // 코드로 만든 비트맵 10개 (5개는 보정 포함)
       const bitmaps = [];
       for (let i = 0; i < 10; i++) {
         const bm = new OffscreenCanvas(200, 200);
@@ -49,7 +48,6 @@ test.describe('P4 성능 측정', () => {
       doc.meta.height     = H;
       doc.meta.frameCount = FRAMES;
 
-      // 이미지 10개 (5개는 brightness 보정)
       for (let i = 0; i < 10; i++) {
         const lyr = createLayer('image');
         lyr.assetId = String(i);
@@ -60,7 +58,6 @@ test.describe('P4 성능 측정', () => {
         doc.order.push(lyr.id);
       }
 
-      // 글자 3개
       const textColors = ['#ffffff', '#ffcc00', '#00ccff'];
       for (let i = 0; i < 3; i++) {
         const lyr = createLayer('text');
@@ -74,7 +71,6 @@ test.describe('P4 성능 측정', () => {
         doc.order.push(lyr.id);
       }
 
-      // test-dots 3개 (seed 다름)
       for (let i = 0; i < 3; i++) {
         const lyr = createLayer('effect');
         lyr.effectId = testDots.id;
@@ -87,10 +83,8 @@ test.describe('P4 성능 측정', () => {
       const cv  = createCanvas(W, H);
       const ctx = cv.getContext('2d');
 
-      // 웜업 1바퀴
       for (let i = 0; i < FRAMES; i++) engine.renderFrame(ctx, doc, i);
 
-      // 측정 RUNS 바퀴
       const times = [];
       for (let run = 0; run < RUNS; run++) {
         const t0 = performance.now();
@@ -134,12 +128,49 @@ test.describe('P4 성능 측정', () => {
     } else {
       let baseline;
       try { baseline = JSON.parse(readFileSync(BASELINE_PATH, 'utf8')); } catch (_) { baseline = null; }
-      if (baseline?.result?.avgTotalMs) {
-        const threshold = baseline.result.avgTotalMs * 1.2; // 20% 허용
-        expect(result.avgTotalMs).toBeLessThan(threshold);
+      if (baseline?.result) {
+        // userAgent 불일치 → 경고만 (실패 아님)
+        if (baseline.result.userAgent && baseline.result.userAgent !== result.userAgent) {
+          console.warn(`[perf] 경고: 기기 다름 — 기준(${baseline.result.userAgent.slice(0,40)}) vs 현재(${result.userAgent.slice(0,40)})`);
+        }
+        if (baseline.result.avgTotalMs) {
+          const threshold = baseline.result.avgTotalMs * 1.2;
+          expect(result.avgTotalMs).toBeLessThan(threshold);
+        }
       }
     }
 
-    expect(result.avgTotalMs).toBeLessThan(30000); // 절대 상한 30초
+    expect(result.avgTotalMs).toBeLessThan(30000);
+  });
+
+  // ── 1600% 줌 렌더 성능 ─────────────────────────────────────────────
+  test('[perf] 1600% 줌 viewport culling 확인', async ({ page }) => {
+    await page.goto('/?demo=1');
+    await page.waitForFunction(() => !!(window.__store && window.__stage));
+
+    await page.evaluate(() => {
+      window.__editorState.set({ zoom: 16 });
+    });
+    await page.waitForTimeout(300);
+
+    const result = await page.evaluate(() => {
+      const offscreen = window.__stage.offscreenCanvas;
+      if (!offscreen) return null;
+      const dpr = window.devicePixelRatio || 1;
+      return {
+        offW: offscreen.width,
+        offH: offscreen.height,
+        screenW: window.screen.width,
+        screenH: window.screen.height,
+        dpr,
+      };
+    });
+
+    if (!result) return;
+
+    console.log(`[perf] 1600% 줌 오프스크린: ${result.offW}×${result.offH} (화면: ${result.screenW}×${result.screenH} dpr=${result.dpr})`);
+
+    expect(result.offW).toBeLessThanOrEqual(result.screenW * result.dpr + 2);
+    expect(result.offH).toBeLessThanOrEqual(result.screenH * result.dpr + 2);
   });
 });

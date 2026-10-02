@@ -23,13 +23,11 @@ export function getDocWorldTr(doc, layerId, f) {
 }
 
 // 레이어 로컬 공간 기준 반폭/반높이
+// null: 선택 불가 (effect scope=full, group은 자식 재귀로 처리)
 export function getLayerBounds(layer) {
   const type = layer.type;
   if (type === 'shape') {
-    return {
-      hw: (layer.shape?.w ?? 100) / 2,
-      hh: (layer.shape?.h ?? 100) / 2,
-    };
+    return { hw: (layer.shape?.w ?? 100) / 2, hh: (layer.shape?.h ?? 100) / 2 };
   }
   if (type === 'text') {
     const sz = layer.size ?? 48;
@@ -47,7 +45,10 @@ export function getLayerBounds(layer) {
     if (layer.scope === 'box' && layer.box) {
       return { hw: (layer.box.w ?? 100) / 2, hh: (layer.box.h ?? 100) / 2 };
     }
-    return null; // full scope: 항상 히트
+    return null; // scope=full: 선택 불가
+  }
+  if (type === 'group') {
+    return null; // hitTest에서 자식 재귀 처리
   }
   return { hw: 50, hh: 50 };
 }
@@ -65,6 +66,30 @@ function _worldToLocal(worldX, worldY, worldTr) {
   };
 }
 
+// 그룹 자식 재귀 히트 검사 (그룹 id 반환하지 않고 hit 여부만)
+function _hitGroupChildren(doc, groupId, docX, docY, f) {
+  const group = doc.layers[groupId];
+  if (!group) return false;
+  const children = group.childOrder ?? [];
+  for (let i = children.length - 1; i >= 0; i--) {
+    const cid = children[i];
+    const child = doc.layers[cid];
+    if (!child || child.visible === false) continue;
+    if (child.type === 'effect' && (!child.scope || child.scope === 'full')) continue;
+    if (child.type === 'group') {
+      if (_hitGroupChildren(doc, cid, docX, docY, f)) return true;
+      continue;
+    }
+    const worldTr = getDocWorldTr(doc, cid, f);
+    if (!worldTr) continue;
+    const bounds = getLayerBounds(child);
+    if (!bounds) continue;
+    const local = _worldToLocal(docX, docY, worldTr);
+    if (Math.abs(local.x) <= bounds.hw && Math.abs(local.y) <= bounds.hh) return true;
+  }
+  return false;
+}
+
 // doc 공간의 점 (docX, docY)에서 최상위 레이어 id 반환
 // groupEditId: 그룹 편집 중이면 해당 그룹 id
 export function hitTest(doc, docX, docY, f, groupEditId = null) {
@@ -77,19 +102,21 @@ export function hitTest(doc, docX, docY, f, groupEditId = null) {
     const layer = doc.layers[id];
     if (!layer || layer.visible === false || layer.locked) continue;
 
+    // effect scope=full: 선택 불가
+    if (layer.type === 'effect' && (!layer.scope || layer.scope === 'full')) continue;
+
+    // 그룹: 자식을 재귀적으로 확인 (그룹 편집 외부에서만)
+    if (layer.type === 'group' && !groupEditId) {
+      if (_hitGroupChildren(doc, id, docX, docY, f)) return id;
+      continue;
+    }
+
     const worldTr = getDocWorldTr(doc, id, f);
     if (!worldTr) continue;
-
     const bounds = getLayerBounds(layer);
-    if (!bounds) {
-      // effect scope=full: 항상 히트
-      return id;
-    }
-
+    if (!bounds) continue;
     const local = _worldToLocal(docX, docY, worldTr);
-    if (Math.abs(local.x) <= bounds.hw && Math.abs(local.y) <= bounds.hh) {
-      return id;
-    }
+    if (Math.abs(local.x) <= bounds.hw && Math.abs(local.y) <= bounds.hh) return id;
   }
   return null;
 }

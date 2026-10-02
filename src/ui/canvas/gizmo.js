@@ -1,36 +1,23 @@
 import { getDocWorldTr, getLayerBounds } from './hit.js';
-import { docToScreen } from './transform.js';
-
-// worldTr + 로컬 점 → 화면 좌표
-function _localToScreen(lx, ly, worldTr, zoom, panX, panY, W, H, docW, docH) {
-  const rad = (worldTr.rotation ?? 0) * Math.PI / 180;
-  const cos = Math.cos(rad), sin = Math.sin(rad);
-  const s = worldTr.scale ?? 1;
-  const dx = s * (lx * cos - ly * sin);
-  const dy = s * (lx * sin + ly * cos);
-  return docToScreen(
-    (worldTr.x ?? 0) + dx,
-    (worldTr.y ?? 0) + dy,
-    zoom, panX, panY, W, H, docW, docH,
-  );
-}
+import { docToScreen, localToScreen } from './transform.js';
 
 function _drawHandle(ctx, sx, sy, size = 6) {
   ctx.fillRect(sx - size / 2, sy - size / 2, size, size);
 }
 
 // 선택 기즈모 + 그리드 + 스냅 가이드 그리기
-export function drawOverlay(ctx, doc, es, snapLines = []) {
+// W, H는 CSS 픽셀 크기 (dpr 적용 전)
+export function drawOverlay(ctx, doc, es, snapLines = [], W, H) {
   const { selection, f, zoom, panX, panY, grid } = es;
   const { width: docW, height: docH } = doc.meta;
-  const W = ctx.canvas.width;
-  const H = ctx.canvas.height;
+  if (!W) W = ctx.canvas.width;
+  if (!H) H = ctx.canvas.height;
 
-  ctx.clearRect(0, 0, W, H);
+  ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
 
   // 그리드
   if (grid) {
-    const step = 50; // 50px doc 단위
+    const step = 50;
     ctx.save();
     ctx.strokeStyle = 'rgba(255,255,255,0.08)';
     ctx.lineWidth = 1;
@@ -42,7 +29,6 @@ export function drawOverlay(ctx, doc, es, snapLines = []) {
       const sx = gx * zoom + ox;
       ctx.beginPath(); ctx.moveTo(sx, 0); ctx.lineTo(sx, H); ctx.stroke();
     }
-
     const startRow = Math.floor(-oy / zoom / step) * step;
     const endRow   = Math.ceil((H - oy) / zoom / step) * step;
     for (let gy = startRow; gy <= endRow; gy += step) {
@@ -68,46 +54,77 @@ export function drawOverlay(ctx, doc, es, snapLines = []) {
     ctx.save();
     ctx.strokeStyle = '#3a9dff';
     ctx.fillStyle = '#3a9dff';
-    ctx.lineWidth = 1.5 / zoom;
 
-    for (const id of selection) {
+    if (selection.length === 1) {
+      // 단일 선택: 코너 핸들 + 회전 핸들
+      const id = selection[0];
       const layer = doc.layers[id];
-      if (!layer) continue;
-      const worldTr = getDocWorldTr(doc, id, f);
-      if (!worldTr) continue;
-      const bounds = getLayerBounds(layer);
-      if (!bounds) continue;
+      if (layer) {
+        const worldTr = getDocWorldTr(doc, id, f);
+        const bounds  = getLayerBounds(layer);
+        if (worldTr && bounds) {
+          const { hw, hh } = bounds;
+          const corners = [[-hw, -hh], [hw, -hh], [hw, hh], [-hw, hh]];
+          const sp = corners.map(([lx, ly]) =>
+            localToScreen(lx, ly, worldTr, zoom, panX, panY, W, H, docW, docH));
 
-      const { hw, hh } = bounds;
-      const corners = [[-hw, -hh], [hw, -hh], [hw, hh], [-hw, hh]];
-      const sp = corners.map(([lx, ly]) =>
-        _localToScreen(lx, ly, worldTr, zoom, panX, panY, W, H, docW, docH));
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.moveTo(sp[0].x, sp[0].y);
+          for (let i = 1; i < 4; i++) ctx.lineTo(sp[i].x, sp[i].y);
+          ctx.closePath();
+          ctx.stroke();
 
-      ctx.beginPath();
-      ctx.moveTo(sp[0].x, sp[0].y);
-      for (let i = 1; i < 4; i++) ctx.lineTo(sp[i].x, sp[i].y);
-      ctx.closePath();
-      ctx.stroke();
+          // 코너 핸들 (흰색)
+          ctx.fillStyle = '#ffffff';
+          ctx.strokeStyle = '#3a9dff';
+          ctx.lineWidth = 1.5;
+          for (const p of sp) {
+            ctx.beginPath();
+            ctx.rect(p.x - 4, p.y - 4, 8, 8);
+            ctx.fill();
+            ctx.stroke();
+          }
 
-      // 코너 핸들
-      ctx.fillStyle = '#ffffff';
-      ctx.strokeStyle = '#3a9dff';
-      ctx.lineWidth = 1.5;
-      for (const p of sp) _drawHandle(ctx, p.x, p.y, 8);
-
-      // 회전 핸들 (위쪽 중앙에서 20px 위)
-      const rotHandle = _localToScreen(0, -hh - 20, worldTr, zoom, panX, panY, W, H, docW, docH);
-      const topMid    = _localToScreen(0, -hh, worldTr, zoom, panX, panY, W, H, docW, docH);
-      ctx.strokeStyle = '#3a9dff';
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(topMid.x, topMid.y);
-      ctx.lineTo(rotHandle.x, rotHandle.y);
-      ctx.stroke();
-      ctx.fillStyle = '#3a9dff';
-      ctx.beginPath();
-      ctx.arc(rotHandle.x, rotHandle.y, 5, 0, Math.PI * 2);
-      ctx.fill();
+          // 회전 핸들 (위쪽 중앙에서 20px 위)
+          const rotHandle = localToScreen(0, -hh - 20, worldTr, zoom, panX, panY, W, H, docW, docH);
+          const topMid    = localToScreen(0, -hh,      worldTr, zoom, panX, panY, W, H, docW, docH);
+          ctx.strokeStyle = '#3a9dff';
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(topMid.x, topMid.y);
+          ctx.lineTo(rotHandle.x, rotHandle.y);
+          ctx.stroke();
+          ctx.fillStyle = '#3a9dff';
+          ctx.beginPath();
+          ctx.arc(rotHandle.x, rotHandle.y, 5, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+    } else {
+      // 다중 선택: 통합 AABB (축 정렬 경계 상자)
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      for (const id of selection) {
+        const layer = doc.layers[id];
+        if (!layer) continue;
+        const worldTr = getDocWorldTr(doc, id, f);
+        const bounds  = getLayerBounds(layer);
+        if (!worldTr || !bounds) continue;
+        const { hw, hh } = bounds;
+        for (const [lx, ly] of [[-hw,-hh],[hw,-hh],[hw,hh],[-hw,hh]]) {
+          const sp = localToScreen(lx, ly, worldTr, zoom, panX, panY, W, H, docW, docH);
+          if (sp.x < minX) minX = sp.x;
+          if (sp.y < minY) minY = sp.y;
+          if (sp.x > maxX) maxX = sp.x;
+          if (sp.y > maxY) maxY = sp.y;
+        }
+      }
+      if (minX < Infinity) {
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([4, 3]);
+        ctx.strokeRect(minX, minY, maxX - minX, maxY - minY);
+        ctx.setLineDash([]);
+      }
     }
     ctx.restore();
   }
@@ -117,13 +134,14 @@ export function drawOverlay(ctx, doc, es, snapLines = []) {
     ctx.save();
     ctx.strokeStyle = '#ff4488';
     ctx.lineWidth = 1;
+    const { ox, oy } = _origin(zoom, panX, panY, W, H, docW, docH);
     for (const line of snapLines) {
       ctx.beginPath();
       if (line.axis === 'x') {
-        const sx = line.docVal * zoom + _origin(zoom, panX, panY, W, H, docW, docH).ox;
+        const sx = line.docVal * zoom + ox;
         ctx.moveTo(sx, 0); ctx.lineTo(sx, H);
       } else {
-        const sy = line.docVal * zoom + _origin(zoom, panX, panY, W, H, docW, docH).oy;
+        const sy = line.docVal * zoom + oy;
         ctx.moveTo(0, sy); ctx.lineTo(W, sy);
       }
       ctx.stroke();
