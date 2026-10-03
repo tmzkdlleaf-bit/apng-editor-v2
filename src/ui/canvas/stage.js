@@ -41,6 +41,7 @@ export function initStage(containerEl, store, editorState) {
   let _draftMode = false;
   let _autoDraft = false;
   let _lastRenderMs = 0;
+  let _sceneMsSamples = []; // 전체 장면 그리기(체커 포함) 시간 표본
   let _snapLines = [];
   let _offscreen  = null;
   let _cssW = 1, _cssH = 1;
@@ -77,6 +78,7 @@ export function initStage(containerEl, store, editorState) {
   function _doScene() {
     _sceneReq = false;
     _sceneRenderCount++;
+    const _sceneT0 = performance.now();
 
     if (_lastPointerMoveTime > 0) {
       const latency = performance.now() - _lastPointerMoveTime;
@@ -127,6 +129,9 @@ export function initStage(containerEl, store, editorState) {
     const blitX = Math.max(0, ox) * dpr;
     const blitY = Math.max(0, oy) * dpr;
     ctx.drawImage(offscreen, blitX, blitY);
+
+    _sceneMsSamples.push(performance.now() - _sceneT0);
+    if (_sceneMsSamples.length > 240) _sceneMsSamples.shift();
   }
 
   function _doOverlay() {
@@ -282,6 +287,12 @@ export function initStage(containerEl, store, editorState) {
     },
     get sceneRenderCount() { return _sceneRenderCount; },
     get offscreenCanvas() { return _offscreen; },
+    resetSceneStats() { _sceneMsSamples = []; },
+    getSceneStats() {
+      if (!_sceneMsSamples.length) return null;
+      const avg = _sceneMsSamples.reduce((a, b) => a + b, 0) / _sceneMsSamples.length;
+      return { avg, max: Math.max(..._sceneMsSamples), count: _sceneMsSamples.length };
+    },
     destroy() {
       ro.disconnect();
       drag.cleanup();
