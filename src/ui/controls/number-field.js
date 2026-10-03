@@ -140,7 +140,8 @@ export function createNumberField({
 
   inputEl.addEventListener('blur', () => {
     const v = parseFloat(inputEl.value);
-    if (Number.isFinite(v)) {
+    // Enter 처리 직후(값 동일)·빈 입력이면 재커밋하지 않음 (되돌리기 중복 방지)
+    if (Number.isFinite(v) && _clamp(v) !== _current) {
       onBegin();
       _current = _clamp(v);
       _mixed = false;
@@ -148,8 +149,10 @@ export function createNumberField({
       inputEl.value = _fmt(_current);
       onChange(_current, { relative: false, delta: 0 });
       onCommit();
+    } else if (!_mixed) {
+      inputEl.value = _fmt(_current);
     } else {
-      inputEl.value = _mixed ? '' : _fmt(_current);
+      inputEl.value = '';
     }
   });
 
