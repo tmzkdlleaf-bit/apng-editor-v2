@@ -19,6 +19,16 @@ export function initTimeline(timelineEl, store, editorState, playback) {
 
   loopBtn.classList.add('tl-loop-btn');
 
+  // item 7: 머리줄 스냅 토글
+  const tlSnapBtn = document.createElement('button');
+  tlSnapBtn.dataset.action = 'tl-snap';
+  tlSnapBtn.textContent = '머리줄 스냅';
+  tlSnapBtn.title = '키·클립을 프레임 경계·재생선·다른 키에 붙임';
+  snapBtn.after(tlSnapBtn);
+  tlSnapBtn.addEventListener('click', () => {
+    editorState.set({ tlSnap: !editorState.get().tlSnap });
+  });
+
   // C12: 처음/끝 버튼을 play 앞뒤에 삽입
   const firstBtn = document.createElement('button');
   firstBtn.dataset.action = 'go-first';
@@ -85,6 +95,8 @@ export function initTimeline(timelineEl, store, editorState, playback) {
     autoKeyBtn.style.color      = es.autoKey ? 'var(--acc)' : '';
     snapBtn.style.background    = es.snap    ? 'var(--toolon)' : '';
     snapBtn.style.color         = es.snap    ? 'var(--acc)' : '';
+    tlSnapBtn.style.background  = es.tlSnap  ? 'var(--toolon)' : '';
+    tlSnapBtn.style.color       = es.tlSnap  ? 'var(--acc)' : '';
     if (frameInfo) frameInfo.textContent = `${es.f + 1} / ${fc}`;
   }
 

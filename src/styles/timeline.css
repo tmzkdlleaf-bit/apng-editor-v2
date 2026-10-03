@@ -57,6 +57,67 @@
 
 .tl-row.tl-row-drag-over-before { border-top: 2px solid var(--acc); }
 .tl-row.tl-row-drag-over-after  { border-bottom: 2px solid var(--acc); }
+.tl-row.tl-row-drop-into { outline: 2px solid var(--acc); outline-offset: -2px; background: var(--selrow); }
+
+/* 펼침 화살표 */
+.tl-expand {
+  width: 14px;
+  height: 20px;
+  padding: 0;
+  font-size: 9px;
+  background: transparent;
+  border: none;
+  color: var(--dim);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.tl-expand:hover { color: var(--text); }
+
+/* 하위 속성 행 */
+.tl-row-prop {
+  padding-left: var(--sp-5);
+  cursor: default;
+}
+.tl-row-prop:hover { background: transparent; }
+.tl-prop-name {
+  font-size: var(--fs-1);
+  color: var(--dim);
+}
+
+/* 카메라 행 */
+.tl-row-camera {
+  cursor: default;
+  padding-left: var(--sp-3);
+}
+.tl-row-camera:hover { background: transparent; }
+.tl-row-camera .tl-name { color: var(--faint); font-style: italic; }
+
+/* 키프레임 이징 메뉴 */
+.kf-ease-menu {
+  position: fixed;
+  z-index: 1100;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--r-2);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.35);
+  overflow-y: auto;
+  max-height: 60vh;
+  min-width: 140px;
+  padding: var(--sp-1) 0;
+}
+.kf-ease-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  padding: 0 var(--sp-3);
+  height: 26px;
+  font-size: var(--fs-2);
+  cursor: pointer;
+}
+.kf-ease-item:hover { background: var(--selrow); color: var(--acc); }
 
 .tl-btn {
   width: 20px;

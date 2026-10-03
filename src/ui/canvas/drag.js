@@ -128,6 +128,7 @@ export function initDrag(overlayCanvas, store, editorState, onSnapLines, onDraft
   function _onPointerDown(e) {
     if (e.button !== 0) return;
     const es = editorState.get();
+    editorState.set({ focusRegion: 'canvas' });
     if (es.tool !== 'select') return;
 
     const { cx, cy } = _canvasCoord(e);

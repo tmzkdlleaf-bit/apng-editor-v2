@@ -10,9 +10,18 @@ function _isInputFocused() {
 const _MOVE_STEP       = 1;
 const _MOVE_STEP_LARGE = 10;
 
+// 키프레임 ref에서 현재 v/ease 읽기
+function _readKey(doc, ref) {
+  const prop = doc.layers[ref.id]?.[ref.path.split('.')[0]]?.[ref.path.split('.')[1]];
+  const kf = (prop?.keys ?? []).find(k => k.f === ref.f);
+  return kf ? { id: ref.id, path: ref.path, f: ref.f, v: kf.v, ease: kf.ease ?? 'linear' } : null;
+}
+
 export function initKeys(store, editorState, getDragging = () => false) {
   // 복사 버퍼 (레이어 id 목록)
   let _clipboard = [];
+  // 키프레임 복사 버퍼 [{id, path, f, v, ease}]
+  let _kfClipboard = [];
   // 방향키 500ms merge 창
   let _arrowMergeTimer = null;
   let _canMergeArrow   = false;
@@ -23,6 +32,8 @@ export function initKeys(store, editorState, getDragging = () => false) {
     const es  = editorState.get();
     const doc = store.get();
     const { selection, f, autoKey } = es;
+    const kfSel = es.kfSelection ?? [];
+    const timelineFocus = es.focusRegion === 'timeline';
 
     const ctrl = e.ctrlKey || e.metaKey;
 
@@ -39,6 +50,27 @@ export function initKeys(store, editorState, getDragging = () => false) {
     }
 
     // ── 복사 / 붙여넣기 ────────────────────────────────────────────────
+    // item 4: 타임라인 포커스 + 키 선택이면 키프레임 복사/붙여넣기
+    if (ctrl && e.key.toLowerCase() === 'c' && timelineFocus && kfSel.length) {
+      _kfClipboard = kfSel.map(r => _readKey(doc, r)).filter(Boolean);
+      return;
+    }
+    if (ctrl && e.key.toLowerCase() === 'v' && timelineFocus && _kfClipboard.length) {
+      e.preventDefault();
+      // 상대 간격 유지, 가장 이른 키를 재생선 위치에
+      const minF = Math.min(..._kfClipboard.map(k => k.f));
+      const fc   = doc.meta.frameCount ?? 1;
+      const cmds = [];
+      const newSel = [];
+      for (const k of _kfClipboard) {
+        const nf = Math.max(0, Math.min(fc - 1, f + (k.f - minF)));
+        cmds.push({ type: 'setKey', id: k.id, path: k.path, f: nf, v: k.v, ease: k.ease });
+        newSel.push({ id: k.id, path: k.path, f: nf });
+      }
+      if (cmds.length) store.apply(cmds.length === 1 ? cmds[0] : { type: 'batch', cmds });
+      editorState.set({ kfSelection: newSel });
+      return;
+    }
     if (ctrl && e.key.toLowerCase() === 'c') {
       _clipboard = selection.filter(id => doc.layers[id]);
       return;
@@ -109,8 +141,16 @@ export function initKeys(store, editorState, getDragging = () => false) {
       return;
     }
 
-    // ── 레이어 삭제 ────────────────────────────────────────────────────
+    // ── 삭제 ───────────────────────────────────────────────────────────
     if ((e.key === 'Delete' || e.key === 'Backspace') && !ctrl) {
+      // item 3: 타임라인 포커스 + 키 선택이면 키프레임 삭제
+      if (timelineFocus && kfSel.length) {
+        e.preventDefault();
+        const cmds = kfSel.map(r => ({ type: 'removeKey', id: r.id, path: r.path, f: r.f }));
+        store.apply(cmds.length === 1 ? cmds[0] : { type: 'batch', cmds });
+        editorState.set({ kfSelection: [] });
+        return;
+      }
       if (!selection.length) return;
       e.preventDefault();
       store.apply({ type: 'removeLayers', ids: [...selection] });

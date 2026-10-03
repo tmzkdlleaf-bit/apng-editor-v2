@@ -262,6 +262,36 @@ export function applyCommand(doc, cmd) {
       break;
     }
 
+    case 'retimeKeys': {
+      // 선택한 키들을 임의 프레임으로 재배치 (스트레치/이동)
+      // moves: [{ from, to }]  같은 프레임으로 겹치면 뒤의 것이 이김
+      const { id, path: dotPath, moves } = cmd;
+      if (!doc.layers[id] || !moves?.length) break;
+      const propPath = ['layers', id, ...dotPath.split('.')];
+      const prop = _get(doc, propPath);
+      if (!prop?.keys) break;
+      const moveMap = new Map(moves.map(m => [m.from, m.to]));
+      const mapped = prop.keys.map(k => moveMap.has(k.f) ? { ...k, f: moveMap.get(k.f) } : k);
+      mapped.sort((a, b) => a.f - b.f);
+      const byF = new Map();
+      for (const k of mapped) byF.set(k.f, k);
+      _pa(doc, patches, [...propPath, 'keys'], [...byF.values()].sort((a, b) => a.f - b.f));
+      break;
+    }
+
+    case 'setKeysEase': {
+      // 지정 프레임의 키들에 이징 적용
+      const { id, path: dotPath, frames, ease } = cmd;
+      if (!doc.layers[id] || !frames?.length) break;
+      const propPath = ['layers', id, ...dotPath.split('.')];
+      const prop = _get(doc, propPath);
+      if (!prop?.keys) break;
+      const fSet = new Set(frames);
+      const keys = prop.keys.map(k => fSet.has(k.f) ? { ...k, ease } : k);
+      _pa(doc, patches, [...propPath, 'keys'], keys);
+      break;
+    }
+
     case 'addClip': {
       const { id, clip } = cmd;
       const layer = doc.layers[id];
