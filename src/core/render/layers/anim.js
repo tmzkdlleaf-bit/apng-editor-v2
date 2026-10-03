@@ -16,7 +16,7 @@ function _animSourceFrameIndex(timing, srcFrameCount, frameIndex, frameCount) {
 }
 
 export function renderAnimLayer(outputCtx, layer, worldTr, totalAlpha, rctx) {
-  const { assets, pool, cache, docWidth, docHeight, width, height, f, frameCount } = rctx;
+  const { assets, pool, cache, width, height, viewOffsetX = 0, viewOffsetY = 0, f, frameCount } = rctx;
   const frames = assets.getAnimFrames?.(layer.assetId);
   if (!frames || !frames.length) return;
 
@@ -75,16 +75,17 @@ export function renderAnimLayer(outputCtx, layer, worldTr, totalAlpha, rctx) {
     return;
   }
 
-  // 복잡한 경로: 전체 문서 크기 작업 캔버스
-  const tmpW = docWidth  ?? width;
-  const tmpH = docHeight ?? height;
+  // 복잡한 경로: view 크기 작업 캔버스 — 내용은 view 오프셋 후 worldTr로 배치
+  const tmpW = width;
+  const tmpH = height;
   const tmp  = pool.borrow(tmpW, tmpH);
   const tmpC = tmp.getContext('2d');
 
   tmpC.save();
+  tmpC.translate(-viewOffsetX, -viewOffsetY);
   applyTransform(tmpC, worldTr);
   tmpC.drawImage(contentCanvas, -bW * ax, -bH * ay);
-  tmpC.restore();
+  tmpC.restore();  // identity로 복원
 
   if (blur > 0) {
     const id = tmpC.getImageData(0, 0, tmpW, tmpH);
@@ -108,8 +109,9 @@ export function renderAnimLayer(outputCtx, layer, worldTr, totalAlpha, rctx) {
     }
   }
 
-  // setTransform 리셋 없음 — outputCtx의 view 오프셋 translate 유지
+  // tmp는 물리 픽셀 기준 — outputCtx를 identity로 리셋 후 blit
   outputCtx.save();
+  outputCtx.setTransform(1, 0, 0, 1, 0, 0);
   outputCtx.globalAlpha = totalAlpha;
   outputCtx.globalCompositeOperation = blendToComposite(layer.blend);
   outputCtx.drawImage(tmp, 0, 0);

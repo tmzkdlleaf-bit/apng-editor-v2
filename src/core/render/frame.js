@@ -53,6 +53,7 @@ export function createRenderEngine(opts = {}) {
     const { width, height } = doc.meta;
 
     cache.resetFrameStats();
+    pool.resetBorrowStats();
 
     const renderScale = (quality === 'draft') ? scale * 0.5 : scale;
 
@@ -118,10 +119,14 @@ export function createRenderEngine(opts = {}) {
 
     const { frameCount } = doc.meta;
 
-    // scope=full 이펙트·마스크·퇴장 효과 등 전체 캔버스 중간체는 문서 전체 크기를 써야 함
-    // rctx.docWidth/docHeight = doc.meta.width/height × renderScale
+    // docWidth/docHeight: 이펙트 w/h 의미 기준값(점 밀도·위치 계산)으로만 사용
+    // 캔버스 크기로는 쓰지 않는다 — 실제 작업 캔버스는 view(width×height)로 빌린다
     const docWidth  = Math.max(1, Math.round(doc.meta.width  * renderScale));
     const docHeight = Math.max(1, Math.round(doc.meta.height * renderScale));
+
+    // view 오프셋(물리 픽셀) — 레이어 렌더러가 작업 캔버스에 translate로 적용
+    const viewOffsetX = view ? Math.round(view.x * renderScale) : 0;
+    const viewOffsetY = view ? Math.round(view.y * renderScale) : 0;
 
     const cam   = evalCamera(doc, f);
     const camTr = {
@@ -139,6 +144,8 @@ export function createRenderEngine(opts = {}) {
       height,
       docWidth,
       docHeight,
+      viewOffsetX,
+      viewOffsetY,
       frameCount,
       motions:      motions      ?? null,
       effects:      effects      ?? null,
@@ -152,6 +159,10 @@ export function createRenderEngine(opts = {}) {
 
     rctx.renderMask = function renderMaskFn(sourceLayer, frame, w, h, maskOpts) {
       return _renderMask(sourceLayer, frame, w, h, maskOpts, pool, (maskCtx) => {
+        // 마스크 캔버스도 view 크기: view 오프셋을 먼저 적용해 좌표 일치
+        if (viewOffsetX || viewOffsetY) {
+          maskCtx.translate(-viewOffsetX, -viewOffsetY);
+        }
         if (sourceLayer.visible !== false) {
           _renderLayer(maskCtx, sourceLayer, camTr, rctx);
         }
@@ -190,12 +201,15 @@ export function createRenderEngine(opts = {}) {
   }
 
   function stats() {
+    const { maxBorrowW, maxBorrowH } = pool.getBorrowStats();
     return {
       renders:    _totalRenders,
       cacheHits:  _totalHits,
       cacheMisses: _totalMisses,
       adjustRuns: _lastAdjustRuns,
       lastMs:     _lastMs,
+      maxBorrowW,
+      maxBorrowH,
     };
   }
 

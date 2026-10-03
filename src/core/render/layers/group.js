@@ -2,14 +2,19 @@
 import { blendToComposite } from '../blend.js';
 
 export function renderGroupLayer(outputCtx, layer, worldTr, totalAlpha, rctx, renderLayerFn) {
-  const { doc, pool, docWidth, docHeight, width, height, f } = rctx;
+  const { doc, pool, width, height, viewOffsetX = 0, viewOffsetY = 0, f } = rctx;
 
-  // 전체 문서 크기 오프스크린: 자식이 어떤 위치에 있어도 잘리지 않음
-  const offW = docWidth  ?? width;
-  const offH = docHeight ?? height;
+  // view 크기 오프스크린: 자식도 view 오프셋 기준으로 그리므로 크기 충분
+  const offW = width;
+  const offH = height;
 
   const offscreen = pool.borrow(offW, offH);
   const offCtx    = offscreen.getContext('2d');
+
+  // 자식이 doc 좌표로 그릴 수 있도록 view 오프셋 적용
+  if (viewOffsetX || viewOffsetY) {
+    offCtx.translate(-viewOffsetX, -viewOffsetY);
+  }
 
   // 자식에게 넘기는 parentTr: 위치·회전·축척은 그대로, alpha=1
   const childParentTr = { ...worldTr, alpha: 1 };
@@ -21,14 +26,14 @@ export function renderGroupLayer(outputCtx, layer, worldTr, totalAlpha, rctx, re
     renderLayerFn(offCtx, child, childParentTr, rctx);
   }
 
-  // 그룹 마스크
+  // 그룹 마스크: maskCanvas는 view 크기(view 오프셋 내재)
   if (layer.mask && rctx.renderMask) {
     const { sourceId, mode = 'alpha', invert = false, feather = 0 } = layer.mask;
     const sourceLayer = doc.layers[sourceId];
     if (sourceLayer) {
       const maskCanvas = rctx.renderMask(sourceLayer, f, offW, offH, { mode, invert, feather });
       if (maskCanvas) {
-        offCtx.setTransform(1, 0, 0, 1, 0, 0);
+        offCtx.setTransform(1, 0, 0, 1, 0, 0);  // identity로 리셋 (자식 렌더 완료 후)
         offCtx.globalAlpha = 1;
         offCtx.globalCompositeOperation = 'destination-in';
         offCtx.drawImage(maskCanvas, 0, 0);
@@ -38,8 +43,9 @@ export function renderGroupLayer(outputCtx, layer, worldTr, totalAlpha, rctx, re
     }
   }
 
-  // setTransform 리셋 없음 — outputCtx의 view 오프셋 translate 유지
+  // offscreen은 물리 픽셀 기준 — outputCtx를 identity로 리셋 후 blit
   outputCtx.save();
+  outputCtx.setTransform(1, 0, 0, 1, 0, 0);
   outputCtx.globalAlpha = totalAlpha;
   outputCtx.globalCompositeOperation = blendToComposite(layer.blend);
   outputCtx.drawImage(offscreen, 0, 0);

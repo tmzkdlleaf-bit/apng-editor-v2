@@ -4,7 +4,11 @@ import { applyTransform } from '../matrix.js';
 import { blendToComposite } from '../blend.js';
 
 export function renderEffectLayer(outputCtx, layer, worldTr, totalAlpha, rctx) {
-  const { effects, pool, docWidth, docHeight, width, height, f, frameCount, renderScale = 1 } = rctx;
+  const {
+    effects, pool, docWidth, docHeight, width, height,
+    viewOffsetX = 0, viewOffsetY = 0,
+    f, frameCount, renderScale = 1,
+  } = rctx;
   if (!effects) return;
 
   const effectId = layer.effectId;
@@ -13,9 +17,11 @@ export function renderEffectLayer(outputCtx, layer, worldTr, totalAlpha, rctx) {
 
   const scope = layer.scope ?? 'full';
   const box   = layer.box;
+  const wx    = worldTr.x ?? 0;
+  const wy    = worldTr.y ?? 0;
 
-  // scope=full: 문서 전체 픽셀 크기 — 점 밀도·위치가 뷰 크기에 종속되지 않아야 함
-  // scope=box : box.w/h를 문서 단위로 사용 (worldTr.scale이 renderScale 포함)
+  // ew/eh: 이펙트에 전달하는 의미 크기(점 밀도·위치 기준) — 캔버스 크기와 무관
+  // scope=full: 문서 전체 픽셀 크기; scope=box: box.w/h
   const fullW = docWidth  ?? width;
   const fullH = docHeight ?? height;
   const ew = (scope === 'box' && box) ? Math.max(1, Math.round(box.w ?? 100)) : fullW;
@@ -24,13 +30,24 @@ export function renderEffectLayer(outputCtx, layer, worldTr, totalAlpha, rctx) {
   const seed = (layer.seed ?? 1) >>> 0;
   const rng  = createRng(seed);
 
-  const contentCanvas = pool.borrow(ew, eh);
+  // scope=full: view 크기 + PAD_PX 여유(경계 밖 이펙트 도형 블리드 허용)
+  // scope=box: box 크기 그대로
+  const PAD_PX = 20;
+  const contentW = (scope === 'full') ? width  + PAD_PX * 2 : ew;
+  const contentH = (scope === 'full') ? height + PAD_PX * 2 : eh;
+
+  const contentCanvas = pool.borrow(contentW, contentH);
   const contentCtx    = contentCanvas.getContext('2d');
+
+  if (scope === 'full') {
+    // PAD_PX 여유분 + view 오프셋 적용 (viewOffset=0이어도 항상 적용)
+    contentCtx.translate(-viewOffsetX + PAD_PX, -viewOffsetY + PAD_PX);
+  }
 
   effect.render(contentCtx, {
     f,
     frameCount,
-    w: ew,
+    w: ew,    // 이펙트는 항상 문서 크기 기준으로 점 위치를 계산
     h: eh,
     rng,
     sources: [],
@@ -40,25 +57,26 @@ export function renderEffectLayer(outputCtx, layer, worldTr, totalAlpha, rctx) {
   const hasMask = !!(layer.mask && rctx.renderMask);
 
   if (hasMask) {
-    // 마스크 경로: docWidth×docHeight 작업 캔버스에 내용 + 마스크를 합성 후 blit
-    // tmp는 항상 전체 문서 크기 — mask가 view 기준이 되면 위치 불일치
-    const tmp  = pool.borrow(fullW, fullH);
+    // 마스크 경로: view 크기 작업 캔버스
+    const tmp  = pool.borrow(width, height);
     const tmpC = tmp.getContext('2d');
 
-    tmpC.save();
     if (scope === 'full') {
-      tmpC.translate(worldTr.x ?? 0, worldTr.y ?? 0);
-      tmpC.drawImage(contentCanvas, 0, 0);
+      // PAD_PX 잘라내기 + worldTr(wx,wy) 오프셋 유지
+      tmpC.drawImage(contentCanvas, PAD_PX, PAD_PX, width, height, wx, wy, width, height);
     } else {
+      // scope=box: view 오프셋 + worldTr 적용 후 box contentCanvas를 그림
+      tmpC.save();
+      tmpC.translate(-viewOffsetX, -viewOffsetY);
       applyTransform(tmpC, worldTr);
       tmpC.drawImage(contentCanvas, -ew / 2, -eh / 2);
+      tmpC.restore();
     }
-    tmpC.restore();
 
     const { sourceId, mode = 'alpha', invert = false, feather = 0 } = layer.mask;
     const sourceLayer = rctx.doc.layers[sourceId];
     if (sourceLayer) {
-      const maskCanvas = rctx.renderMask(sourceLayer, f, fullW, fullH, { mode, invert, feather });
+      const maskCanvas = rctx.renderMask(sourceLayer, f, width, height, { mode, invert, feather });
       if (maskCanvas) {
         tmpC.setTransform(1, 0, 0, 1, 0, 0);
         tmpC.globalAlpha = 1;
@@ -69,23 +87,26 @@ export function renderEffectLayer(outputCtx, layer, worldTr, totalAlpha, rctx) {
       }
     }
 
-    // setTransform 리셋 없음 — outputCtx의 view 오프셋 translate 유지
-    // tmp 안에 이미 worldTr이 반영됐으므로 추가 변환 없이 (0,0)에 그림
+    // tmp는 물리 픽셀 기준(view 오프셋 내재) — outputCtx를 identity로 리셋 후 blit
     outputCtx.save();
+    outputCtx.setTransform(1, 0, 0, 1, 0, 0);
     outputCtx.globalAlpha = totalAlpha;
     outputCtx.globalCompositeOperation = blendToComposite(layer.blend);
     outputCtx.drawImage(tmp, 0, 0);
     outputCtx.restore();
     pool.release(tmp);
   } else {
-    // 마스크 없음: outputCtx에 직접 변환 후 그리기
+    // 마스크 없음: contentCanvas를 직접 blit
     outputCtx.save();
+    outputCtx.setTransform(1, 0, 0, 1, 0, 0);
     outputCtx.globalAlpha = totalAlpha;
     outputCtx.globalCompositeOperation = blendToComposite(layer.blend);
     if (scope === 'full') {
-      outputCtx.translate(worldTr.x ?? 0, worldTr.y ?? 0);
-      outputCtx.drawImage(contentCanvas, 0, 0);
+      // PAD_PX 잘라내기 + worldTr(wx,wy) 오프셋 유지
+      outputCtx.drawImage(contentCanvas, PAD_PX, PAD_PX, width, height, wx, wy, width, height);
     } else {
+      // scope=box: identity 기준으로 view 오프셋 + worldTr 적용
+      outputCtx.translate(-viewOffsetX, -viewOffsetY);
       applyTransform(outputCtx, worldTr);
       outputCtx.drawImage(contentCanvas, -ew / 2, -eh / 2);
     }

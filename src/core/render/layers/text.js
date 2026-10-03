@@ -116,7 +116,7 @@ export function measureTextBounds(layer) {
 }
 
 export function renderTextLayer(outputCtx, layer, worldTr, totalAlpha, rctx) {
-  const { pool, cache, docWidth, docHeight, width, height, f, frameCount } = rctx;
+  const { pool, cache, width, height, viewOffsetX = 0, viewOffsetY = 0, f, frameCount } = rctx;
 
   const isStatic = !layer.reveal && !layer.charAnim;
   const hasMask  = !!(layer.mask && rctx.renderMask);
@@ -148,16 +148,17 @@ export function renderTextLayer(outputCtx, layer, worldTr, totalAlpha, rctx) {
     return;
   }
 
-  // 동적 텍스트(reveal/charAnim) 또는 마스크: 전체 문서 크기 작업 캔버스
-  const tmpW = docWidth  ?? width;
-  const tmpH = docHeight ?? height;
+  // 동적 텍스트(reveal/charAnim) 또는 마스크: view 크기 작업 캔버스
+  const tmpW = width;
+  const tmpH = height;
   const tmp  = pool.borrow(tmpW, tmpH);
   const tmpC = tmp.getContext('2d');
 
   tmpC.save();
+  tmpC.translate(-viewOffsetX, -viewOffsetY);
   applyTransform(tmpC, worldTr);
   _drawLines(tmpC, layer, f, frameCount);
-  tmpC.restore();
+  tmpC.restore();  // identity로 복원
 
   if (layer.mask && rctx.renderMask) {
     const { sourceId, mode = 'alpha', invert = false, feather = 0 } = layer.mask;
@@ -175,8 +176,9 @@ export function renderTextLayer(outputCtx, layer, worldTr, totalAlpha, rctx) {
     }
   }
 
-  // setTransform 리셋 없음 — outputCtx의 view 오프셋 translate 유지
+  // tmp는 물리 픽셀 기준 — outputCtx를 identity로 리셋 후 blit
   outputCtx.save();
+  outputCtx.setTransform(1, 0, 0, 1, 0, 0);
   outputCtx.globalAlpha = totalAlpha;
   outputCtx.globalCompositeOperation = blendToComposite(layer.blend);
   outputCtx.drawImage(tmp, 0, 0);

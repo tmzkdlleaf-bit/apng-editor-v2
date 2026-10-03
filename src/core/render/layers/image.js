@@ -39,7 +39,7 @@ function _applyMask(tmpC, maskOpts, rctx, f, w, h) {
 }
 
 export function renderImageLayer(outputCtx, layer, worldTr, totalAlpha, rctx) {
-  const { assets, pool, cache, docWidth, docHeight, width, height, f } = rctx;
+  const { assets, pool, cache, width, height, viewOffsetX = 0, viewOffsetY = 0, f } = rctx;
   const bitmap = assets.getBitmap?.(layer.assetId);
   if (!bitmap) return;
 
@@ -91,9 +91,9 @@ export function renderImageLayer(outputCtx, layer, worldTr, totalAlpha, rctx) {
     return;
   }
 
-  // 복잡한 경로: 전체 문서 크기 작업 캔버스 — view 오프셋과 독립적으로 위치 계산
-  const tmpW = docWidth  ?? width;
-  const tmpH = docHeight ?? height;
+  // 복잡한 경로: view 크기 작업 캔버스 — 내용은 view 오프셋 후 worldTr로 배치
+  const tmpW = width;
+  const tmpH = height;
   const tmp  = pool.borrow(tmpW, tmpH);
   const tmpC = tmp.getContext('2d');
 
@@ -103,22 +103,30 @@ export function renderImageLayer(outputCtx, layer, worldTr, totalAlpha, rctx) {
     const color = layer.outline.color ?? '#ffffff';
     const sil   = pool.borrow(tmpW, tmpH);
     const silC  = sil.getContext('2d');
+
+    // sil: view 오프셋 + worldTr로 실루엣 그리기
     silC.save();
+    silC.translate(-viewOffsetX, -viewOffsetY);
     applyTransform(silC, worldTr);
     silC.drawImage(contentCanvas, -bW * ax, -bH * ay);
-    silC.restore();
+    silC.restore();  // identity로 복원
+
     silC.globalCompositeOperation = 'source-in';
     silC.fillStyle = color;
-    silC.fillRect(0, 0, tmpW, tmpH);
+    silC.fillRect(0, 0, tmpW, tmpH);  // 물리 캔버스 전체 칠하기
     silC.globalCompositeOperation = 'source-over';
+
+    // 외곽선: tmpC와 sil 모두 물리 좌표 기준 → ow 픽셀 shift
     _drawOutline(tmpC, sil, steps, ow);
     pool.release(sil);
   }
 
+  // 본체: view 오프셋 + worldTr 적용
   tmpC.save();
+  tmpC.translate(-viewOffsetX, -viewOffsetY);
   applyTransform(tmpC, worldTr);
   tmpC.drawImage(contentCanvas, -bW * ax, -bH * ay);
-  tmpC.restore();
+  tmpC.restore();  // identity로 복원
 
   if (hasBlur) {
     const id = tmpC.getImageData(0, 0, tmpW, tmpH);
@@ -128,8 +136,9 @@ export function renderImageLayer(outputCtx, layer, worldTr, totalAlpha, rctx) {
 
   if (layer.mask) _applyMask(tmpC, layer.mask, rctx, f, tmpW, tmpH);
 
-  // setTransform 리셋 없음 — outputCtx의 view 오프셋 translate 유지
+  // tmp는 물리 픽셀 기준(view 오프셋 내재) — outputCtx를 identity로 리셋 후 blit
   outputCtx.save();
+  outputCtx.setTransform(1, 0, 0, 1, 0, 0);
   outputCtx.globalAlpha = totalAlpha;
   outputCtx.globalCompositeOperation = blendToComposite(layer.blend);
   outputCtx.drawImage(tmp, 0, 0);
