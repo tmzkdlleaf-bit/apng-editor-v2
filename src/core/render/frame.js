@@ -84,7 +84,8 @@ export function createRenderEngine(opts = {}) {
         : Math.max(1, Math.round(height * scale));
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.clearRect(0, 0, outW, outH);
-      ctx.drawImage(workCanvas, 0, 0, outW, outH);
+      // A1: pool 정렬로 캔버스가 renderW×renderH보다 클 수 있음 → 실제 내용 영역만 지정
+      ctx.drawImage(workCanvas, 0, 0, renderW, renderH, 0, 0, outW, outH);
       pool.release(workCanvas);
     }
 
@@ -112,15 +113,13 @@ export function createRenderEngine(opts = {}) {
     }
 
     // view 있으면 doc 좌표 (view.x, view.y)를 캔버스 (0, 0)에 대응
-    // composeTransforms는 scale=1 시 camTr.x 오프셋 영향 없으므로 ctx.translate 사용
     if (view) {
       ctx.translate(-view.x * renderScale, -view.y * renderScale);
     }
 
     const { frameCount } = doc.meta;
 
-    // docWidth/docHeight: 이펙트 w/h 의미 기준값(점 밀도·위치 계산)으로만 사용
-    // 캔버스 크기로는 쓰지 않는다 — 실제 작업 캔버스는 view(width×height)로 빌린다
+    // docWidth/docHeight: renderScale 적용 픽셀 크기 (레이어 좌표 변환 기준)
     const docWidth  = Math.max(1, Math.round(doc.meta.width  * renderScale));
     const docHeight = Math.max(1, Math.round(doc.meta.height * renderScale));
 
@@ -144,6 +143,8 @@ export function createRenderEngine(opts = {}) {
       height,
       docWidth,
       docHeight,
+      rawDocWidth:  doc.meta.width,   // 이펙트에 전달하는 문서 단위 크기
+      rawDocHeight: doc.meta.height,
       viewOffsetX,
       viewOffsetY,
       frameCount,

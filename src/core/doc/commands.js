@@ -424,6 +424,19 @@ export function applyCommand(doc, cmd) {
       break;
     }
 
+    case 'addAsset': {
+      const { id, asset } = cmd;
+      if (!doc.assets) doc.assets = {};
+      _pa(doc, patches, ['assets', id], structuredClone(asset));
+      break;
+    }
+
+    case 'removeAsset': {
+      const { id } = cmd;
+      _pa(doc, patches, ['assets', id], undefined);
+      break;
+    }
+
     case 'batch': {
       for (const subCmd of cmd.cmds) {
         patches.push(...applyCommand(doc, subCmd));

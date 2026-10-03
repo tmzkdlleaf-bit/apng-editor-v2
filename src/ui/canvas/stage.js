@@ -21,7 +21,6 @@ export function initStage(containerEl, store, editorState) {
 
   // 에셋 어댑터: doc.assets → canvas 비트맵
   const assets = createAssets(store, (_assetId) => {
-    // 비트맵 디코딩 완료 시 씬 재렌더
     requestScene();
   });
 
@@ -45,6 +44,10 @@ export function initStage(containerEl, store, editorState) {
   let _snapLines = [];
   let _offscreen  = null;
   let _cssW = 1, _cssH = 1;
+
+  // A2: 체커보드 패턴 캐시
+  let _checkerPattern = null;
+  let _checkerPatDpr  = 0;
 
   // 드래그 지연 측정
   let _lastPointerMoveTime = 0;
@@ -75,7 +78,6 @@ export function initStage(containerEl, store, editorState) {
     _sceneReq = false;
     _sceneRenderCount++;
 
-    // 드래그 지연 측정: rAF 시작 시점과 마지막 pointermove 시점의 차이
     if (_lastPointerMoveTime > 0) {
       const latency = performance.now() - _lastPointerMoveTime;
       if (latency < 200) _latencies.push(latency);
@@ -140,6 +142,24 @@ export function initStage(containerEl, store, editorState) {
     ctx.restore();
   }
 
+  // A2: createPattern으로 한 번에 채우기
+  function _makeCheckerPattern(ctx, dpr) {
+    if (_checkerPattern && _checkerPatDpr === dpr) return _checkerPattern;
+    const sz = Math.round(8 * dpr);
+    const pc = document.createElement('canvas');
+    pc.width  = sz * 2;
+    pc.height = sz * 2;
+    const pctx = pc.getContext('2d');
+    pctx.fillStyle = 'rgba(255,255,255,0.07)';
+    pctx.fillRect(0, 0, sz * 2, sz * 2);
+    pctx.fillStyle = 'rgba(0,0,0,0.15)';
+    pctx.fillRect(0, 0, sz, sz);
+    pctx.fillRect(sz, sz, sz, sz);
+    _checkerPattern = ctx.createPattern(pc, 'repeat');
+    _checkerPatDpr  = dpr;
+    return _checkerPattern;
+  }
+
   function _drawChecker(ctx, zoom, panX, panY, W, H, docW, docH, dpr) {
     const { ox, oy } = docOrigin(zoom, panX, panY, W, H, docW, docH);
     const dw = docW * zoom;
@@ -148,20 +168,23 @@ export function initStage(containerEl, store, editorState) {
     const y0 = Math.max(0, oy) * dpr;
     const x1 = Math.min(W, ox + dw) * dpr;
     const y1 = Math.min(H, oy + dh) * dpr;
+    if (x1 <= x0 || y1 <= y0) return;
+
+    const sz  = Math.round(8 * dpr);
+    const pat = _makeCheckerPattern(ctx, dpr);
+
+    // 패턴 위상: doc 원점(ox,oy)에 체커 격자가 맞게 offset 계산
+    const offX = ((Math.round(ox * dpr) % (sz * 2)) + sz * 2) % (sz * 2);
+    const offY = ((Math.round(oy * dpr) % (sz * 2)) + sz * 2) % (sz * 2);
 
     ctx.save();
     ctx.beginPath();
     ctx.rect(x0, y0, x1 - x0, y1 - y0);
     ctx.clip();
-
-    const sz = 8 * dpr;
-    for (let gy = Math.floor(y0 / sz) * sz; gy < y1; gy += sz) {
-      for (let gx = Math.floor(x0 / sz) * sz; gx < x1; gx += sz) {
-        const even = ((Math.floor((gx - ox * dpr) / sz) + Math.floor((gy - oy * dpr) / sz)) & 1) === 0;
-        ctx.fillStyle = even ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.15)';
-        ctx.fillRect(gx, gy, sz, sz);
-      }
-    }
+    ctx.translate(offX, offY);
+    ctx.fillStyle = pat;
+    // clip이 실제 범위를 제한 — 충분히 큰 영역으로 채우기
+    ctx.fillRect(x0 - offX, y0 - offY, x1 - x0 + offX + sz * 2, y1 - y0 + offY + sz * 2);
     ctx.restore();
   }
 
@@ -193,7 +216,6 @@ export function initStage(containerEl, store, editorState) {
     if (!on) _autoDraft = false;
   }
 
-  // pointermove 시각 기록 (capture phase, passive)
   overlayCanvas.addEventListener('pointermove', () => {
     _lastPointerMoveTime = performance.now();
   }, { capture: true, passive: true });
@@ -229,6 +251,9 @@ export function initStage(containerEl, store, editorState) {
 
       sceneCanvas.style.width   = w + 'px'; sceneCanvas.style.height  = h + 'px';
       overlayCanvas.style.width  = w + 'px'; overlayCanvas.style.height = h + 'px';
+
+      // dpr가 바뀌면 패턴 재생성
+      _checkerPattern = null;
     }
     requestScene();
     requestOverlay();

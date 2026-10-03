@@ -1,5 +1,5 @@
-// 레이어 추가 메뉴 — 버튼 클릭 시 드롭다운 표시
-import { createLayer } from '../core/doc/schema.js';
+// 레이어 추가 메뉴 — 버튼 클릭 또는 캔버스 드래그로 레이어 추가
+import { createLayer, newId } from '../core/doc/schema.js';
 
 const _ITEMS = [
   { key: 'rect',     label: '사각형',   type: 'shape', shape: { kind: 'rect',    w: 100, h: 100, fill: '#5eb8f0', stroke: null } },
@@ -37,7 +37,7 @@ export function createLayerAddMenu(store, editorState, containerEl) {
   // 이미지 파일 입력
   const fileInput = document.createElement('input');
   fileInput.type = 'file';
-  fileInput.accept = 'image/*';
+  fileInput.accept = 'image/png,image/jpeg,image/webp';
   fileInput.style.display = 'none';
   fileInput.addEventListener('change', () => {
     const file = fileInput.files[0];
@@ -60,9 +60,9 @@ export function createLayerAddMenu(store, editorState, containerEl) {
   function _close() { menu.style.display = 'none'; }
 
   function _addLayer(item) {
-    const doc   = store.get();
-    const cx    = Math.round(doc.meta.width  / 2);
-    const cy    = Math.round(doc.meta.height / 2);
+    const doc = store.get();
+    const cx  = Math.round(doc.meta.width  / 2);
+    const cy  = Math.round(doc.meta.height / 2);
 
     if (item.key === 'image') {
       fileInput.click();
@@ -81,30 +81,53 @@ export function createLayerAddMenu(store, editorState, containerEl) {
       layer.color = '#ffffff';
     }
 
-    // 현재 선택 위치 바로 위에 삽입 (기본: 최상단)
     const topIndex = doc.order.length;
     store.apply({ type: 'addLayer', layer, index: topIndex });
     editorState.set({ selection: [layer.id] });
   }
 
+  // A4: addAsset + addLayer를 batch 한 건으로 → 되돌리기/다시하기 일치
   function _addImageFile(file) {
     const reader = new FileReader();
     reader.onload = (ev) => {
       const dataUrl = ev.target.result;
       const doc     = store.get();
-      const assetId = 'img_' + Date.now();
-      const layer   = createLayer('image', { name: file.name.replace(/\.[^.]+$/, ''), assetId });
+      const assetId = newId('img_');
+      const name    = file.name.replace(/\.[^.]+$/, '');
+      const layer   = createLayer('image', { name, assetId });
       layer.transform.x.value = Math.round(doc.meta.width  / 2);
       layer.transform.y.value = Math.round(doc.meta.height / 2);
 
-      store.apply({ type: 'addLayer', layer, index: doc.order.length });
-      // 에셋 저장 (store.apply setMeta로 불가 → doc을 직접 건드릴 수 없으므로
-      // assets는 store 밖 별도 관리 or addAsset 명령 필요 — 여기서는 별도 addAsset 처리)
-      // P6 범위: 파일 선택 경로만 열고 assetId 기록; 렌더는 assets 모듈에서 처리
-      store.get().assets[assetId] = { dataUrl };
+      store.apply({
+        type: 'batch',
+        cmds: [
+          { type: 'addAsset', id: assetId, asset: { dataUrl } },
+          { type: 'addLayer', layer, index: doc.order.length },
+        ],
+      });
       editorState.set({ selection: [layer.id] });
     };
     reader.readAsDataURL(file);
+  }
+
+  // D1: 캔버스로 끌어다 놓기 — PNG·JPG·WebP
+  function setupDropTarget(stageEl) {
+    if (!stageEl) return;
+
+    stageEl.addEventListener('dragover', (e) => {
+      const hasImage = [...(e.dataTransfer?.items ?? [])].some(
+        (it) => it.kind === 'file' && it.type.startsWith('image/')
+      );
+      if (hasImage) e.preventDefault();
+    });
+
+    stageEl.addEventListener('drop', (e) => {
+      e.preventDefault();
+      const files = [...(e.dataTransfer?.files ?? [])].filter(
+        (f) => f.type === 'image/png' || f.type === 'image/jpeg' || f.type === 'image/webp'
+      );
+      for (const file of files) _addImageFile(file);
+    });
   }
 
   function destroy() {
@@ -112,5 +135,5 @@ export function createLayerAddMenu(store, editorState, containerEl) {
     fileInput.remove();
   }
 
-  return { btn, menu, destroy };
+  return { btn, menu, destroy, setupDropTarget };
 }
