@@ -9,6 +9,26 @@
   overflow: hidden;
 }
 
+/* 임시 상태 토스트 */
+.app-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%) translateY(8px);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--r-2);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.35);
+  color: var(--text);
+  font-size: var(--fs-2);
+  padding: var(--sp-2) var(--sp-4);
+  z-index: 2000;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--dur-fast), transform var(--dur-fast);
+}
+.app-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
 [data-region="topbar"] {
   grid-area: topbar;
   background: var(--panel);

@@ -1,7 +1,8 @@
-// 타임라인 레이어 목록 패널 (왼쪽) — 펼침 하위 행 + 그룹 드롭
-import { computeRows } from './rows.js';
+// 타임라인 레이어 목록 패널 (왼쪽) — 그룹 계층 + 펼침 하위 행 + 끌어 놓기
+import { computeRows, isSelfOrDescendant } from './rows.js';
 
-const ROW_H = 28; // C3: 28px
+const ROW_H  = 28; // C3: 28px
+const INDENT = 12; // G1: 단계당 들여쓰기 px
 
 const _TYPE_CHAR = {
   shape: '▣', image: '▤', text: 'T', effect: '★',
@@ -12,7 +13,7 @@ export function initLayerList(containerEl, store, editorState) {
   let _dragId     = null;
   let _dragStartY = 0;
   let _dragging   = false;
-  let _dropInfo   = null; // { parentId, index } 또는 null
+  let _dropInfo   = null;
 
   function _rebuild() {
     if (_dragging) return;
@@ -20,24 +21,26 @@ export function initLayerList(containerEl, store, editorState) {
     const doc = store.get();
     const es  = editorState.get();
     const sel = new Set(es.selection);
-    const rows = computeRows(doc, es.expanded);
-    for (const row of rows) {
+    for (const row of computeRows(doc, es.expanded)) {
       if (row.kind === 'camera') {
-        containerEl.appendChild(_makeCameraRow());
+        containerEl.appendChild(_makeCameraRow(row.depth));
       } else if (row.kind === 'layer') {
         const layer = doc.layers[row.id];
-        if (layer) containerEl.appendChild(_makeLayerRow(layer, sel.has(row.id), row.hasKeyedProps, es.expanded[row.id]));
+        if (layer) containerEl.appendChild(_makeLayerRow(layer, sel.has(row.id), row, es.expanded[row.id]));
       } else if (row.kind === 'prop') {
-        containerEl.appendChild(_makePropRow(row.label));
+        containerEl.appendChild(_makePropRow(row.label, row.depth));
       }
     }
   }
 
-  function _makeCameraRow() {
+  function _indent(el, depth) { el.style.paddingLeft = (depth * INDENT + 2) + 'px'; }
+
+  function _makeCameraRow(depth) {
     const r = document.createElement('div');
     r.className = 'tl-row tl-row-camera';
     r.style.height = ROW_H + 'px';
     r.dataset.kind = 'camera';
+    _indent(r, depth);
     const name = document.createElement('span');
     name.className = 'tl-name';
     name.textContent = '카메라';
@@ -45,11 +48,12 @@ export function initLayerList(containerEl, store, editorState) {
     return r;
   }
 
-  function _makePropRow(label) {
+  function _makePropRow(label, depth) {
     const r = document.createElement('div');
     r.className = 'tl-row tl-row-prop';
     r.style.height = ROW_H + 'px';
     r.dataset.kind = 'prop';
+    _indent(r, depth);
     const name = document.createElement('span');
     name.className = 'tl-prop-name';
     name.textContent = label;
@@ -57,7 +61,7 @@ export function initLayerList(containerEl, store, editorState) {
     return r;
   }
 
-  function _makeLayerRow(layer, selected, hasKeyedProps, expanded) {
+  function _makeLayerRow(layer, selected, rowInfo, expanded) {
     const row = document.createElement('div');
     row.className = 'tl-row'
       + (selected ? ' tl-row-sel' : '')
@@ -65,11 +69,12 @@ export function initLayerList(containerEl, store, editorState) {
     row.dataset.id = layer.id;
     row.dataset.kind = 'layer';
     row.style.height = ROW_H + 'px';
+    _indent(row, rowInfo.depth);
 
-    // 펼침 화살표 (키 있는 속성이 있을 때만)
+    // 펼침 화살표 (그룹이거나 키 있는 속성이 있을 때)
     const expandBtn = document.createElement('button');
     expandBtn.className = 'tl-expand';
-    if (hasKeyedProps) {
+    if (rowInfo.hasExpandable) {
       expandBtn.textContent = expanded ? '▾' : '▸';
       expandBtn.title = expanded ? '접기' : '펼치기';
       expandBtn.addEventListener('click', (e) => {
@@ -115,21 +120,20 @@ export function initLayerList(containerEl, store, editorState) {
 
     row.append(expandBtn, eyeBtn, lockBtn, typeEl, nameEl);
 
-    // 클릭 → 선택 (C1)
+    // 클릭 → 선택
     row.addEventListener('click', (e) => {
       if (_dragging) return;
       const id  = layer.id;
       const es  = editorState.get();
       const cur = es.selection;
       if (e.shiftKey) {
-        const ids = _layerOrder();
+        const ids = _visibleLayerIds();
         const lastSel = cur[cur.length - 1];
         if (lastSel && ids.includes(lastSel)) {
           const from = ids.indexOf(lastSel);
           const to   = ids.indexOf(id);
           const [lo, hi] = from <= to ? [from, to] : [to, from];
-          const range = ids.slice(lo, hi + 1);
-          editorState.set({ selection: [...new Set([...cur, ...range])] });
+          editorState.set({ selection: [...new Set([...cur, ...ids.slice(lo, hi + 1)])] });
         } else {
           editorState.set({ selection: cur.includes(id) ? cur.filter(x => x !== id) : [...cur, id] });
         }
@@ -153,12 +157,12 @@ export function initLayerList(containerEl, store, editorState) {
     return row;
   }
 
-  // 최상위 레이어 순서 (표시 순 = 역순)
-  function _layerOrder() {
-    return [...store.get().order].reverse();
+  // 화면에 보이는 레이어 행 id 순서
+  function _visibleLayerIds() {
+    return computeRows(store.get(), editorState.get().expanded)
+      .filter(r => r.kind === 'layer').map(r => r.id);
   }
 
-  // C1: 인라인 이름 편집
   function _startRename(id, nameEl) {
     const layer = store.get().layers[id];
     if (!layer) return;
@@ -180,7 +184,12 @@ export function initLayerList(containerEl, store, editorState) {
     input.addEventListener('blur', _commit);
   }
 
-  // ── 드래그: 순서 바꾸기 / 그룹 안으로 (item 1) ─────────────────────────
+  // ── 끌어 놓기 (G2) ─────────────────────────────────────────────────────
+  function _siblingOrder(parentId) {
+    const doc = store.get();
+    return parentId ? (doc.layers[parentId]?.childOrder ?? []) : doc.order;
+  }
+
   function _onPointerMove(e) {
     if (!_dragId) return;
     const dy = e.clientY - _dragStartY;
@@ -190,36 +199,52 @@ export function initLayerList(containerEl, store, editorState) {
     _updateIndicator();
   }
 
-  // 드롭 위치 계산: 레이어 행들의 화면 영역으로 판정
+  // 드롭 위치 계산 → { parentId, index, into, markEl, markBefore }
   function _computeDrop(clientY) {
     const doc  = store.get();
-    const rows = [...containerEl.querySelectorAll('.tl-row[data-kind="layer"]')];
     _dropInfo = null;
-    let placed = false;
+
+    const rows = [...containerEl.querySelectorAll('.tl-row[data-kind="layer"]')];
+    let targetEl = null, frac = 1;
     for (const el of rows) {
-      const id = el.dataset.id;
-      if (id === _dragId) continue;
       const rect = el.getBoundingClientRect();
-      if (clientY < rect.top || clientY > rect.bottom) continue;
-      const frac  = (clientY - rect.top) / rect.height;
-      const layer = doc.layers[id];
-      if (layer?.type === 'group' && frac >= 0.25 && frac <= 0.75) {
-        // 그룹 안으로
-        _dropInfo = { parentId: id, index: (layer.childOrder?.length ?? 0), into: true, markEl: el };
-      } else {
-        // 순서 바꾸기 (최상위)
-        const order   = _layerOrder();
-        const uiIdx   = order.indexOf(id);
-        const before  = frac < 0.5;
-        _dropInfo = { parentId: null, uiIdx, before, markEl: el, markBefore: before };
+      if (clientY >= rect.top && clientY <= rect.bottom) {
+        targetEl = el;
+        frac = (clientY - rect.top) / rect.height;
+        break;
       }
-      placed = true;
-      break;
     }
-    if (!placed) {
-      // 목록 끝으로
-      _dropInfo = { parentId: null, uiIdx: _layerOrder().length, before: true, markEl: null };
+
+    if (!targetEl) {
+      // 목록 끝/빈 공간 → 최상위 맨 아래(표시) = order[0] 앞
+      _dropInfo = { parentId: null, index: _siblingOrder(null).length, markEl: null };
+      return;
     }
+
+    const targetId = targetEl.dataset.id;
+    if (targetId === _dragId) return;                       // 자기 위
+    if (isSelfOrDescendant(doc, _dragId, targetId)) return;  // 자기 자손 안 (막기)
+
+    const targetLayer = doc.layers[targetId];
+
+    // 그룹 가운데 50% → 그룹 안으로
+    if (targetLayer?.type === 'group' && frac >= 0.25 && frac <= 0.75) {
+      _dropInfo = {
+        parentId: targetId,
+        index: (targetLayer.childOrder?.length ?? 0), // 표시 맨 위
+        into: true, markEl: targetEl,
+      };
+      return;
+    }
+
+    // 순서 바꾸기 — target의 형제로
+    const parentId = targetLayer.parentId ?? null;
+    const order    = _siblingOrder(parentId);
+    const tIdx     = order.indexOf(targetId);
+    const before   = frac < 0.5; // 표시상 target 위
+    // 표시는 역순: target 위(before) = doc 인덱스 tIdx+1, 아래 = tIdx
+    const docIndex = before ? tIdx + 1 : tIdx;
+    _dropInfo = { parentId, index: docIndex, markEl: targetEl, markBefore: before };
   }
 
   function _onPointerUp() {
@@ -229,33 +254,26 @@ export function initLayerList(containerEl, store, editorState) {
     const info   = _dropInfo;
     _dragId = null; _dragging = false; _dropInfo = null;
     _clearIndicator();
-    if (!wasDragging) return;        // 단순 클릭 — click 핸들러가 처리
+    if (!wasDragging) return;        // 단순 클릭
     if (!info) { _rebuild(); return; }
 
-    if (info.into) {
-      store.apply({ type: 'moveLayer', id: dragId, parentId: info.parentId, index: info.index });
-    } else {
-      // 최상위 순서 바꾸기 — UI(역순) 인덱스를 doc 인덱스로 변환
-      const order = _layerOrder();
-      const fromUi = order.indexOf(dragId);
-      let toUi = info.uiIdx;
-      if (!info.before) toUi += 1;
-      if (toUi === fromUi || toUi === fromUi + 1) { _rebuild(); return; }
-      if (toUi > fromUi) toUi -= 1;
-      const total  = store.get().order.length;
-      const docIdx = Math.max(0, total - 1 - toUi);
-      store.apply({ type: 'moveLayer', id: dragId, parentId: null, index: docIdx });
+    const doc = store.get();
+    const curParent = doc.layers[dragId]?.parentId ?? null;
+    let index = info.index;
+    // 같은 부모 안에서 앞쪽 요소를 들어내면 인덱스가 하나 당겨짐
+    if ((info.parentId ?? null) === curParent) {
+      const order = _siblingOrder(curParent);
+      const from  = order.indexOf(dragId);
+      if (from !== -1 && from < index) index -= 1;
     }
+    store.apply({ type: 'moveLayer', id: dragId, parentId: info.parentId ?? null, index });
   }
 
   function _updateIndicator() {
     _clearIndicator();
-    if (!_dropInfo) return;
-    if (_dropInfo.into && _dropInfo.markEl) {
-      _dropInfo.markEl.classList.add('tl-row-drop-into');
-    } else if (_dropInfo.markEl) {
-      _dropInfo.markEl.classList.add(_dropInfo.markBefore ? 'tl-row-drag-over-before' : 'tl-row-drag-over-after');
-    }
+    if (!_dropInfo || !_dropInfo.markEl) return;
+    if (_dropInfo.into) _dropInfo.markEl.classList.add('tl-row-drop-into');
+    else _dropInfo.markEl.classList.add(_dropInfo.markBefore ? 'tl-row-drag-over-before' : 'tl-row-drag-over-after');
   }
 
   function _clearIndicator() {

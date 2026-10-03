@@ -1,5 +1,6 @@
 // 레이어 추가 메뉴 — 버튼 클릭 또는 캔버스 드래그로 레이어 추가
 import { createLayer, newId } from '../core/doc/schema.js';
+import { groupSelection } from './group-ops.js';
 
 // AddMenu 설계: 이미지 / 글자 / 도형 / 이펙트 / 그룹 / 조정 / 움직이는 이미지 / PSD
 // 이번에 안 되는 항목은 disabled + "준비 중"
@@ -14,7 +15,7 @@ const _MENU = [
   { kind: 'hexagon',  label: '육각형',   type: 'shape', shape: { kind: 'polygon', sides: 6, w: 80, h: 80, fill: '#2ecc71', stroke: null } },
   { group: '기타' },
   { kind: 'effect',   label: '이펙트',   disabled: true },
-  { kind: 'group',    label: '그룹',     disabled: true },
+  { kind: 'group',    label: '그룹',     type: 'group' },
   { kind: 'adjust',   label: '조정',     disabled: true },
   { kind: 'psd',      label: 'PSD',      disabled: true },
 ];
@@ -92,6 +93,18 @@ export function createLayerAddMenu(store, editorState, containerEl) {
 
     if (item.kind === 'image') {
       fileInput.click();
+      return;
+    }
+
+    // 그룹: 선택이 있으면 그것으로 묶고, 없으면 빈 그룹 추가
+    if (item.type === 'group') {
+      if (editorState.get().selection.length) {
+        groupSelection(store, editorState);
+      } else {
+        const g = createLayer('group', { name: '그룹', childOrder: [] });
+        store.apply({ type: 'addLayer', layer: g, index: doc.order.length });
+        editorState.set({ selection: [g.id] });
+      }
       return;
     }
 

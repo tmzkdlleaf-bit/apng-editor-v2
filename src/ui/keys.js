@@ -1,6 +1,7 @@
 // 키보드 단축키 — 입력 포커스 중 무시
 
 import { buildPropCmd, getStartValue } from './canvas/edit-prop.js';
+import { groupSelection, ungroupSelection } from './group-ops.js';
 
 function _isInputFocused() {
   const el = document.activeElement;
@@ -46,6 +47,18 @@ export function initKeys(store, editorState, getDragging = () => false) {
     if (ctrl && (e.key === 'y' || e.key === 'Y' || (e.shiftKey && e.key.toLowerCase() === 'z'))) {
       e.preventDefault();
       store.redo();
+      return;
+    }
+
+    // ── 그룹 만들기 / 풀기 (G3) ───────────────────────────────────────
+    if (ctrl && e.shiftKey && e.key.toLowerCase() === 'g') {
+      e.preventDefault();
+      ungroupSelection(store, editorState);
+      return;
+    }
+    if (ctrl && !e.shiftKey && e.key.toLowerCase() === 'g') {
+      e.preventDefault();
+      groupSelection(store, editorState);
       return;
     }
 
