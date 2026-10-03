@@ -17,10 +17,25 @@ export function initTimeline(timelineEl, store, editorState, playback) {
   const snapBtn   = head.querySelector('[data-action="snap"]');
   const frameInfo = head.querySelector('.tl-frame-info');
 
-  // 클래스 추가
   loopBtn.classList.add('tl-loop-btn');
 
-  // 레이어 추가 메뉴 — 헤더 맨 앞에 삽입
+  // C12: 처음/끝 버튼을 play 앞뒤에 삽입
+  const firstBtn = document.createElement('button');
+  firstBtn.dataset.action = 'go-first';
+  firstBtn.title = '처음으로';
+  firstBtn.textContent = '|<';
+  firstBtn.style.cssText = 'font-size:10px; padding:0 4px;';
+
+  const lastBtn = document.createElement('button');
+  lastBtn.dataset.action = 'go-last';
+  lastBtn.title = '끝으로';
+  lastBtn.textContent = '>|';
+  lastBtn.style.cssText = 'font-size:10px; padding:0 4px;';
+
+  head.insertBefore(firstBtn, playBtn);
+  playBtn.after(lastBtn);
+
+  // 레이어 추가 메뉴
   const addWrap = document.createElement('div');
   addWrap.style.cssText = 'position:relative; flex-shrink:0;';
   const layerAdd = createLayerAddMenu(store, editorState, addWrap);
@@ -32,14 +47,21 @@ export function initTimeline(timelineEl, store, editorState, playback) {
   // 트랙 캔버스
   const trackCanvas = initTrackCanvas(tracksEl, layersEl, store, editorState, playback);
 
+  // 처음/끝
+  firstBtn.addEventListener('click', () => playback.goTo(0));
+  lastBtn.addEventListener('click', () => {
+    const fc = Math.max(1, store.get().meta.frameCount ?? 1);
+    playback.goTo(fc - 1);
+  });
+
   // 재생/정지
   playBtn.addEventListener('click', () => playback.toggle());
 
-  // 루프 모드 순환
+  // B2: 루프 모드 → doc.meta.playback (setMeta 명령, 되돌리기 가능)
   loopBtn.addEventListener('click', () => {
-    const cur  = editorState.get().loopMode ?? 'loop';
+    const cur  = store.get().meta.playback ?? 'loop';
     const next = _LOOP_CYCLE[(_LOOP_CYCLE.indexOf(cur) + 1) % _LOOP_CYCLE.length];
-    editorState.set({ loopMode: next });
+    store.apply({ type: 'setMeta', patch: { playback: next } });
   });
 
   // 자동 키
@@ -52,13 +74,13 @@ export function initTimeline(timelineEl, store, editorState, playback) {
     editorState.set({ snap: !editorState.get().snap });
   });
 
-  // 상태 반영
   function _updateHead() {
-    const es = editorState.get();
+    const es  = editorState.get();
     const doc = store.get();
     const fc  = doc.meta.frameCount ?? 1;
+    const playMode = doc.meta.playback ?? 'loop';
     playBtn.textContent  = es.playing ? '정지' : '재생';
-    loopBtn.textContent  = (_LOOP_LABELS[es.loopMode ?? 'loop']) + ' ▾';
+    loopBtn.textContent  = (_LOOP_LABELS[playMode]) + ' ▾';
     autoKeyBtn.style.background = es.autoKey ? 'var(--toolon)' : '';
     autoKeyBtn.style.color      = es.autoKey ? 'var(--acc)' : '';
     snapBtn.style.background    = es.snap    ? 'var(--toolon)' : '';

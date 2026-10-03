@@ -1,22 +1,19 @@
 // 타임라인 트랙 캔버스 — 키프레임, 클립, 플레이헤드
-const ROW_H    = 32;
+const ROW_H    = 28;  // C3: 28px
 const HEAD_H   = 24;
-const PX_PER_F = 20;  // 프레임당 픽셀
+const PX_PER_F_DEFAULT = 20; // 기본 프레임당 픽셀
 
-// CSS 변수 값 읽기 (토큰 기반)
 function _cssVar(name) {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 }
 
 export function initTrackCanvas(tracksEl, layersEl, store, editorState, playback) {
-  // 헤더 캔버스 (수평 스크롤 동조, 세로 고정)
   const headWrap = document.createElement('div');
   headWrap.className = 'track-header-wrap';
   const headCanvas = document.createElement('canvas');
   headCanvas.className = 'track-header-canvas';
   headWrap.appendChild(headCanvas);
 
-  // 바디 래퍼 (스크롤 컨테이너)
   const bodyWrap = document.createElement('div');
   bodyWrap.className = 'track-body-wrap';
   const bodyCanvas = document.createElement('canvas');
@@ -26,9 +23,11 @@ export function initTrackCanvas(tracksEl, layersEl, store, editorState, playback
   tracksEl.appendChild(headWrap);
   tracksEl.appendChild(bodyWrap);
 
+  // C13: 프레임당 픽셀 (Ctrl+휠로 조절)
+  let _pxPerF = PX_PER_F_DEFAULT;
+
   let _syncingScroll = false;
 
-  // 수직 스크롤 동조 (레이어 목록 ↔ 바디)
   layersEl.addEventListener('scroll', () => {
     if (_syncingScroll) return;
     _syncingScroll = true;
@@ -39,27 +38,52 @@ export function initTrackCanvas(tracksEl, layersEl, store, editorState, playback
     if (_syncingScroll) return;
     _syncingScroll = true;
     layersEl.scrollTop = bodyWrap.scrollTop;
-    // 헤더 수평 스크롤 동조
     headWrap.scrollLeft = bodyWrap.scrollLeft;
     _syncingScroll = false;
   });
   headWrap.style.overflowX = 'hidden';
 
-  // 클릭 → 프레임 이동
+  // C5: 눈금자 드래그 스크럽
+  let _scrubbing = false;
+
+  function _scrubAt(clientX) {
+    const rect = headWrap.getBoundingClientRect();
+    const x    = clientX - rect.left + bodyWrap.scrollLeft;
+    const f    = Math.floor(x / _pxPerF);
+    const fc   = store.get().meta.frameCount ?? 1;
+    playback.goTo(Math.max(0, Math.min(fc - 1, f)));
+  }
+
+  headCanvas.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0) return;
+    _scrubbing = true;
+    headCanvas.setPointerCapture(e.pointerId);
+    _scrubAt(e.clientX);
+  });
+  headCanvas.addEventListener('pointermove', (e) => {
+    if (!_scrubbing) return;
+    _scrubAt(e.clientX);
+  });
+  headCanvas.addEventListener('pointerup', () => { _scrubbing = false; });
+  headCanvas.addEventListener('pointercancel', () => { _scrubbing = false; });
+
+  // 바디 클릭 → 프레임 이동 (C5와 분리)
   bodyCanvas.addEventListener('click', (e) => {
     const rect = bodyCanvas.getBoundingClientRect();
     const x    = e.clientX - rect.left + bodyWrap.scrollLeft;
-    const f    = Math.floor(x / PX_PER_F);
+    const f    = Math.floor(x / _pxPerF);
     const fc   = store.get().meta.frameCount ?? 1;
     playback.goTo(Math.max(0, Math.min(fc - 1, f)));
   });
-  headCanvas.addEventListener('click', (e) => {
-    const rect = headWrap.getBoundingClientRect();
-    const x    = e.clientX - rect.left + bodyWrap.scrollLeft;
-    const f    = Math.floor(x / PX_PER_F);
-    const fc   = store.get().meta.frameCount ?? 1;
-    playback.goTo(Math.max(0, Math.min(fc - 1, f)));
-  });
+
+  // C13: Ctrl+휠 → 가로 확대/축소
+  tracksEl.addEventListener('wheel', (e) => {
+    if (!e.ctrlKey) return;
+    e.preventDefault();
+    const delta = e.deltaY > 0 ? -2 : 2;
+    _pxPerF = Math.max(4, Math.min(80, _pxPerF + delta));
+    requestDraw();
+  }, { passive: false });
 
   let _rafReq = false;
   function requestDraw() {
@@ -75,20 +99,17 @@ export function initTrackCanvas(tracksEl, layersEl, store, editorState, playback
     const ids  = [...doc.order].reverse();
     const dpr  = window.devicePixelRatio || 1;
 
-    const totalW = Math.max(400, fc * PX_PER_F);
+    const totalW = Math.max(400, fc * _pxPerF);
     const bodyH  = Math.max(ROW_H, ids.length * ROW_H);
 
-    // 컨테이너 너비로 헤더 정렬
     const wrapW = tracksEl.clientWidth || 400;
 
-    // 헤더
     headCanvas.width   = Math.round(Math.max(wrapW, totalW) * dpr);
     headCanvas.height  = Math.round(HEAD_H * dpr);
     headCanvas.style.width  = Math.max(wrapW, totalW) + 'px';
     headCanvas.style.height = HEAD_H + 'px';
     headWrap.style.width = Math.max(wrapW, totalW) + 'px';
 
-    // 바디
     bodyCanvas.width   = Math.round(totalW * dpr);
     bodyCanvas.height  = Math.round(bodyH  * dpr);
     bodyCanvas.style.width  = totalW + 'px';
@@ -116,20 +137,18 @@ export function initTrackCanvas(tracksEl, layersEl, store, editorState, playback
     ctx.font      = '10px monospace';
     ctx.textAlign = 'center';
 
-    // 5프레임 단위 눈금
-    const step = fc > 60 ? 10 : 5;
+    const step = _pxPerF >= 20 ? 5 : (fc > 60 ? 10 : 5);
     for (let f = 0; f < fc; f += step) {
-      const x = f * PX_PER_F + PX_PER_F / 2;
+      const x = f * _pxPerF + _pxPerF / 2;
       ctx.fillStyle = lineColor;
       ctx.fillRect(x, HEAD_H - 6, 1, 6);
       ctx.fillStyle = textColor;
       ctx.fillText(String(f), x, HEAD_H - 8);
     }
-    // 플레이헤드 (헤더)
-    const px = curF * PX_PER_F + PX_PER_F / 2;
+
+    const px = curF * _pxPerF + _pxPerF / 2;
     ctx.fillStyle = accColor;
     ctx.fillRect(px - 1, 0, 2, HEAD_H);
-    // 삼각형 마커
     ctx.beginPath();
     ctx.moveTo(px - 5, 0);
     ctx.lineTo(px + 5, 0);
@@ -144,19 +163,16 @@ export function initTrackCanvas(tracksEl, layersEl, store, editorState, playback
     const line2     = _cssVar('--line2')   || '#2b2e33';
     const accColor  = _cssVar('--acc')     || '#f0a35e';
     const clipBg    = _cssVar('--clipbg')  || '#4a3524';
-    const fxBg      = _cssVar('--fxbg')   || '#243446';
     const selRow    = _cssVar('--selrow')  || '#2a241e';
-    const dimColor  = _cssVar('--dim')     || '#9a9ea6';
 
     ctx.fillStyle = bgColor;
     ctx.fillRect(0, 0, totalW, totalH);
 
     const sel = new Set(es.selection);
 
-    // 세로 프레임 선
     ctx.fillStyle = line2;
     for (let f = 0; f < fc; f++) {
-      const x = f * PX_PER_F;
+      const x = f * _pxPerF;
       if (f % 5 === 0) ctx.fillRect(x, 0, 1, totalH);
     }
 
@@ -166,23 +182,20 @@ export function initTrackCanvas(tracksEl, layersEl, store, editorState, playback
       if (!layer) continue;
       const y0 = i * ROW_H;
 
-      // 행 배경
       if (sel.has(id)) {
         ctx.fillStyle = selRow;
         ctx.fillRect(0, y0, totalW, ROW_H);
       }
 
-      // 클립 바 (motion clips)
       if (layer.clips?.length) {
         for (const clip of layer.clips) {
-          const x  = clip.start * PX_PER_F;
-          const cw = clip.length * PX_PER_F;
+          const x  = clip.start * _pxPerF;
+          const cw = clip.length * _pxPerF;
           ctx.fillStyle = clipBg;
           ctx.fillRect(x + 1, y0 + 4, cw - 2, ROW_H - 8);
         }
       }
 
-      // 키프레임 다이아몬드
       const transform = layer.transform ?? {};
       const propKeys  = ['x', 'y', 'scale', 'rotation', 'alpha'];
       const kfFrames  = new Set();
@@ -193,7 +206,7 @@ export function initTrackCanvas(tracksEl, layersEl, store, editorState, playback
       }
       for (const f of kfFrames) {
         if (f < 0 || f >= fc) continue;
-        const kx = f * PX_PER_F + PX_PER_F / 2;
+        const kx = f * _pxPerF + _pxPerF / 2;
         const ky = y0 + ROW_H / 2;
         const s  = 5;
         ctx.fillStyle = accColor;
@@ -206,13 +219,11 @@ export function initTrackCanvas(tracksEl, layersEl, store, editorState, playback
         ctx.fill();
       }
 
-      // 행 구분선
       ctx.fillStyle = lineColor;
       ctx.fillRect(0, y0 + ROW_H - 1, totalW, 1);
     }
 
-    // 플레이헤드 수직선
-    const px = es.f * PX_PER_F + PX_PER_F / 2;
+    const px = es.f * _pxPerF + _pxPerF / 2;
     ctx.fillStyle = accColor;
     ctx.globalAlpha = 0.8;
     ctx.fillRect(px - 1, 0, 2, totalH);
@@ -233,5 +244,5 @@ export function initTrackCanvas(tracksEl, layersEl, store, editorState, playback
     ro.disconnect();
   }
 
-  return { destroy, PX_PER_F, HEAD_H };
+  return { destroy, get PX_PER_F() { return _pxPerF; }, HEAD_H };
 }
