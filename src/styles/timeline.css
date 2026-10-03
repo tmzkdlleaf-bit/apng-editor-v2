@@ -1,0 +1,148 @@
+/* 타임라인 패널 스타일 */
+
+.tl-add-btn {
+  flex-shrink: 0;
+}
+
+.layer-add-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--r-2);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+  z-index: 200;
+  min-width: 120px;
+  overflow: hidden;
+}
+
+.layer-add-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: none;
+  border-radius: 0;
+  padding: 0 var(--sp-3);
+  height: 32px;
+  font-size: var(--fs-2);
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  border-bottom: 1px solid var(--line2);
+}
+
+.layer-add-item:last-child { border-bottom: none; }
+
+.layer-add-item:hover {
+  background: var(--selrow);
+  color: var(--acc);
+}
+
+/* 레이어 행 */
+.tl-row {
+  display: flex;
+  align-items: center;
+  height: 32px;
+  padding: 0 var(--sp-1);
+  gap: var(--sp-1);
+  border-bottom: 1px solid var(--rowline);
+  cursor: pointer;
+  user-select: none;
+  position: relative;
+}
+
+.tl-row:hover { background: var(--selrow); }
+.tl-row.tl-row-sel { background: var(--selrow); outline: 1px solid var(--accline); outline-offset: -1px; }
+
+.tl-row.tl-row-drag-over-before { border-top: 2px solid var(--acc); }
+.tl-row.tl-row-drag-over-after  { border-bottom: 2px solid var(--acc); }
+
+.tl-btn {
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  font-size: var(--fs-1);
+  border-radius: var(--r-1);
+  background: transparent;
+  border: none;
+  color: var(--dim);
+  cursor: pointer;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tl-btn:hover { color: var(--text); background: var(--btn); }
+.tl-btn.tl-hidden { opacity: 0.4; }
+.tl-btn.tl-locked { color: var(--acc); }
+
+.tl-type {
+  font-size: var(--fs-1);
+  color: var(--faint);
+  width: 16px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.tl-name {
+  flex: 1;
+  font-size: var(--fs-2);
+  color: var(--text2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tl-row.tl-row-hidden .tl-name { opacity: 0.45; }
+
+/* 트랙 캔버스 컨테이너 */
+.track-header-wrap {
+  height: 24px;
+  background: var(--tl);
+  border-bottom: 1px solid var(--line2);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.track-header-canvas {
+  display: block;
+}
+
+.track-body-wrap {
+  flex: 1;
+  overflow: auto;
+}
+
+.track-body-canvas {
+  display: block;
+  cursor: crosshair;
+}
+
+/* 트랙 영역 flex 재구성 */
+[data-region="timeline"] .timeline-tracks {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* frame info */
+.tl-frame-info {
+  font-size: var(--fs-2);
+  color: var(--dim);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* loop mode button */
+.tl-loop-btn {
+  min-width: 60px;
+}
+
+/* undo/redo disabled */
+[data-action="undo"]:disabled,
+[data-action="redo"]:disabled {
+  opacity: 0.35;
+  cursor: default;
+}

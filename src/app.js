@@ -22,10 +22,11 @@ const store       = createStore(initialDoc);
 const editorState = createEditorState();
 
 initTheme();
-const stage = initShell(store, editorState);
+const { stage, playback } = initShell(store, editorState);
 
 if (isDemo) {
   window.__store       = store;
   window.__editorState = editorState;
   window.__stage       = stage;
+  window.__playback    = playback;
 }

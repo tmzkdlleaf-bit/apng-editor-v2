@@ -1,6 +1,9 @@
 import { toggle as toggleTheme, current as currentTheme } from './theme.js';
-import { initStage } from '../canvas/stage.js';
-import { initKeys } from '../keys.js';
+import { initStage }      from '../canvas/stage.js';
+import { initKeys }       from '../keys.js';
+import { createPlayback } from '../playback.js';
+import { initTimeline }   from '../timeline/index.js';
+import { initInspector }  from '../inspector/index.js';
 
 const TL_KEY     = 'apng2.timelineHeight';
 const TL_DEFAULT = 340;
@@ -81,15 +84,36 @@ export function init(store, editorState) {
   const mainArea = app.querySelector('#main-area');
   setTlHeight(mainArea, getStoredTlHeight());
 
+  // 테마 전환
   const themeBtn = app.querySelector('#btn-theme');
   themeBtn.addEventListener('click', () => {
     toggleTheme();
     themeBtn.textContent = currentTheme() === 'dark' ? '라이트' : '다크';
   });
 
-  app.querySelector('[data-action="undo"]').addEventListener('click', () => store.undo());
-  app.querySelector('[data-action="redo"]').addEventListener('click', () => store.redo());
+  // 되돌리기 / 다시하기 버튼
+  const undoBtn = app.querySelector('[data-action="undo"]');
+  const redoBtn = app.querySelector('[data-action="redo"]');
 
+  undoBtn.addEventListener('click', () => {
+    const result = store.undo();
+    if (result?.selectionSnapshot) editorState.set({ selection: result.selectionSnapshot });
+    _updateUndoRedo();
+  });
+  redoBtn.addEventListener('click', () => {
+    const result = store.redo();
+    if (result?.selectionSnapshot) editorState.set({ selection: result.selectionSnapshot });
+    _updateUndoRedo();
+  });
+
+  function _updateUndoRedo() {
+    undoBtn.disabled = !store.canUndo();
+    redoBtn.disabled = !store.canRedo();
+  }
+  _updateUndoRedo();
+  store.subscribe({ any: true }, _updateUndoRedo);
+
+  // 타임라인 높이 조절 핸들
   const handle   = app.querySelector('#tl-resize');
   const tlRegion = app.querySelector('[data-region="timeline"]');
 
@@ -110,11 +134,37 @@ export function init(store, editorState) {
     handle.classList.remove('dragging');
   });
 
+  // 캔버스 스테이지
   const canvasRegion = app.querySelector('[data-region="canvas"]');
   const stage = initStage(canvasRegion, store, editorState);
 
-  // stage.isDragging()을 keys.js에 전달 — Esc 중 드래그 감지용
+  // 키보드 단축키
   initKeys(store, editorState, () => stage.isDragging());
 
-  return stage;
+  // 재생 컨트롤러
+  const playback = createPlayback(store, editorState);
+
+  // 타임라인
+  const timelineEl = app.querySelector('[data-region="timeline"]');
+  initTimeline(timelineEl, store, editorState, playback);
+
+  // 인스펙터
+  const inspectorEl = app.querySelector('[data-region="inspector"]');
+  initInspector(inspectorEl, store, editorState);
+
+  // 캔버스 정보 (상단 바)
+  const canvasInfoEl = app.querySelector('#canvas-info');
+  function _updateCanvasInfo() {
+    const es   = editorState.get();
+    const doc  = store.get();
+    const zoom = Math.round(es.zoom * 100);
+    const w    = doc.meta.width;
+    const h    = doc.meta.height;
+    canvasInfoEl.textContent = `${zoom}%  ${w}×${h}`;
+  }
+  _updateCanvasInfo();
+  editorState.subscribe((p) => { if ('zoom' in p) _updateCanvasInfo(); });
+  store.subscribe({ meta: true }, _updateCanvasInfo);
+
+  return { stage, playback };
 }

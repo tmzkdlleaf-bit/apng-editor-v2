@@ -1,0 +1,114 @@
+/* 인스펙터 패널 스타일 */
+
+[data-region="inspector"] {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.inspector-scroll {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.inspector-empty {
+  padding: var(--sp-4);
+  color: var(--dim);
+  font-size: var(--fs-2);
+  text-align: center;
+  margin-top: var(--sp-6);
+}
+
+.inspector-section {
+  border-bottom: 1px solid var(--line2);
+}
+
+.inspector-section-header {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: 0 var(--sp-3);
+  height: 32px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.inspector-section-title {
+  flex: 1;
+  font-size: var(--fs-2);
+  font-weight: 600;
+  color: var(--text2);
+}
+
+.inspector-section-chevron {
+  font-size: var(--fs-1);
+  color: var(--faint);
+  transition: transform var(--dur-fast);
+}
+
+.inspector-section.collapsed .inspector-section-chevron {
+  transform: rotate(-90deg);
+}
+
+.inspector-section-body {
+  padding: var(--sp-2) var(--sp-3) var(--sp-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+.inspector-section.collapsed .inspector-section-body {
+  display: none;
+}
+
+/* 속성 행 */
+.prop-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-height: 24px;
+}
+
+.prop-row .num-field {
+  flex: 1;
+}
+
+/* 좌우 나란히 두 칸 */
+.prop-row-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--sp-2);
+}
+
+/* 인스펙터 상단 레이어 요약 */
+.inspector-layer-summary {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-3);
+  border-bottom: 1px solid var(--line);
+  background: var(--tl);
+}
+
+.inspector-layer-name {
+  flex: 1;
+  font-size: var(--fs-3);
+  font-weight: 500;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.inspector-layer-type {
+  font-size: var(--fs-1);
+  color: var(--dim);
+  flex-shrink: 0;
+}
+
+.inspector-multi {
+  padding: var(--sp-2) var(--sp-3);
+  font-size: var(--fs-2);
+  color: var(--dim);
+  border-bottom: 1px solid var(--line);
+}

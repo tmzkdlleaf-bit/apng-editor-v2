@@ -10,6 +10,9 @@ export function createEditorState(initial = {}) {
     autoKey: false,
     groupEdit: null,
     tool: 'select',
+    playing: false,
+    loopMode: 'loop',   // 'loop' | 'once' | 'pingpong'
+    playDir: 1,
   };
 
   for (const k of Object.keys(initial)) {
