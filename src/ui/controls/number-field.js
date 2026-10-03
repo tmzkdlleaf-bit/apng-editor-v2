@@ -1,4 +1,5 @@
-// 숫자 입력 칸 — 레이블 드래그, 방향키, Enter/Esc 지원
+// 숫자 입력 칸 — 레이블 드래그, 방향키, Enter/Esc, 혼합 상태 지원
+// onChange(value, info) — info.relative/ info.delta 로 드래그(상대) vs 입력(절대) 구분
 
 export function createNumberField({
   label = '',
@@ -12,7 +13,6 @@ export function createNumberField({
   onChange = () => {},
   onCommit = () => {},
   onCancel = () => {},
-  hasKeyframe = false,
 } = {}) {
   const el = document.createElement('span');
   el.className = 'num-field';
@@ -32,38 +32,36 @@ export function createNumberField({
   unitEl.textContent = unit;
   if (!unit) unitEl.style.display = 'none';
 
-  let _kfEl = null;
-  if (hasKeyframe) {
-    _kfEl = document.createElement('span');
-    _kfEl.className = 'num-kf';
-    _kfEl.title = '키프레임';
-  }
-
   el.appendChild(labelEl);
   el.appendChild(inputEl);
   el.appendChild(unitEl);
-  if (_kfEl) el.appendChild(_kfEl);
 
   let _current = value;
+  let _mixed = false;
   let _dragging = false;
   let _dragStart = null;
 
-  function _clamp(v) {
-    return Math.max(min, Math.min(max, v));
-  }
-
-  function _fmt(v) {
-    return Number.isFinite(v) ? String(Math.round(v * 100) / 100) : '0';
-  }
+  function _clamp(v) { return Math.max(min, Math.min(max, v)); }
+  function _fmt(v) { return Number.isFinite(v) ? String(Math.round(v * 100) / 100) : '0'; }
 
   function setValue(v) {
+    _mixed = false;
     _current = _clamp(v);
+    inputEl.placeholder = '';
     inputEl.value = _fmt(_current);
+  }
+
+  // 혼합 상태 (여러 레이어 값이 다름) — base는 드래그 상대 기준값
+  function setMixed(base = 0) {
+    _mixed = true;
+    _current = _clamp(base);
+    inputEl.value = '';
+    inputEl.placeholder = '혼합';
   }
 
   function getValue() { return _current; }
 
-  // 레이블 드래그
+  // 레이블 드래그 (상대)
   labelEl.addEventListener('pointerdown', (e) => {
     if (e.button !== 0) return;
     _dragging = false;
@@ -75,49 +73,47 @@ export function createNumberField({
   labelEl.addEventListener('pointermove', (e) => {
     if (!_dragStart) return;
     const dx = e.clientX - _dragStart.x;
-    if (!_dragging && Math.abs(dx) >= 2) {
-      _dragging = true;
-      onBegin();
-    }
+    if (!_dragging && Math.abs(dx) >= 2) { _dragging = true; onBegin(); }
     if (_dragging) {
       const factor = e.shiftKey ? step * 10 : e.altKey ? step * 0.1 : step;
       const newVal = _clamp(_dragStart.origVal + dx * factor);
+      const delta  = newVal - _dragStart.origVal;
       _current = newVal;
+      _mixed = false;
+      inputEl.placeholder = '';
       inputEl.value = _fmt(_current);
-      onChange(_current);
+      onChange(_current, { relative: true, delta });
     }
   });
 
   labelEl.addEventListener('pointerup', (e) => {
-    if (_dragging) {
-      _dragging = false;
-      _dragStart = null;
-      onCommit();
-    } else {
-      _dragStart = null;
-    }
+    if (_dragging) { _dragging = false; _dragStart = null; onCommit(); }
+    else { _dragStart = null; }
     labelEl.releasePointerCapture(e.pointerId);
   });
 
-  // 레이블 더블클릭: 기본값 복원
+  // 레이블 더블클릭: 기본값 복원 (절대)
   labelEl.addEventListener('dblclick', () => {
     onBegin();
     _current = _clamp(defaultValue);
+    _mixed = false;
+    inputEl.placeholder = '';
     inputEl.value = _fmt(_current);
-    onChange(_current);
+    onChange(_current, { relative: false, delta: 0 });
     onCommit();
   });
 
-  // 방향키
   inputEl.addEventListener('keydown', (e) => {
     if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
       e.preventDefault();
       const dir = e.key === 'ArrowUp' ? 1 : -1;
-      const delta = e.shiftKey ? step * 10 : e.altKey ? step * 0.1 : step;
+      const delta = (e.shiftKey ? step * 10 : e.altKey ? step * 0.1 : step) * dir;
       onBegin();
-      _current = _clamp(_current + dir * delta);
+      _current = _clamp(_current + delta);
+      _mixed = false;
+      inputEl.placeholder = '';
       inputEl.value = _fmt(_current);
-      onChange(_current);
+      onChange(_current, { relative: true, delta });
       onCommit();
     }
     if (e.key === 'Enter') {
@@ -126,15 +122,17 @@ export function createNumberField({
       if (Number.isFinite(v)) {
         onBegin();
         _current = _clamp(v);
+        _mixed = false;
+        inputEl.placeholder = '';
         inputEl.value = _fmt(_current);
-        onChange(_current);
+        onChange(_current, { relative: false, delta: 0 });
         onCommit();
       }
       inputEl.blur();
     }
     if (e.key === 'Escape') {
       e.preventDefault();
-      inputEl.value = _fmt(_current);
+      inputEl.value = _mixed ? '' : _fmt(_current);
       onCancel();
       inputEl.blur();
     }
@@ -145,13 +143,15 @@ export function createNumberField({
     if (Number.isFinite(v)) {
       onBegin();
       _current = _clamp(v);
+      _mixed = false;
+      inputEl.placeholder = '';
       inputEl.value = _fmt(_current);
-      onChange(_current);
+      onChange(_current, { relative: false, delta: 0 });
       onCommit();
     } else {
-      inputEl.value = _fmt(_current);
+      inputEl.value = _mixed ? '' : _fmt(_current);
     }
   });
 
-  return { el, setValue, getValue };
+  return { el, setValue, setMixed, getValue };
 }

@@ -1,8 +1,9 @@
-// 인스펙터 패널 — 선택 레이어에 따라 섹션 표시
-import { createLayoutSection } from './layout-section.js';
-import { createLayerSection }  from './layer-section.js';
-import { createShapeSection }  from './shape-section.js';
-import { createTextSection }   from './text-section.js';
+// 인스펙터 패널 — 섹션 순서·접힘 (item 9)
+// 배치 → 움직임 → 모습 → 보정 → 외곽선·색 덮기·매트 → 정렬
+import { createLayoutSection }     from './layout-section.js';
+import { createAppearanceSection } from './appearance-section.js';
+import { createAlignSection }      from './align-section.js';
+import { makePlaceholderSection }  from './section-shell.js';
 
 const _TYPE_KO = {
   shape: '도형', image: '이미지', text: '텍스트', effect: '이펙트',
@@ -20,7 +21,6 @@ export function initInspector(containerEl, store, editorState) {
   const summaryEl = document.createElement('div');
   summaryEl.className = 'inspector-layer-summary';
   summaryEl.style.display = 'none';
-
   const nameEl = document.createElement('span');
   nameEl.className = 'inspector-layer-name';
   const typeEl = document.createElement('span');
@@ -33,38 +33,31 @@ export function initInspector(containerEl, store, editorState) {
 
   containerEl.append(summaryEl, multiEl, scrollEl);
 
-  // 섹션들 (E1~E4)
-  const layoutSection = createLayoutSection(store, editorState); // E1: 배치
-  const layerSection  = createLayerSection(store, editorState);  // E2: 레이어
-  const shapeSection  = createShapeSection(store, editorState);  // E3: 도형
-  const textSection   = createTextSection(store, editorState);   // E4: 텍스트
+  // 섹션 (순서 고정)
+  const layout     = createLayoutSection(store, editorState);        // 배치
+  const motion     = makePlaceholderSection('움직임', '프리셋 모션 · 클립 — 준비 중');
+  const appearance = createAppearanceSection(store, editorState);    // 모습
+  const adjust     = makePlaceholderSection('보정', '밝기 · 대비 · 색조 — 준비 중');
+  const outline    = makePlaceholderSection('외곽선 · 색 덮기 · 매트', '준비 중');
+  const align      = createAlignSection(store, editorState);         // 정렬
 
-  scrollEl.append(
-    layoutSection.el,
-    layerSection.el,
-    shapeSection.el,
-    textSection.el,
-    emptyEl,
-  );
+  const sections = [layout, motion, appearance, adjust, outline, align];
+  for (const s of sections) scrollEl.appendChild(s.el);
+  scrollEl.appendChild(emptyEl);
 
   function _update() {
     const ids = editorState.get().selection;
     const doc = store.get();
+    const show = ids.length > 0;
 
-    if (!ids.length) {
+    emptyEl.style.display = show ? 'none' : 'block';
+    for (const s of sections) s.el.style.display = show ? '' : 'none';
+
+    if (!show) {
       summaryEl.style.display = 'none';
       multiEl.style.display   = 'none';
-      emptyEl.style.display   = 'block';
-      layoutSection.el.style.display = 'none';
-      layerSection.el.style.display  = 'none';
-      shapeSection.el.style.display  = 'none';
-      textSection.el.style.display   = 'none';
       return;
     }
-
-    emptyEl.style.display = 'none';
-    layoutSection.el.style.display = '';
-    layerSection.el.style.display  = '';
 
     if (ids.length === 1) {
       const layer = doc.layers[ids[0]];
@@ -79,21 +72,16 @@ export function initInspector(containerEl, store, editorState) {
       multiEl.style.display   = 'block';
       multiEl.textContent     = `${ids.length}개 레이어 선택됨`;
     }
-    // shape/text 섹션은 각자 _refresh에서 자기 type에 맞게 표시·숨김
   }
 
   const unsubES    = editorState.subscribe((p) => { if ('selection' in p) _update(); });
   const unsubStore = store.subscribe({ layers: true }, _update);
-
   _update();
 
   function destroy() {
     unsubES();
     unsubStore();
-    layoutSection.destroy();
-    layerSection.destroy();
-    shapeSection.destroy();
-    textSection.destroy();
+    for (const s of sections) s.destroy?.();
   }
 
   return { destroy };

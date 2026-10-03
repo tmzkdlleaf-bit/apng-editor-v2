@@ -1,13 +1,22 @@
 // 레이어 추가 메뉴 — 버튼 클릭 또는 캔버스 드래그로 레이어 추가
 import { createLayer, newId } from '../core/doc/schema.js';
 
-const _ITEMS = [
-  { key: 'rect',     label: '사각형',   type: 'shape', shape: { kind: 'rect',    w: 100, h: 100, fill: '#5eb8f0', stroke: null } },
-  { key: 'ellipse',  label: '원',       type: 'shape', shape: { kind: 'ellipse', w: 80,  h: 80,  fill: '#f0a35e', stroke: null } },
-  { key: 'triangle', label: '삼각형',   type: 'shape', shape: { kind: 'polygon', sides: 3, w: 80, h: 80, fill: '#9b59b6', stroke: null } },
-  { key: 'hexagon',  label: '육각형',   type: 'shape', shape: { kind: 'polygon', sides: 6, w: 80, h: 80, fill: '#2ecc71', stroke: null } },
-  { key: 'text',     label: '텍스트',   type: 'text'  },
-  { key: 'image',    label: '이미지',   type: 'image' },
+// AddMenu 설계: 이미지 / 글자 / 도형 / 이펙트 / 그룹 / 조정 / 움직이는 이미지 / PSD
+// 이번에 안 되는 항목은 disabled + "준비 중"
+const _MENU = [
+  { kind: 'image',    label: '이미지',                type: 'image' },
+  { kind: 'anim',     label: '움직이는 이미지 (GIF·APNG)', disabled: true },
+  { kind: 'text',     label: '글자',                  type: 'text'  },
+  { group: '도형' },
+  { kind: 'rect',     label: '사각형',   type: 'shape', shape: { kind: 'rect',    w: 100, h: 100, fill: '#5eb8f0', stroke: null } },
+  { kind: 'ellipse',  label: '원',       type: 'shape', shape: { kind: 'ellipse', w: 80,  h: 80,  fill: '#f0a35e', stroke: null } },
+  { kind: 'triangle', label: '삼각형',   type: 'shape', shape: { kind: 'polygon', sides: 3, w: 80, h: 80, fill: '#9b59b6', stroke: null } },
+  { kind: 'hexagon',  label: '육각형',   type: 'shape', shape: { kind: 'polygon', sides: 6, w: 80, h: 80, fill: '#2ecc71', stroke: null } },
+  { group: '기타' },
+  { kind: 'effect',   label: '이펙트',   disabled: true },
+  { kind: 'group',    label: '그룹',     disabled: true },
+  { kind: 'adjust',   label: '조정',     disabled: true },
+  { kind: 'psd',      label: 'PSD',      disabled: true },
 ];
 
 export function createLayerAddMenu(store, editorState, containerEl) {
@@ -21,16 +30,33 @@ export function createLayerAddMenu(store, editorState, containerEl) {
   menu.className = 'layer-add-menu';
   menu.style.display = 'none';
 
-  for (const item of _ITEMS) {
+  for (const item of _MENU) {
+    if (item.group) {
+      const g = document.createElement('div');
+      g.className = 'layer-add-group';
+      g.textContent = item.group;
+      menu.appendChild(g);
+      continue;
+    }
     const el = document.createElement('button');
-    el.className = 'layer-add-item';
-    el.dataset.kind = item.key;
-    el.textContent = item.label;
-    el.addEventListener('click', (e) => {
-      e.stopPropagation();
-      _addLayer(item);
-      _close();
-    });
+    el.className = 'layer-add-item' + (item.disabled ? ' disabled' : '');
+    el.dataset.kind = item.kind;
+    if (item.disabled) {
+      el.disabled = true;
+      const lbl = document.createElement('span');
+      lbl.textContent = item.label;
+      const tag = document.createElement('span');
+      tag.className = 'layer-add-soon';
+      tag.textContent = '준비 중';
+      el.append(lbl, tag);
+    } else {
+      el.textContent = item.label;
+      el.addEventListener('click', (e) => {
+        e.stopPropagation();
+        _addLayer(item);
+        _close();
+      });
+    }
     menu.appendChild(el);
   }
 
@@ -64,7 +90,7 @@ export function createLayerAddMenu(store, editorState, containerEl) {
     const cx  = Math.round(doc.meta.width  / 2);
     const cy  = Math.round(doc.meta.height / 2);
 
-    if (item.key === 'image') {
+    if (item.kind === 'image') {
       fileInput.click();
       return;
     }

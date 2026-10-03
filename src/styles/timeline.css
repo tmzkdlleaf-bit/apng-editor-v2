@@ -39,6 +39,30 @@
   color: var(--acc);
 }
 
+.layer-add-item.disabled {
+  color: var(--faint);
+  cursor: default;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.layer-add-item.disabled:hover { background: transparent; color: var(--faint); }
+.layer-add-soon {
+  font-size: var(--fs-1);
+  color: var(--faint);
+  border: 1px solid var(--line2);
+  border-radius: var(--r-1);
+  padding: 0 4px;
+  margin-left: var(--sp-2);
+}
+.layer-add-group {
+  padding: var(--sp-1) var(--sp-3) 2px;
+  font-size: var(--fs-1);
+  color: var(--faint);
+  border-bottom: 1px solid var(--line2);
+  background: var(--tl);
+}
+
 /* 레이어 행 */
 .tl-row {
   display: flex;
