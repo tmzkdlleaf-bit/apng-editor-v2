@@ -312,7 +312,7 @@ test.describe('P6 — 재생 / 타임라인 / 레이어 추가 / 인스펙터', 
 
   test('[인스펙터] 레이어 선택 → 레이아웃 섹션 표시', async ({ page }) => {
     await page.locator('.tl-row').first().click();
-    const section = page.locator('.inspector-section');
+    const section = page.locator('.inspector-section').first();
     await expect(section).toBeVisible();
     const xLabel = page.locator('.num-label').filter({ hasText: 'X' });
     await expect(xLabel.first()).toBeVisible();

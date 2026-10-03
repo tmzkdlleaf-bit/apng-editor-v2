@@ -1,5 +1,8 @@
 // 인스펙터 패널 — 선택 레이어에 따라 섹션 표시
 import { createLayoutSection } from './layout-section.js';
+import { createLayerSection }  from './layer-section.js';
+import { createShapeSection }  from './shape-section.js';
+import { createTextSection }   from './text-section.js';
 
 const _TYPE_KO = {
   shape: '도형', image: '이미지', text: '텍스트', effect: '이펙트',
@@ -30,10 +33,19 @@ export function initInspector(containerEl, store, editorState) {
 
   containerEl.append(summaryEl, multiEl, scrollEl);
 
-  // 레이아웃 섹션
-  const layoutSection = createLayoutSection(store, editorState);
-  scrollEl.appendChild(layoutSection.el);
-  scrollEl.appendChild(emptyEl);
+  // 섹션들 (E1~E4)
+  const layoutSection = createLayoutSection(store, editorState); // E1: 배치
+  const layerSection  = createLayerSection(store, editorState);  // E2: 레이어
+  const shapeSection  = createShapeSection(store, editorState);  // E3: 도형
+  const textSection   = createTextSection(store, editorState);   // E4: 텍스트
+
+  scrollEl.append(
+    layoutSection.el,
+    layerSection.el,
+    shapeSection.el,
+    textSection.el,
+    emptyEl,
+  );
 
   function _update() {
     const ids = editorState.get().selection;
@@ -44,11 +56,15 @@ export function initInspector(containerEl, store, editorState) {
       multiEl.style.display   = 'none';
       emptyEl.style.display   = 'block';
       layoutSection.el.style.display = 'none';
+      layerSection.el.style.display  = 'none';
+      shapeSection.el.style.display  = 'none';
+      textSection.el.style.display   = 'none';
       return;
     }
 
     emptyEl.style.display = 'none';
     layoutSection.el.style.display = '';
+    layerSection.el.style.display  = '';
 
     if (ids.length === 1) {
       const layer = doc.layers[ids[0]];
@@ -63,6 +79,7 @@ export function initInspector(containerEl, store, editorState) {
       multiEl.style.display   = 'block';
       multiEl.textContent     = `${ids.length}개 레이어 선택됨`;
     }
+    // shape/text 섹션은 각자 _refresh에서 자기 type에 맞게 표시·숨김
   }
 
   const unsubES    = editorState.subscribe((p) => { if ('selection' in p) _update(); });
@@ -74,6 +91,9 @@ export function initInspector(containerEl, store, editorState) {
     unsubES();
     unsubStore();
     layoutSection.destroy();
+    layerSection.destroy();
+    shapeSection.destroy();
+    textSection.destroy();
   }
 
   return { destroy };

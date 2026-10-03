@@ -112,3 +112,100 @@
   color: var(--dim);
   border-bottom: 1px solid var(--line);
 }
+
+/* 블렌드 모드 선택 (E2) */
+.blend-select {
+  flex: 1;
+  background: var(--bg2);
+  color: var(--fg);
+  border: 1px solid var(--line2);
+  border-radius: var(--r-1);
+  padding: 2px 4px;
+  font-size: var(--fs-2);
+  height: 24px;
+}
+
+/* 색상 입력 (E3/E4) */
+.color-input {
+  width: 40px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid var(--line2);
+  border-radius: var(--r-1);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+/* D3: 캔버스 설정 다이어로그 */
+.canvas-settings-dialog {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.5);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cs-panel {
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--r-2);
+  padding: var(--sp-5);
+  width: 280px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+
+.cs-title {
+  font-size: var(--fs-4);
+  font-weight: 600;
+  color: var(--text);
+}
+
+.cs-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.cs-row label {
+  flex: 1;
+  font-size: var(--fs-2);
+  color: var(--text2);
+}
+
+.cs-input {
+  width: 80px;
+  background: var(--bg2);
+  color: var(--fg);
+  border: 1px solid var(--line2);
+  border-radius: var(--r-1);
+  padding: 2px 6px;
+  font-size: var(--fs-2);
+  text-align: right;
+}
+
+.cs-btns {
+  display: flex;
+  gap: var(--sp-2);
+  justify-content: flex-end;
+  margin-top: var(--sp-2);
+}
+
+/* D3: canvas-info 버튼 */
+.canvas-info-btn {
+  background: none;
+  border: none;
+  color: var(--dim);
+  font-size: var(--fs-2);
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: var(--r-1);
+}
+
+.canvas-info-btn:hover {
+  background: var(--bg2);
+  color: var(--text);
+}

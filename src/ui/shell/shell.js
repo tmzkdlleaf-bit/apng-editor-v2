@@ -44,7 +44,7 @@ export function init(store, editorState) {
       <button data-action="redo" title="다시하기 (Ctrl+Shift+Z)">다시하기</button>
       <div class="topbar-center"></div>
       <div class="topbar-right">
-        <span class="canvas-info" id="canvas-info">-</span>
+        <button class="canvas-info-btn" id="canvas-info" title="캔버스 설정">-</button>
         <div class="sep"></div>
         <button data-action="toggle-theme" id="btn-theme" title="테마 전환">
           ${currentTheme() === 'dark' ? '라이트' : '다크'}
@@ -152,7 +152,7 @@ export function init(store, editorState) {
   const inspectorEl = app.querySelector('[data-region="inspector"]');
   initInspector(inspectorEl, store, editorState);
 
-  // 캔버스 정보 (상단 바)
+  // 캔버스 정보 + 설정 다이어로그 (D3)
   const canvasInfoEl = app.querySelector('#canvas-info');
   function _updateCanvasInfo() {
     const es   = editorState.get();
@@ -165,6 +165,49 @@ export function init(store, editorState) {
   _updateCanvasInfo();
   editorState.subscribe((p) => { if ('zoom' in p) _updateCanvasInfo(); });
   store.subscribe({ meta: true }, _updateCanvasInfo);
+
+  canvasInfoEl.addEventListener('click', () => _openCanvasSettings());
+
+  function _openCanvasSettings() {
+    if (document.querySelector('.canvas-settings-dialog')) return;
+    const doc  = store.get();
+    const { width, height, frameCount, fps } = doc.meta;
+
+    const dlg = document.createElement('div');
+    dlg.className = 'canvas-settings-dialog';
+    dlg.innerHTML = `
+      <div class="cs-panel">
+        <div class="cs-title">캔버스 설정</div>
+        <div class="cs-row"><label>너비 (px)</label><input class="cs-input" id="cs-w" type="number" min="1" max="4096" value="${width}"></div>
+        <div class="cs-row"><label>높이 (px)</label><input class="cs-input" id="cs-h" type="number" min="1" max="4096" value="${height}"></div>
+        <div class="cs-row"><label>프레임 수</label><input class="cs-input" id="cs-fc" type="number" min="1" max="9999" value="${frameCount}"></div>
+        <div class="cs-row"><label>FPS</label><input class="cs-input" id="cs-fps" type="number" min="1" max="120" value="${fps}"></div>
+        <div class="cs-btns">
+          <button id="cs-cancel">취소</button>
+          <button id="cs-ok" class="accent">확인</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(dlg);
+
+    dlg.querySelector('#cs-cancel').addEventListener('click', () => dlg.remove());
+    dlg.querySelector('#cs-ok').addEventListener('click', () => {
+      const nw  = parseInt(dlg.querySelector('#cs-w').value, 10);
+      const nh  = parseInt(dlg.querySelector('#cs-h').value, 10);
+      const nfc = parseInt(dlg.querySelector('#cs-fc').value, 10);
+      const nfps = parseInt(dlg.querySelector('#cs-fps').value, 10);
+      if (!Number.isFinite(nw) || !Number.isFinite(nh) || !Number.isFinite(nfc) || !Number.isFinite(nfps)) return;
+      const patch = {};
+      if (nw !== width)        patch.width      = Math.max(1, nw);
+      if (nh !== height)       patch.height     = Math.max(1, nh);
+      if (nfc !== frameCount)  patch.frameCount = Math.max(1, nfc);
+      if (nfps !== fps)        patch.fps        = Math.max(1, nfps);
+      if (Object.keys(patch).length) store.apply({ type: 'setMeta', patch });
+      dlg.remove();
+    });
+    // 배경 클릭으로 닫기
+    dlg.addEventListener('click', (e) => { if (e.target === dlg) dlg.remove(); });
+  }
 
   return { stage, playback };
 }
