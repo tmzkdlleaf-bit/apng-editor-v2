@@ -2,6 +2,8 @@
 const ROW_H    = 28;  // C3: 28px
 const HEAD_H   = 24;
 const PX_PER_F_DEFAULT = 20; // 기본 프레임당 픽셀
+const KF_HIT   = 8;  // 키프레임 히트 반경 (px)
+const CLIP_HIT = 6;  // 클립 끝단 히트 폭 (px)
 
 function _cssVar(name) {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
@@ -67,15 +69,6 @@ export function initTrackCanvas(tracksEl, layersEl, store, editorState, playback
   headCanvas.addEventListener('pointerup', () => { _scrubbing = false; });
   headCanvas.addEventListener('pointercancel', () => { _scrubbing = false; });
 
-  // 바디 클릭 → 프레임 이동 (C5와 분리)
-  bodyCanvas.addEventListener('click', (e) => {
-    const rect = bodyCanvas.getBoundingClientRect();
-    const x    = e.clientX - rect.left + bodyWrap.scrollLeft;
-    const f    = Math.floor(x / _pxPerF);
-    const fc   = store.get().meta.frameCount ?? 1;
-    playback.goTo(Math.max(0, Math.min(fc - 1, f)));
-  });
-
   // C13: Ctrl+휠 → 가로 확대/축소
   tracksEl.addEventListener('wheel', (e) => {
     if (!e.ctrlKey) return;
@@ -85,6 +78,151 @@ export function initTrackCanvas(tracksEl, layersEl, store, editorState, playback
     requestDraw();
   }, { passive: false });
 
+  // ── 바디 드래그 (C6 클립 트림, C7 키프레임 이동, C14 begin/commit) ──────
+  let _bodyDrag = null;  // { type, ... }
+
+  function _bodyCanvasXY(e) {
+    const rect = bodyCanvas.getBoundingClientRect();
+    return {
+      x: e.clientX - rect.left + bodyWrap.scrollLeft,
+      y: e.clientY - rect.top  + bodyWrap.scrollTop,
+    };
+  }
+
+  // 바디 캔버스 좌표에서 히트 테스트
+  // 반환: { type:'keyframe'|'clip-start'|'clip-end'|'frame', ... }
+  function _hitBody(x, y) {
+    const doc  = store.get();
+    const ids  = [...doc.order].reverse();
+    const rowI = Math.floor(y / ROW_H);
+    if (rowI < 0 || rowI >= ids.length) return { type: 'frame', f: Math.floor(x / _pxPerF) };
+
+    const id    = ids[rowI];
+    const layer = doc.layers[id];
+    if (!layer) return { type: 'frame', f: Math.floor(x / _pxPerF) };
+
+    const y0 = rowI * ROW_H;
+    const fc = doc.meta.frameCount ?? 1;
+
+    // C7: 키프레임 히트
+    const transform = layer.transform ?? {};
+    const propKeys  = ['x', 'y', 'scale', 'rotation', 'alpha'];
+    for (const pk of propKeys) {
+      for (const kf of (transform[pk]?.keys ?? [])) {
+        if (kf.f < 0 || kf.f >= fc) continue;
+        const kx = kf.f * _pxPerF + _pxPerF / 2;
+        const ky = y0 + ROW_H / 2;
+        if (Math.abs(x - kx) <= KF_HIT && Math.abs(y - ky) <= KF_HIT) {
+          return { type: 'keyframe', id, path: `transform.${pk}`, origF: kf.f };
+        }
+      }
+    }
+
+    // C6: 클립 끝단 히트
+    if (layer.clips?.length) {
+      for (const clip of layer.clips) {
+        const x0 = clip.start * _pxPerF;
+        const x1 = (clip.start + clip.length) * _pxPerF;
+        if (Math.abs(x - x0) <= CLIP_HIT) {
+          return { type: 'clip-start', id, clipId: clip.id, origStart: clip.start, origLength: clip.length };
+        }
+        if (Math.abs(x - x1) <= CLIP_HIT) {
+          return { type: 'clip-end', id, clipId: clip.id, origStart: clip.start, origLength: clip.length };
+        }
+      }
+    }
+
+    return { type: 'frame', f: Math.floor(x / _pxPerF) };
+  }
+
+  bodyCanvas.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0) return;
+    const { x, y } = _bodyCanvasXY(e);
+    const hit = _hitBody(x, y);
+
+    if (hit.type === 'frame') {
+      // 프레임 이동 (단순 클릭)
+      const fc = store.get().meta.frameCount ?? 1;
+      playback.goTo(Math.max(0, Math.min(fc - 1, hit.f)));
+      return;
+    }
+
+    // C7: 키프레임 드래그 시작 (C14: begin)
+    if (hit.type === 'keyframe') {
+      store.begin('키프레임 이동');
+      _bodyDrag = { type: 'keyframe', label: '키프레임 이동',
+        id: hit.id, path: hit.path, origF: hit.origF, startX: x, lastDelta: 0 };
+      bodyCanvas.setPointerCapture(e.pointerId);
+      e.preventDefault();
+      return;
+    }
+
+    // C6: 클립 트림 드래그 시작 (C14: begin)
+    if (hit.type === 'clip-start' || hit.type === 'clip-end') {
+      store.begin('클립 트림');
+      _bodyDrag = { type: hit.type, label: '클립 트림',
+        id: hit.id, clipId: hit.clipId,
+        origStart: hit.origStart, origLength: hit.origLength, startX: x };
+      bodyCanvas.setPointerCapture(e.pointerId);
+      e.preventDefault();
+    }
+  });
+
+  // C14: cancel+begin+preview 패턴 — 매 이동마다 초기 상태에서 fresh하게 적용
+  function _resetPreview(cmd) {
+    store.cancel();
+    store.begin(_bodyDrag.label);
+    store.preview(cmd);
+  }
+
+  bodyCanvas.addEventListener('pointermove', (e) => {
+    if (!_bodyDrag) return;
+    const { x } = _bodyCanvasXY(e);
+    const fc     = store.get().meta.frameCount ?? 1;
+
+    if (_bodyDrag.type === 'keyframe') {
+      const delta = Math.round((x - _bodyDrag.startX) / _pxPerF);
+      if (delta === _bodyDrag.lastDelta) return;
+      _bodyDrag.lastDelta = delta;
+      const newF = Math.max(0, Math.min(fc - 1, _bodyDrag.origF + delta));
+      const actualDelta = newF - _bodyDrag.origF;
+      _resetPreview({
+        type: 'moveKeys',
+        id: _bodyDrag.id,
+        refs: [{ path: _bodyDrag.path, f: _bodyDrag.origF }],
+        delta: actualDelta,
+      });
+    } else if (_bodyDrag.type === 'clip-start') {
+      const rawDelta  = Math.round((x - _bodyDrag.startX) / _pxPerF);
+      const newStart  = Math.max(0, _bodyDrag.origStart + rawDelta);
+      const newLength = Math.max(1, _bodyDrag.origLength - (newStart - _bodyDrag.origStart));
+      _resetPreview({ type: 'setClip', id: _bodyDrag.id, clipId: _bodyDrag.clipId,
+        patch: { start: newStart, length: newLength } });
+    } else if (_bodyDrag.type === 'clip-end') {
+      const rawDelta  = Math.round((x - _bodyDrag.startX) / _pxPerF);
+      const newLength = Math.max(1, _bodyDrag.origLength + rawDelta);
+      _resetPreview({ type: 'setClip', id: _bodyDrag.id, clipId: _bodyDrag.clipId,
+        patch: { length: newLength } });
+    }
+  });
+
+  bodyCanvas.addEventListener('pointerup', () => {
+    if (!_bodyDrag) return;
+    store.commit(); // C14: commit → 되돌리기 1건
+    _bodyDrag = null;
+  });
+  bodyCanvas.addEventListener('pointercancel', () => {
+    if (!_bodyDrag) return;
+    store.cancel();
+    _bodyDrag = null;
+  });
+  bodyCanvas.addEventListener('lostpointercapture', () => {
+    if (!_bodyDrag) return;
+    store.cancel();
+    _bodyDrag = null;
+  });
+
+  // ── 그리기 ───────────────────────────────────────────────────────────────
   let _rafReq = false;
   function requestDraw() {
     if (_rafReq) return;
@@ -187,15 +325,23 @@ export function initTrackCanvas(tracksEl, layersEl, store, editorState, playback
         ctx.fillRect(0, y0, totalW, ROW_H);
       }
 
+      // 클립 바 (C6: 끝단에 밝은 핸들 표시)
       if (layer.clips?.length) {
         for (const clip of layer.clips) {
           const x  = clip.start * _pxPerF;
           const cw = clip.length * _pxPerF;
           ctx.fillStyle = clipBg;
           ctx.fillRect(x + 1, y0 + 4, cw - 2, ROW_H - 8);
+          // 트림 핸들
+          ctx.fillStyle = accColor;
+          ctx.globalAlpha = 0.5;
+          ctx.fillRect(x, y0 + 4, 3, ROW_H - 8);
+          ctx.fillRect(x + cw - 3, y0 + 4, 3, ROW_H - 8);
+          ctx.globalAlpha = 1;
         }
       }
 
+      // 키프레임 다이아몬드
       const transform = layer.transform ?? {};
       const propKeys  = ['x', 'y', 'scale', 'rotation', 'alpha'];
       const kfFrames  = new Set();
