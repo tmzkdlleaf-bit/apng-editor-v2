@@ -1,6 +1,8 @@
 // 레이어 추가 메뉴 — 버튼 클릭 또는 캔버스 드래그로 레이어 추가
-import { createLayer, newId } from '../core/doc/schema.js';
+import { createLayer } from '../core/doc/schema.js';
 import { groupSelection } from './group-ops.js';
+import { putAsset } from '../core/io/assets.js';
+import { showToast } from './shell/status.js';
 
 // AddMenu 설계: 이미지 / 글자 / 도형 / 이펙트 / 그룹 / 조정 / 움직이는 이미지 / PSD
 // 이번에 안 되는 항목은 disabled + "준비 중"
@@ -69,7 +71,7 @@ export function createLayerAddMenu(store, editorState, containerEl) {
   fileInput.addEventListener('change', () => {
     const file = fileInput.files[0];
     if (!file) return;
-    _addImageFile(file);
+    _addImageFile(file).catch(() => {});
     fileInput.value = '';
   });
 
@@ -125,28 +127,28 @@ export function createLayerAddMenu(store, editorState, containerEl) {
     editorState.set({ selection: [layer.id] });
   }
 
-  // A4: addAsset + addLayer를 batch 한 건으로 → 되돌리기/다시하기 일치
-  function _addImageFile(file) {
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      const dataUrl = ev.target.result;
-      const doc     = store.get();
-      const assetId = newId('img_');
-      const name    = file.name.replace(/\.[^.]+$/, '');
-      const layer   = createLayer('image', { name, assetId });
-      layer.transform.x.value = Math.round(doc.meta.width  / 2);
-      layer.transform.y.value = Math.round(doc.meta.height / 2);
+  // A4+P7: 바이트는 IndexedDB(내용 주소)로, 문서에는 메타만. addAsset+addLayer를 batch 한 건으로.
+  async function _addImageFile(file) {
+    const name = file.name.replace(/\.[^.]+$/, '');
+    const { id: assetId, meta } = await putAsset(file, name);
+    // 이미지로 디코드되지 않으면(깨진 PNG·이미지 아닌 파일) 크기가 0이다. 레이어를 만들지 않는다.
+    if (!meta.width || !meta.height) {
+      showToast('이미지로 읽을 수 없는 파일입니다.');
+      return;
+    }
+    const doc   = store.get();
+    const layer = createLayer('image', { name, assetId });
+    layer.transform.x.value = Math.round(doc.meta.width  / 2);
+    layer.transform.y.value = Math.round(doc.meta.height / 2);
 
-      store.apply({
-        type: 'batch',
-        cmds: [
-          { type: 'addAsset', id: assetId, asset: { dataUrl } },
-          { type: 'addLayer', layer, index: doc.order.length },
-        ],
-      });
-      editorState.set({ selection: [layer.id] });
-    };
-    reader.readAsDataURL(file);
+    const cmds = [];
+    // 같은 이미지가 이미 문서 메타에 있으면 addAsset을 생략(되돌리기 기록도 깔끔)
+    if (!doc.assets?.[assetId]) {
+      cmds.push({ type: 'addAsset', id: assetId, asset: meta });
+    }
+    cmds.push({ type: 'addLayer', layer, index: doc.order.length });
+    store.apply(cmds.length === 1 ? cmds[0] : { type: 'batch', cmds });
+    editorState.set({ selection: [layer.id] });
   }
 
   // D1: 캔버스로 끌어다 놓기 — PNG·JPG·WebP
@@ -165,7 +167,7 @@ export function createLayerAddMenu(store, editorState, containerEl) {
       const files = [...(e.dataTransfer?.files ?? [])].filter(
         (f) => f.type === 'image/png' || f.type === 'image/jpeg' || f.type === 'image/webp'
       );
-      for (const file of files) _addImageFile(file);
+      for (const file of files) _addImageFile(file).catch(() => {});
     });
   }
 

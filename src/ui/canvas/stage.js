@@ -279,6 +279,21 @@ export function initStage(containerEl, store, editorState) {
     requestOverlay,
     setDraftMode,
     isDragging: () => drag.isDragging(),
+    // 썸네일: 현재 문서 frame 0을 긴 변 maxPx로 그려 PNG Blob 반환(자동 저장용)
+    renderThumbnail(maxPx = 256) {
+      const doc = store.get();
+      const { width, height } = doc.meta;
+      const scale = Math.min(1, maxPx / Math.max(width, height));
+      const w = Math.max(1, Math.round(width * scale));
+      const h = Math.max(1, Math.round(height * scale));
+      const c = document.createElement('canvas');
+      c.width = w; c.height = h;
+      engine.renderFrame(c.getContext('2d'), doc, 0, { scale });
+      return new Promise((resolve) => {
+        if (c.toBlob) c.toBlob((b) => resolve(b), 'image/png');
+        else resolve(null);
+      });
+    },
     getLatencyStats() {
       if (!_latencies.length) return null;
       const avg = _latencies.reduce((a, b) => a + b, 0) / _latencies.length;

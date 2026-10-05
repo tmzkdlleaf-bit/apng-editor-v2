@@ -1,4 +1,5 @@
 import { createDoc, createLayer } from '../core/doc/schema.js';
+import { putAsset } from '../core/io/assets.js';
 
 // 단순 400×400 데모 (기존)
 export function createDemoDoc() {
@@ -42,8 +43,8 @@ export function createDemoDoc() {
   return doc;
 }
 
-// 프로그램으로 색칠한 100×100 캔버스 → data URL
-function _makeAssetDataUrl(bg, fg) {
+// 프로그램으로 색칠한 100×100 캔버스 → Blob (putAsset 경로로 IndexedDB에 저장)
+function _makeAssetBlob(bg, fg) {
   const c = document.createElement('canvas');
   c.width = c.height = 100;
   const ctx = c.getContext('2d');
@@ -51,12 +52,12 @@ function _makeAssetDataUrl(bg, fg) {
   ctx.fillRect(0, 0, 100, 100);
   ctx.fillStyle = fg;
   ctx.fillRect(20, 20, 60, 60);
-  return c.toDataURL();
+  return new Promise((resolve) => c.toBlob((b) => resolve(b), 'image/png'));
 }
 
 // P4 스타일 768×768 데모 (?demo=1) — 성능 측정 기준과 동일 구성
-// 이미지10 + 글자3 + effect3
-export function createLargeDemo() {
+// 이미지10 + 글자3 + effect3. 비트맵은 putAsset으로 IndexedDB에 넣고 문서엔 메타만.
+export async function createLargeDemo() {
   const doc = createDoc({ width: 768, height: 768, fps: 12, frameCount: 24 });
 
   const bg = createLayer('shape');
@@ -95,18 +96,20 @@ export function createLargeDemo() {
   // image 레이어 10개
   // 중심 위치: 5열×2행, step=140
   for (let i = 0; i < 10; i++) {
+    const [bgColor, fgColor] = assetColors[i];
+    const blob = await _makeAssetBlob(bgColor, fgColor);
+    const { id: assetId, meta } = await putAsset(blob, `이미지${i + 1}`);
+
     const img = createLayer('image');
     img.name = `이미지${i + 1}`;
-    img.assetId = String(i);
+    img.assetId = assetId;
     img.transform.x.value = 75 + (i % 5) * 140;
     img.transform.y.value = 75 + Math.floor(i / 5) * 140;
     if (i < 5) img.adjust = { brightness: 80 };
     doc.layers[img.id] = img;
     doc.order.push(img.id);
 
-    // doc.assets에 data URL 저장 (structuredClone 가능)
-    const [bgColor, fgColor] = assetColors[i];
-    doc.assets[String(i)] = { dataUrl: _makeAssetDataUrl(bgColor, fgColor) };
+    doc.assets[assetId] = meta; // 메타만(바이트는 IndexedDB)
   }
 
   // text 레이어 3개

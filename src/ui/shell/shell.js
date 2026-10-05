@@ -29,7 +29,7 @@ function setTlHeight(mainArea, h) {
   saveTlHeight(clamped);
 }
 
-export function init(store, editorState) {
+export function init(store, editorState, projectApi = null) {
   const app = document.createElement('div');
   app.id = 'app';
 
@@ -38,6 +38,7 @@ export function init(store, editorState) {
       <div class="topbar-left">
         <span class="app-title">코코포리아 APNG 에디터</span>
         <button class="project-name-btn" aria-label="프로젝트 이름">새 프로젝트 ▾</button>
+        <span class="save-status" id="save-status"></span>
       </div>
       <div class="sep"></div>
       <button data-action="undo" title="되돌리기 (Ctrl+Z)">되돌리기</button>
@@ -209,5 +210,63 @@ export function init(store, editorState) {
     dlg.addEventListener('click', (e) => { if (e.target === dlg) dlg.remove(); });
   }
 
-  return { stage, playback };
+  // ── 프로젝트 이름 메뉴(P7 임시) + 저장 상태 ─────────────────────────────
+  const projBtn    = app.querySelector('.project-name-btn');
+  const saveStatus = app.querySelector('#save-status');
+
+  function setProjectName(name) {
+    projBtn.textContent = (name || '새 프로젝트') + ' ▾';
+  }
+  function setSaveStatus(status) {
+    const label = status === 'saving' ? '저장 중' : status === 'error' ? '저장 실패' : '저장됨';
+    saveStatus.textContent = label;
+    saveStatus.dataset.status = status || 'saved';
+  }
+
+  if (projectApi) {
+    setProjectName(projectApi.getName?.());
+
+    // 불러오기용 파일 입력
+    const projFile = document.createElement('input');
+    projFile.type = 'file';
+    projFile.accept = '.apngproj,application/json';
+    projFile.style.display = 'none';
+    document.body.appendChild(projFile);
+    projFile.addEventListener('change', () => {
+      const f = projFile.files[0];
+      projFile.value = '';
+      if (f) projectApi.importFile?.(f);
+    });
+
+    const menu = document.createElement('div');
+    menu.className = 'project-menu';
+    menu.style.display = 'none';
+    menu.innerHTML = `
+      <button data-act="new">새 프로젝트</button>
+      <button data-act="export">파일로 내보내기</button>
+      <button data-act="import">파일 불러오기</button>
+    `;
+    document.body.appendChild(menu);
+
+    function _closeProjMenu() { menu.style.display = 'none'; }
+    projBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (menu.style.display === 'block') { _closeProjMenu(); return; }
+      const r = projBtn.getBoundingClientRect();
+      menu.style.left = r.left + 'px';
+      menu.style.top  = (r.bottom + 4) + 'px';
+      menu.style.display = 'block';
+    });
+    document.addEventListener('click', _closeProjMenu);
+    menu.addEventListener('click', (e) => {
+      const act = e.target?.dataset?.act;
+      if (!act) return;
+      _closeProjMenu();
+      if (act === 'new')    projectApi.newProject?.();
+      else if (act === 'export') projectApi.exportFile?.();
+      else if (act === 'import') projFile.click();
+    });
+  }
+
+  return { stage, playback, setSaveStatus, setProjectName };
 }

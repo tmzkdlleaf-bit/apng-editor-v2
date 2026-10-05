@@ -29,6 +29,40 @@
 }
 .app-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
+/* 저장 상태 */
+.save-status {
+  font-size: var(--fs-1);
+  color: var(--faint);
+  min-width: 48px;
+}
+.save-status[data-status="saving"] { color: var(--faint); }
+.save-status[data-status="error"]  { color: var(--danger, #e06c6c); }
+
+/* 프로젝트 이름 메뉴 (임시) */
+.project-menu {
+  position: fixed;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--r-2);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.35);
+  padding: var(--sp-1);
+  z-index: 2000;
+  display: flex;
+  flex-direction: column;
+  min-width: 140px;
+}
+.project-menu button {
+  text-align: left;
+  background: transparent;
+  border: none;
+  color: var(--text);
+  font-size: var(--fs-2);
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--r-1);
+  cursor: pointer;
+}
+.project-menu button:hover { background: var(--selrow, rgba(127,127,127,0.15)); }
+
 [data-region="topbar"] {
   grid-area: topbar;
   background: var(--panel);

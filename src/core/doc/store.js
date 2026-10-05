@@ -142,6 +142,8 @@ export function createStore(initDoc) {
     _redo.length = 0;
     _undo.push({ patches, invPatches, label, mergeKey: null, timestamp: Date.now(), selectionSnapshot });
     if (_undo.length > HISTORY_LIMIT) _undo.shift();
+    // 커밋된 변경을 구독자에게 알린다(자동 저장 등). source='commit'.
+    _scheduleNotif(_notifFromPatches(patches, 'commit'));
   }
 
   function cancel() {
@@ -175,6 +177,9 @@ export function createStore(initDoc) {
   function canUndo() { return _undo.length > 0; }
   function canRedo() { return _redo.length > 0; }
 
+  // 열린 드래그(begin~commit) 진행 중인지. 자동 저장이 preview 중간값을 저장하지 않도록.
+  function isBatching() { return _batch !== null; }
+
   function subscribe(scope, fn) {
     const entry = { scope, fn, seq: _seq };
     _subs.push(entry);
@@ -184,5 +189,5 @@ export function createStore(initDoc) {
     };
   }
 
-  return { get, apply, begin, preview, commit, cancel, undo, redo, canUndo, canRedo, subscribe };
+  return { get, apply, begin, preview, commit, cancel, undo, redo, canUndo, canRedo, isBatching, subscribe };
 }
