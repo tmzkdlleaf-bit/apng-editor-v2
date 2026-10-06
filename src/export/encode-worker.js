@@ -130,7 +130,10 @@ function encodeGif(frames, w, h, loops, options, UPNGmod) {
   }
 
   const out = new Uint8Array(w * h * 2 * nf + nf * 256 + palette.length * 3 + 4096);
-  const gifLoop = (loops === 1) ? undefined : loops; // once → 넷스케이프 블록 없음, 0 → 무한
+  // GIF(NETSCAPE) 반복 값은 "첫 재생 뒤 '추가로' 반복할 횟수"다 — APNG num_plays·WebP loop_count가
+  // '총 재생 횟수'인 것과 다르다. 총 횟수(loops)에 맞추려면 1을 뺀다.
+  //   loops 0 → 0(무한), 1 → 블록 없음(undefined, 1회 재생), N≥2 → N-1.
+  const gifLoop = (loops <= 1) ? (loops === 0 ? 0 : undefined) : (loops - 1);
   const gw = new GifWriter(out, w, h, gifLoop === undefined ? { palette } : { loop: gifLoop, palette });
 
   for (let i = 0; i < nf; i++) {

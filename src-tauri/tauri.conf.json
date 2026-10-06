@@ -14,21 +14,30 @@
     "windows": [
       {
         "label": "main",
-        "title": "APNG 에디터",
-        "width": 1280,
-        "height": 800,
-        "minWidth": 900,
-        "minHeight": 600,
+        "title": "코코포리아 APNG 에디터",
+        "width": 1400,
+        "height": 900,
+        "minWidth": 1100,
+        "minHeight": 700,
         "resizable": true
       }
     ],
     "security": {
-      "csp": null
+      "csp": {
+        "default-src": "'self'",
+        "script-src": "'self' 'wasm-unsafe-eval'",
+        "worker-src": "'self' blob:",
+        "style-src": "'self' 'unsafe-inline' https://fonts.googleapis.com",
+        "font-src": "'self' https://fonts.gstatic.com",
+        "img-src": "'self' blob: data:",
+        "connect-src": "'self' ipc: http://ipc.localhost"
+      }
     }
   },
   "bundle": {
     "active": true,
     "targets": "all",
+    "createUpdaterArtifacts": true,
     "category": "GraphicsAndDesign",
     "shortDescription": "코코포리아 APNG·WebP 제작 도구",
     "longDescription": "코코포리아 사용자를 위한 브라우저·데스크톱 APNG·애니메이션 WebP 제작 도구.",
@@ -39,5 +48,13 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ]
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "__REPLACE_WITH_UPDATER_PUBKEY__",
+      "endpoints": [
+        "https://github.com/tmzkdlleaf-bit/apng-editor-v2/releases/latest/download/latest.json"
+      ]
+    }
   }
 }

@@ -53,17 +53,19 @@ npx @tauri-apps/cli@2 build       # 설치 파일 빌드 (윈도우: .msi/.exe)
 
 ### 데스크톱에서 달라지는 동작
 
-- 내보내기 저장·프로젝트 불러오기: 네이티브 대화상자(dialog 플러그인) + 커스텀 Rust 명령으로
-  **임의 경로**에 쓴다(`src-tauri/src/lib.rs`의 `write_file_bytes`/`read_file_text`).
-  fs 플러그인을 안 쓰는 이유: 스코프에 적힌 경로만 허용해 다른 드라이브 저장이 막히기 때문.
+- 내보내기 저장·프로젝트 불러오기: **Rust 명령이 네이티브 대화상자를 직접 열고** 사용자가 고른
+  경로에만 쓴다(`src-tauri/src/lib.rs`의 `save_with_dialog`/`open_project_with_dialog`).
+  JS 는 경로를 만들지도 넘기지도 않는다(이름·확장자·원시 바이트만) → 웹뷰 코드가 임의 경로에 쓰는 일 차단.
+  바이트는 숫자 배열이 아니라 Tauri 2 원시 바이트 전달(ArrayBuffer 본문)로 보낸다.
 - 프로젝트 파일 끌어다 놓기는 웹/데스크톱 공용.
 
-### 자동 업데이트 (기본 꺼짐)
+### 자동 업데이트 (켜져 있음, 키만 넣으면 작동)
 
-UI(`src/ui/update-banner.js`)와 경계(`platform/checkUpdate`)는 준비돼 있으나, 서명 키가 필요해
-기본은 비활성이다. 켜려면: `npx @tauri-apps/cli@2 signer generate`로 키를 만들고 →
-`src-tauri/Cargo.toml`의 updater/process 의존성 주석 해제 → `src-tauri/src/lib.rs`의 플러그인 등록
-두 줄 추가 → `tauri.conf.json`에 `plugins.updater`(endpoints + pubkey) 추가.
+UI(`src/ui/update-banner.js`) · 경계(`platform/checkUpdate`) · 플러그인(updater/process) · 설정
+(`tauri.conf.json`의 `createUpdaterArtifacts`·`plugins.updater`)이 모두 들어가 있다.
+남은 것은 **서명 키뿐**: 키를 만들어 저장소 시크릿에 넣고 공개 키를 `pubkey`에 붙이면 작동한다.
+키가 없으면 수동 빌드는 업데이트 산출물만 건너뛰고, 태그 릴리스는 한국어 오류로 멈춘다.
+전체 절차는 `docs/release.md` 참고.
 
 ### 아이콘
 

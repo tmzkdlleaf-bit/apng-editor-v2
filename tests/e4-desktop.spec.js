@@ -96,4 +96,68 @@ test.describe('E4 — 데스크톱 경계', () => {
     });
     expect(afterCancel).toBe(null);
   });
+
+  test('[5] 데스크톱 저장: save_with_dialog 에 원시 바이트만, 경로는 JS가 넘기지 않는다', async ({ page }) => {
+    await openApp(page);
+    const r = await page.evaluate(async () => {
+      const calls = [];
+      // 가짜 Tauri 환경. core.invoke 를 가로채 인자를 기록한다.
+      window.__TAURI__ = {
+        core: {
+          invoke: (cmd, payload, opts) => {
+            calls.push({
+              cmd,
+              payloadIsU8: payload instanceof Uint8Array,
+              payloadBytes: payload instanceof Uint8Array ? Array.from(payload) : null,
+              payloadType: typeof payload,
+              hasHeaders: !!(opts && opts.headers),
+              defaultNameHeader: opts?.headers?.['x-default-name'] ?? null,
+              extHeader: opts?.headers?.['x-extension'] ?? null,
+            });
+            return Promise.resolve('C:/사용자가고른/경로/테스트.png'); // Rust가 정한 경로
+          },
+        },
+      };
+      const P = await import('/src/platform/index.js');
+      const isD = P.isDesktop();
+      const res = await P.saveFile('테스트.png', new Blob([new Uint8Array([1, 2, 3])], { type: 'image/png' }));
+      return { isD, calls, res };
+    });
+    expect(r.isD).toBe(true);
+    expect(r.calls.length).toBe(1);
+    expect(r.calls[0].cmd).toBe('save_with_dialog');
+    expect(r.calls[0].payloadIsU8).toBe(true);        // 숫자 배열이 아니라 원시 바이트
+    expect(r.calls[0].payloadBytes).toEqual([1, 2, 3]);
+    expect(r.calls[0].hasHeaders).toBe(true);
+    expect(r.calls[0].extHeader).toBe('png');
+    // 이름은 ASCII 화(encodeURIComponent)되어 전달 — 한글을 헤더에 그대로 넣지 않는다.
+    expect(r.calls[0].defaultNameHeader).toBe(encodeURIComponent('테스트.png'));
+    // 경로는 Rust 대화상자가 정한다. JS 가 넘긴 인자 어디에도 저장 경로 문자열이 없다.
+    expect(r.res.saved).toBe(true);
+    expect(r.res.path).toBe('C:/사용자가고른/경로/테스트.png');
+  });
+
+  test('[6] 데스크톱 열기: open_project_with_dialog 호출, JS가 열 파일 경로를 지정하지 않는다', async ({ page }) => {
+    await openApp(page);
+    const r = await page.evaluate(async () => {
+      const calls = [];
+      window.__TAURI__ = {
+        core: {
+          invoke: (cmd, args) => {
+            calls.push({ cmd, argKeys: args ? Object.keys(args) : [] });
+            return Promise.resolve({ path: 'D:/문서/작업.apngproj', text: '{"ok":true}' });
+          },
+        },
+      };
+      const P = await import('/src/platform/index.js');
+      const res = await P.openProjectFile();
+      return { calls, res };
+    });
+    expect(r.calls.length).toBe(1);
+    expect(r.calls[0].cmd).toBe('open_project_with_dialog');
+    // 인자는 마지막 폴더 힌트(dir)뿐 — 열 파일 경로를 JS 가 지정하지 않는다.
+    expect(r.calls[0].argKeys).toEqual(['dir']);
+    expect(r.res.path).toBe('D:/문서/작업.apngproj');
+    expect(r.res.text).toBe('{"ok":true}');
+  });
 });
