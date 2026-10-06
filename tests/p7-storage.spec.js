@@ -243,15 +243,15 @@ test.describe('P7 — 저장', () => {
       window.__store.apply({ type: 'addLayer', layer, index: 0 });
       await window.__autosave.flush({ withThumb: false });
 
-      // reload를 막아 전환 직전의 flush만 검증한다
-      const origReload = location.reload.bind(location);
-      location.reload = () => {};
+      // reload를 가로채 전환 직전의 flush만 검증한다(location.reload 덮어쓰기는 일부 브라우저에서 막힘)
+      const origReload = window.__project.reload;
+      window.__project.reload = () => {};
       try {
         // 값 하나 바꾸고 디바운스(1초) 안에 바로 새 프로젝트
         window.__store.apply({ type: 'setProp', id: layer.id, path: 'transform.x', value: 123 });
         await window.__project.newProject();
       } finally {
-        location.reload = origReload;
+        window.__project.reload = origReload;
       }
 
       const rec = await getProject(oldId);
