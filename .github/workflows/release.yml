@@ -1,0 +1,68 @@
+name: release
+
+# 수동 실행(workflow_dispatch) = 릴리스 없이 빌드만 → 산출물을 아티팩트로 올려 확인.
+# v* 태그 push = 실제 릴리스 생성(설치 파일을 GitHub 릴리스에 첨부).
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    permissions:
+      contents: write   # 태그 릴리스 생성용. 빌드만 하는 수동 실행에는 쓰이지 않음.
+    strategy:
+      fail-fast: false
+      matrix:
+        # 지금은 윈도우 설치형 앱 빌드 확인이 목표라 windows-latest만 둔다.
+        # mac/linux 릴리스가 필요해지면 아래에 macos-latest / ubuntu-22.04 를 추가한다
+        # (ubuntu는 libwebkit2gtk-4.1-dev 등 시스템 의존성 설치 스텝이 추가로 필요).
+        include:
+          - platform: windows-latest
+            args: ''
+    runs-on: ${{ matrix.platform }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: setup node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: setup rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
+
+      - name: npm ci
+        run: npm ci
+
+      # tauri build 가 beforeBuildCommand(npm run build)로 dist/ 를 먼저 만든다.
+      # tagName 등을 비우면 릴리스를 만들지 않고 빌드만 한다(workflow_dispatch 경로).
+      - name: build tauri app
+        uses: tauri-apps/tauri-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          projectPath: .
+          tagName: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || '' }}
+          releaseName: ${{ startsWith(github.ref, 'refs/tags/') && format('APNG 에디터 {0}', github.ref_name) || '' }}
+          releaseDraft: true
+          args: ${{ matrix.args }}
+
+      # 릴리스 없이 빌드만 한 경우: 설치 파일(.exe/.msi)을 아티팩트로 올려 성공 여부 확인.
+      - name: upload build artifacts
+        if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: apng-editor-${{ matrix.platform }}
+          path: |
+            src-tauri/target/release/bundle/**/*.exe
+            src-tauri/target/release/bundle/**/*.msi
+          if-no-files-found: error
