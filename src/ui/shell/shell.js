@@ -4,6 +4,9 @@ import { initKeys }       from '../keys.js';
 import { createPlayback } from '../playback.js';
 import { initTimeline }   from '../timeline/index.js';
 import { initInspector }  from '../inspector/index.js';
+import { initExport }     from '../export/index.js';
+import { startUpdateCheck } from '../update-banner.js';
+import { isDesktop }      from '../../platform/index.js';
 
 const TL_KEY     = 'apng2.timelineHeight';
 const TL_DEFAULT = 340;
@@ -153,6 +156,27 @@ export function init(store, editorState, projectApi = null) {
   const inspectorEl = app.querySelector('[data-region="inspector"]');
   initInspector(inspectorEl, store, editorState);
 
+  // 내보내기 화면 (E3) — 상단 [내보내기] 버튼 + Ctrl+E
+  const exportUI = initExport(store, editorState, projectApi);
+  app.querySelector('[data-action="export"]').addEventListener('click', () => exportUI.open());
+
+  // 자동 업데이트 확인 (E4, 데스크톱만) — 시작 10초 뒤 한 번. 실패/없음은 조용히.
+  if (projectApi && isDesktop()) {
+    const mount = app.querySelector('.topbar-right');
+    startUpdateCheck(mount, { flush: () => projectApi.flushSave?.(), delayMs: 10000 });
+  }
+
+  // 프로젝트 파일(.apngproj) 끌어다 놓기 — 웹/데스크톱 공용
+  if (projectApi) {
+    document.addEventListener('dragover', (e) => {
+      if ([...(e.dataTransfer?.items ?? [])].some((it) => it.kind === 'file')) e.preventDefault();
+    });
+    document.addEventListener('drop', (e) => {
+      const f = [...(e.dataTransfer?.files ?? [])].find((x) => /\.(apngproj|json)$/i.test(x.name));
+      if (f) { e.preventDefault(); projectApi.importFile?.(f); }
+    });
+  }
+
   // 캔버스 정보 + 설정 다이어로그 (D3)
   const canvasInfoEl = app.querySelector('#canvas-info');
   function _updateCanvasInfo() {
@@ -264,7 +288,7 @@ export function init(store, editorState, projectApi = null) {
       _closeProjMenu();
       if (act === 'new')    projectApi.newProject?.();
       else if (act === 'export') projectApi.exportFile?.();
-      else if (act === 'import') projFile.click();
+      else if (act === 'import') { if (isDesktop()) projectApi.openProject?.(); else projFile.click(); }
     });
   }
 

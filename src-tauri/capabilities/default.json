@@ -1,0 +1,10 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "APNG 에디터 기본 권한 — 저장/열기 대화상자만. 파일 입출력은 커스텀 명령(권한 불필요).",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "dialog:default"
+  ]
+}

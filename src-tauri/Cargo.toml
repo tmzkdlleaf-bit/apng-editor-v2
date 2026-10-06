@@ -1,0 +1,26 @@
+[package]
+name = "apng-editor"
+version = "0.1.0"
+description = "코코포리아 APNG 에디터"
+edition = "2021"
+rust-version = "1.77.2"
+
+# 앱 버전은 tauri.conf.json 이 package.json 에서 읽는다. 이 crate 버전과는 별개다.
+
+[lib]
+name = "apng_editor_lib"
+crate-type = ["lib", "cdylib", "staticlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-dialog = "2"
+# 파일 쓰기/읽기는 fs 플러그인 대신 커스텀 명령(std::fs)으로 한다 → 임의 드라이브 경로 저장 가능, 스코프 설정 불필요.
+
+# ── 자동 업데이트를 켤 때 주석을 풀고 lib.rs 의 updater 블록·tauri.conf.json 의 plugins.updater 를 추가한다.
+# 서명 키가 필요하다(npx @tauri-apps/cli signer generate). 키 없이는 빌드/실행이 깨질 수 있어 기본은 꺼 둔다.
+# [target.'cfg(any(target_os = "macos", windows, target_os = "linux"))'.dependencies]
+# tauri-plugin-updater = "2"
+# tauri-plugin-process = "2"

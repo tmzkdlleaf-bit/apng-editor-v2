@@ -9,6 +9,7 @@ import { migrate } from './core/io/migrate.js';
 import { buildProjectFile, importProjectFile } from './core/io/project-file.js';
 import { createAutosave } from './core/io/autosave.js';
 import { showToast } from './ui/shell/status.js';
+import { saveFile, openProjectFile } from './platform/index.js';
 
 const CUR_KEY = 'apng2.currentProject';
 
@@ -64,6 +65,9 @@ let autosave = null;
 
 const projectApi = {
   getName: () => projectName,
+  getId:   () => projectId,
+  // 전환 후 새로고침. 테스트에서 바꿔 끼울 수 있게 주입형으로 둔다(location.reload 덮어쓰기는 일부 브라우저에서 막힘).
+  reload: () => location.reload(),
   async newProject() {
     // 전환 전에 현재 프로젝트의 미저장 변경을 먼저 기록한다(썸네일은 생략).
     if (autosave) { try { await autosave.flush({ withThumb: false }); } catch {} }
@@ -71,41 +75,48 @@ const projectApi = {
     const doc = createDoc();
     await putProject({ id, name: '새 프로젝트', doc, updatedAt: Date.now() });
     _setCurrentId(id);
-    location.reload();
+    projectApi.reload();
   },
+  // 설치/전환 전 자동 저장 flush (업데이트 설치 전에도 호출).
+  async flushSave() { if (autosave) { try { await autosave.flush({ withThumb: false }); } catch {} } },
   async exportFile() {
     try {
       const payload = await buildProjectFile(store.get());
       const json = JSON.stringify(payload);
       const blob = new Blob([json], { type: 'application/json' });
-      const url  = URL.createObjectURL(blob);
-      const a    = document.createElement('a');
-      a.href = url;
-      a.download = `${projectName || '프로젝트'}.apngproj`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
+      // 웹: 다운로드 / 데스크톱: 저장 대화상자 (platform이 분기)
+      await saveFile(`${projectName || '프로젝트'}.apngproj`, blob);
     } catch {
       showToast('내보내기에 실패했습니다.');
     }
   },
+  // 파일(브라우저 File) 경로 — 웹 파일 입력/드롭에서 호출
   async importFile(file) {
+    try { await _importFromText(await file.text(), file.name); }
+    catch (err) { showToast('파일을 불러올 수 없습니다: ' + (err?.message ?? '형식 오류')); }
+  },
+  // 데스크톱 열기 대화상자
+  async openProject() {
     try {
-      const payload = JSON.parse(await file.text());
-      const { doc } = await importProjectFile(payload);
-      // 파싱·검증을 통과한 뒤에야 현재 프로젝트 변경을 기록하고 전환한다.
-      if (autosave) { try { await autosave.flush({ withThumb: false }); } catch {} }
-      const id   = _genId();
-      const name = file.name.replace(/\.apngproj$/i, '').replace(/\.json$/i, '') || '불러온 프로젝트';
-      await putProject({ id, name, doc, updatedAt: Date.now() });
-      _setCurrentId(id);
-      location.reload();
-    } catch (err) {
-      showToast('파일을 불러올 수 없습니다: ' + (err?.message ?? '형식 오류'));
-    }
+      const r = await openProjectFile();
+      if (!r) return;
+      const name = String(r.path ?? '').split(/[\\/]/).pop() || '불러온 프로젝트';
+      await _importFromText(r.text, name);
+    } catch (err) { showToast('파일을 불러올 수 없습니다: ' + (err?.message ?? '형식 오류')); }
   },
 };
+
+async function _importFromText(text, nameHint) {
+  const payload = JSON.parse(text);
+  const { doc } = await importProjectFile(payload);
+  // 파싱·검증을 통과한 뒤에야 현재 프로젝트 변경을 기록하고 전환한다.
+  if (autosave) { try { await autosave.flush({ withThumb: false }); } catch {} }
+  const id   = _genId();
+  const name = String(nameHint ?? '').replace(/\.apngproj$/i, '').replace(/\.json$/i, '') || '불러온 프로젝트';
+  await putProject({ id, name, doc, updatedAt: Date.now() });
+  _setCurrentId(id);
+  projectApi.reload();
+}
 
 initTheme();
 const shell = initShell(store, editorState, isDemo ? null : projectApi);
