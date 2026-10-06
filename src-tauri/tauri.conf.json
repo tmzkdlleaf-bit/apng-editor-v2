@@ -51,7 +51,7 @@
   },
   "plugins": {
     "updater": {
-      "pubkey": "__REPLACE_WITH_UPDATER_PUBKEY__",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDk5QkNBNTI3NTYyMjg0NkUKUldSdWhDSldKNlc4bVVyUklNR1UvYU1kWC9aRzVIalg5SkpQUzlPclFYWGVTVjJGdVVpajArY00K",
       "endpoints": [
         "https://github.com/tmzkdlleaf-bit/apng-editor-v2/releases/latest/download/latest.json"
       ]
