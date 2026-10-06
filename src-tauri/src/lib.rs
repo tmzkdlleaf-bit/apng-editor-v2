@@ -110,9 +110,9 @@ pub fn run() {
             // 자동 업데이트(데스크톱만). 설치된 앱이 GitHub 릴리스의 latest.json 을 보고 새 버전을 받는다.
             #[cfg(desktop)]
             {
-                app.handle()
+                app.app_handle()
                     .plugin(tauri_plugin_updater::Builder::new().build())?;
-                app.handle().plugin(tauri_plugin_process::init())?;
+                app.app_handle().plugin(tauri_plugin_process::init())?;
             }
             Ok(())
         })

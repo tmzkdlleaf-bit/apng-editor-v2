@@ -18,6 +18,8 @@ tauri-build = { version = "2", features = [] }
 tauri = { version = "2", features = [] }
 tauri-plugin-dialog = "2"
 serde = { version = "1", features = ["derive"] }
+# tauri::generate_context! 매크로가 plugins(updater) 설정을 직렬화할 때 serde_json 을 직접 참조한다.
+serde_json = "1"
 # 파일 쓰기/읽기는 fs 플러그인 대신 커스텀 명령(std::fs)으로 한다 → 임의 드라이브 경로 저장 가능, 스코프 설정 불필요.
 
 # ── 자동 업데이트(데스크톱 전용). lib.rs 의 setup 에서 플러그인을 등록하고,
