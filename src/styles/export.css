@@ -1,0 +1,145 @@
+/* 내보내기 모달 (E3) — 색·간격·둥글기는 tokens.css 변수만 사용 */
+.export-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.export-dialog {
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: var(--r-3);
+  width: min(880px, 94vw);
+  max-height: 92vh;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.4);
+}
+
+.ex-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--sp-3) var(--sp-4);
+  border-bottom: 1px solid var(--line);
+}
+.ex-title { font-size: var(--fs-4); font-weight: 600; }
+.ex-close {
+  background: none; border: none; color: var(--text2);
+  font-size: var(--fs-5); cursor: pointer; line-height: 1; padding: 0 var(--sp-2);
+}
+.ex-close:hover { color: var(--text); }
+
+.ex-body {
+  display: grid;
+  grid-template-columns: 300px 1fr;
+  gap: var(--sp-4);
+  padding: var(--sp-4);
+}
+
+/* 왼쪽: 미리보기 */
+.ex-preview-wrap {
+  background-color: var(--chk1);
+  background-image:
+    linear-gradient(45deg, var(--chk2) 25%, transparent 25%),
+    linear-gradient(-45deg, var(--chk2) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, var(--chk2) 75%),
+    linear-gradient(-45deg, transparent 75%, var(--chk2) 75%);
+  background-size: 16px 16px;
+  background-position: 0 0, 0 8px, 8px -8px, -8px 0;
+  border: 1px solid var(--line);
+  border-radius: var(--r-2);
+  width: 100%;
+  min-height: 220px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+.ex-preview { max-width: 100%; max-height: 300px; image-rendering: auto; }
+.ex-info { margin-top: var(--sp-2); color: var(--text2); font-size: var(--fs-2); text-align: center; }
+
+/* 오른쪽 */
+.ex-right { display: flex; flex-direction: column; gap: var(--sp-3); min-width: 0; }
+
+.ex-size-box {
+  display: flex; align-items: baseline; gap: var(--sp-3); flex-wrap: wrap;
+  padding: var(--sp-3); background: var(--input); border-radius: var(--r-2);
+}
+.ex-size { font-size: var(--fs-5); font-weight: 600; }
+.ex-target { font-size: var(--fs-2); color: var(--text2); }
+.ex-target.ok  { color: var(--acc); }
+.ex-target.over { color: var(--danger); }
+.ex-fit { margin-left: auto; }
+
+.ex-settings { display: flex; flex-direction: column; gap: var(--sp-2); }
+.ex-row { display: flex; align-items: center; gap: var(--sp-3); min-height: 28px; }
+.ex-row > label:first-child { width: 72px; color: var(--text2); font-size: var(--fs-2); flex: none; }
+.ex-inline { display: inline-flex; align-items: center; gap: 4px; color: var(--text); font-size: var(--fs-2); }
+.ex-note { color: var(--dim); font-size: var(--fs-1); }
+.ex-modified { color: var(--danger); font-size: var(--fs-1); margin-left: var(--sp-2); }
+.ex-quality-row { display: inline-flex; align-items: center; gap: var(--sp-2); }
+
+.ex-ctl { font: inherit; }
+select.ex-ctl, input[type="number"].ex-ctl {
+  background: var(--input); color: var(--text); border: 1px solid var(--line);
+  border-radius: var(--r-1); padding: 2px 6px;
+}
+
+.ex-warn {
+  background: #8a6d0033; border: 1px solid #c9a227; color: var(--text);
+  border-radius: var(--r-1); padding: var(--sp-2) var(--sp-3); font-size: var(--fs-1);
+}
+.ex-warn > div { margin: 2px 0; }
+
+.ex-together-title, .ex-results-title { font-size: var(--fs-2); color: var(--text2); margin-bottom: var(--sp-1); }
+.ex-together { display: flex; flex-direction: column; gap: 2px; }
+
+.ex-progress { display: flex; flex-direction: column; gap: var(--sp-2); }
+.ex-bar { height: 8px; background: var(--input); border-radius: 999px; overflow: hidden; }
+.ex-bar-fill { height: 100%; width: 0; background: var(--acc); transition: width var(--dur-fast) linear; }
+.ex-step { font-size: var(--fs-2); color: var(--text2); }
+.ex-log-wrap summary { cursor: pointer; color: var(--text2); font-size: var(--fs-1); }
+.ex-log { max-height: 140px; overflow: auto; background: var(--input); border-radius: var(--r-1); padding: var(--sp-2); font-family: var(--font-mono); font-size: var(--fs-1); white-space: pre-wrap; }
+
+.ex-results { display: flex; flex-direction: column; gap: var(--sp-2); }
+.ex-result-row { display: flex; align-items: center; gap: var(--sp-3); padding: var(--sp-2); background: var(--input); border-radius: var(--r-1); }
+.ex-result-name { font-weight: 500; }
+.ex-result-meta { color: var(--text2); font-size: var(--fs-1); margin-left: auto; }
+.ex-result-meta .ok { color: var(--acc); }
+.ex-result-meta .over { color: var(--danger); }
+
+.ex-foot {
+  display: flex; align-items: center; gap: var(--sp-2);
+  padding: var(--sp-3) var(--sp-4); border-top: 1px solid var(--line);
+}
+.ex-foot-spacer { flex: 1; }
+.ex-modified { font-weight: 500; }
+
+/* 자동 업데이트 (E4) */
+.update-badge {
+  background: var(--acc); color: var(--onacc, var(--acctext));
+  border: none; border-radius: var(--r-1); padding: 2px 10px; cursor: pointer; font-weight: 600;
+}
+.update-dialog {
+  position: fixed; inset: 0; background: rgba(0, 0, 0, 0.5);
+  display: flex; align-items: center; justify-content: center; z-index: 1100;
+}
+.ud-panel {
+  background: var(--panel); color: var(--text); border: 1px solid var(--line);
+  border-radius: var(--r-3); padding: var(--sp-4); width: min(460px, 92vw);
+  display: flex; flex-direction: column; gap: var(--sp-3);
+}
+.ud-title { font-size: var(--fs-4); font-weight: 600; }
+.ud-notes {
+  max-height: 240px; overflow: auto; background: var(--input); border-radius: var(--r-1);
+  padding: var(--sp-2); font-family: var(--font-mono); font-size: var(--fs-1); white-space: pre-wrap; margin: 0;
+}
+.ud-btns { display: flex; justify-content: flex-end; gap: var(--sp-2); }
+.ud-err { color: var(--danger); font-size: var(--fs-1); }
