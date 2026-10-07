@@ -1,5 +1,6 @@
 // 타임라인 레이어 목록 패널 (왼쪽) — 그룹 계층 + 펼침 하위 행 + 끌어 놓기
 import { computeRows, isSelfOrDescendant } from './rows.js';
+import { createLayerAddMenu } from '../layer-add.js';
 
 const ROW_H  = 28; // C3: 28px
 const INDENT = 12; // G1: 단계당 들여쓰기 px
@@ -15,9 +16,21 @@ export function initLayerList(containerEl, store, editorState) {
   let _dragging   = false;
   let _dropInfo   = null;
 
+  // item 2: 트랙 눈금자(24px)와 높이를 맞춘 머리 칸 — sticky 로 맨 위에 고정.
+  //   이 칸이 있어야 왼쪽 레이어 행과 오른쪽 트랙 행의 화면 y 가 한 칸도 안 어긋난다.
+  // item 5: [+ 레이어] 를 이 머리 칸으로 옮긴다.
+  const headEl = document.createElement('div');
+  headEl.className = 'tl-layers-head';
+  const addWrap = document.createElement('div');
+  addWrap.className = 'tl-add-wrap';
+  const layerAdd = createLayerAddMenu(store, editorState, addWrap);
+  headEl.appendChild(addWrap);
+  containerEl.appendChild(headEl);
+
   function _rebuild() {
     if (_dragging) return;
-    containerEl.innerHTML = '';
+    // 머리 칸(headEl)은 두고 행만 교체한다.
+    for (const r of [...containerEl.children]) { if (r !== headEl) r.remove(); }
     const doc = store.get();
     const es  = editorState.get();
     const sel = new Set(es.selection);
@@ -295,6 +308,7 @@ export function initLayerList(containerEl, store, editorState) {
   function destroy() {
     document.removeEventListener('pointermove', _onPointerMove);
     document.removeEventListener('pointerup',   _onPointerUp);
+    layerAdd.destroy();
     unsubStore();
     unsubES();
   }

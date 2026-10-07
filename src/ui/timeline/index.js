@@ -1,116 +1,142 @@
-// 타임라인 패널 — 레이어 목록 + 트랙 캔버스 + 컨트롤 버튼 조립
+// 타임라인 패널 — 재생줄(머리줄) + 레이어 목록 + 트랙 캔버스 조립
+// 재생줄(item 5): [처음][이전][재생/멈춤][다음][끝]  현재/전체·초  반복(아이콘 3)  자동키  스냅
+//   [+ 레이어]는 레이어 목록 머리 칸으로 옮겼다(layer-list.js).
 import { initLayerList }   from './layer-list.js';
 import { initTrackCanvas } from './track-canvas.js';
-import { createLayerAddMenu } from '../layer-add.js';
+import { iconButton } from '../icons.js';
 
-const _LOOP_LABELS = { loop: '반복', once: '한번', pingpong: '핑퐁' };
-const _LOOP_CYCLE  = ['loop', 'once', 'pingpong'];
+const _LOOP_MODES = [
+  { mode: 'loop',     icon: 'loop',     label: '반복' },
+  { mode: 'once',     icon: 'once',     label: '한 번' },
+  { mode: 'pingpong', icon: 'pingpong', label: '핑퐁' },
+];
 
 export function initTimeline(timelineEl, store, editorState, playback) {
-  const head      = timelineEl.querySelector('.timeline-head');
-  const body      = timelineEl.querySelector('.timeline-body');
-  const layersEl  = timelineEl.querySelector('.timeline-layers');
-  const tracksEl  = timelineEl.querySelector('.timeline-tracks');
-  const playBtn   = head.querySelector('[data-action="play"]');
-  const loopBtn   = head.querySelector('[data-action="loop-mode"]');
-  const autoKeyBtn = head.querySelector('[data-action="auto-key"]');
-  const snapBtn   = head.querySelector('[data-action="snap"]');
-  const frameInfo = head.querySelector('.tl-frame-info');
+  const head     = timelineEl.querySelector('.timeline-head');
+  const layersEl = timelineEl.querySelector('.timeline-layers');
+  const tracksEl = timelineEl.querySelector('.timeline-tracks');
 
-  loopBtn.classList.add('tl-loop-btn');
+  // ── 재생 이동 묶음 ──────────────────────────────────────────────────
+  const transport = document.createElement('div');
+  transport.className = 'tl-transport';
+  const firstBtn = iconButton('first', { label: '처음으로', title: '처음으로 (Home)' });
+  const prevBtn  = iconButton('prev',  { label: '이전 프레임', title: '이전 프레임 (←)' });
+  const playBtn  = iconButton('play',  { label: '재생', title: '재생/멈춤 (Space)' });
+  playBtn.dataset.action = 'play';
+  const nextBtn  = iconButton('next',  { label: '다음 프레임', title: '다음 프레임 (→)' });
+  const lastBtn  = iconButton('last',  { label: '끝으로', title: '끝으로 (End)' });
+  transport.append(firstBtn, prevBtn, playBtn, nextBtn, lastBtn);
 
-  // item 7: 머리줄 스냅 토글
-  const tlSnapBtn = document.createElement('button');
-  tlSnapBtn.dataset.action = 'tl-snap';
-  tlSnapBtn.textContent = '머리줄 스냅';
-  tlSnapBtn.title = '키·클립을 프레임 경계·재생선·다른 키에 붙임';
-  snapBtn.after(tlSnapBtn);
-  tlSnapBtn.addEventListener('click', () => {
-    editorState.set({ tlSnap: !editorState.get().tlSnap });
+  // ── 프레임 표시(클릭하면 입력) + 초 ─────────────────────────────────
+  const frameWrap = document.createElement('div');
+  frameWrap.className = 'tl-frame-info';
+  const frameCur = document.createElement('button');
+  frameCur.className = 'tl-frame-cur';
+  frameCur.title = '클릭해서 프레임 입력';
+  frameCur.setAttribute('aria-label', '현재 프레임');
+  const frameTot = document.createElement('span');
+  frameTot.className = 'tl-frame-tot';
+  const timeEl = document.createElement('span');
+  timeEl.className = 'tl-time';
+  frameWrap.append(frameCur, frameTot, timeEl);
+
+  // ── 반복 방식(아이콘 3개 중 하나 선택) ──────────────────────────────
+  const loopGroup = document.createElement('div');
+  loopGroup.className = 'tl-loop-group';
+  const loopBtns = _LOOP_MODES.map(({ mode, icon, label }) => {
+    const b = iconButton(icon, { label: `반복: ${label}`, title: `반복 방식: ${label}` });
+    b.dataset.mode = mode;
+    b.addEventListener('click', () => store.apply({ type: 'setMeta', patch: { playback: mode } }));
+    loopGroup.appendChild(b);
+    return b;
   });
 
-  // C12: 처음/끝 버튼을 play 앞뒤에 삽입
-  const firstBtn = document.createElement('button');
-  firstBtn.dataset.action = 'go-first';
-  firstBtn.title = '처음으로';
-  firstBtn.textContent = '|<';
-  firstBtn.style.cssText = 'font-size:10px; padding:0 4px;';
+  // ── 자동 키 · 스냅(캔버스/타임라인) ─────────────────────────────────
+  const autoKeyBtn = iconButton('autokey', { label: '자동 키', title: '자동 키 (값 바꾸면 키 자동 생성)' });
+  const snapCanvasBtn = iconButton('magnet', { label: '캔버스 스냅', title: '캔버스 스냅 (격자·가장자리에 붙임)' });
+  const snapTlBtn     = iconButton('magnet', { label: '타임라인 스냅', title: '타임라인 스냅 (키·클립을 프레임·재생선에 붙임)' });
 
-  const lastBtn = document.createElement('button');
-  lastBtn.dataset.action = 'go-last';
-  lastBtn.title = '끝으로';
-  lastBtn.textContent = '>|';
-  lastBtn.style.cssText = 'font-size:10px; padding:0 4px;';
+  const sep = () => { const s = document.createElement('span'); s.className = 'tl-sep'; return s; };
+  head.append(transport, sep(), frameWrap, sep(), loopGroup, sep(), autoKeyBtn, snapCanvasBtn, snapTlBtn);
 
-  head.insertBefore(firstBtn, playBtn);
-  playBtn.after(lastBtn);
-
-  // 레이어 추가 메뉴
-  const addWrap = document.createElement('div');
-  addWrap.style.cssText = 'position:relative; flex-shrink:0;';
-  const layerAdd = createLayerAddMenu(store, editorState, addWrap);
-  head.insertBefore(addWrap, head.firstChild);
-
-  // 레이어 목록
-  const layerList = initLayerList(layersEl, store, editorState);
-
-  // 트랙 캔버스
+  // 레이어 목록(머리 칸에 [+ 레이어] 포함) · 트랙 캔버스
+  const layerList   = initLayerList(layersEl, store, editorState);
   const trackCanvas = initTrackCanvas(tracksEl, layersEl, store, editorState, playback);
 
-  // 처음/끝
+  // ── 동작 ────────────────────────────────────────────────────────────
+  const _fc = () => Math.max(1, store.get().meta.frameCount ?? 1);
   firstBtn.addEventListener('click', () => playback.goTo(0));
-  lastBtn.addEventListener('click', () => {
-    const fc = Math.max(1, store.get().meta.frameCount ?? 1);
-    playback.goTo(fc - 1);
+  prevBtn .addEventListener('click', () => playback.goTo(Math.max(0, editorState.get().f - 1)));
+  nextBtn .addEventListener('click', () => playback.goTo(Math.min(_fc() - 1, editorState.get().f + 1)));
+  lastBtn .addEventListener('click', () => playback.goTo(_fc() - 1));
+  playBtn .addEventListener('click', () => playback.toggle());
+  autoKeyBtn.addEventListener('click', () => editorState.set({ autoKey: !editorState.get().autoKey }));
+  snapCanvasBtn.addEventListener('click', () => editorState.set({ snap: !editorState.get().snap }));
+  snapTlBtn.addEventListener('click', () => editorState.set({ tlSnap: !editorState.get().tlSnap }));
+
+  // 프레임 숫자 클릭 → 직접 입력
+  frameCur.addEventListener('click', () => {
+    const input = document.createElement('input');
+    input.className = 'tl-frame-input';
+    input.type = 'text';
+    input.value = String(editorState.get().f + 1);
+    frameCur.replaceWith(input);
+    input.focus(); input.select();
+    const commit = (apply) => {
+      if (apply) {
+        const v = parseInt(input.value, 10);
+        if (Number.isFinite(v)) playback.goTo(Math.max(0, Math.min(_fc() - 1, v - 1)));
+      }
+      input.replaceWith(frameCur);
+      _updateHead();
+    };
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); commit(true); }
+      else if (e.key === 'Escape') { e.preventDefault(); commit(false); }
+    });
+    input.addEventListener('blur', () => commit(true));
   });
 
-  // 재생/정지
-  playBtn.addEventListener('click', () => playback.toggle());
-
-  // B2: 루프 모드 → doc.meta.playback (setMeta 명령, 되돌리기 가능)
-  loopBtn.addEventListener('click', () => {
-    const cur  = store.get().meta.playback ?? 'loop';
-    const next = _LOOP_CYCLE[(_LOOP_CYCLE.indexOf(cur) + 1) % _LOOP_CYCLE.length];
-    store.apply({ type: 'setMeta', patch: { playback: next } });
-  });
-
-  // 자동 키
-  autoKeyBtn.addEventListener('click', () => {
-    editorState.set({ autoKey: !editorState.get().autoKey });
-  });
-
-  // 스냅
-  snapBtn.addEventListener('click', () => {
-    editorState.set({ snap: !editorState.get().snap });
-  });
+  // Space = 재생/멈춤 (입력 칸 포커스가 아닐 때)
+  function _onKeydown(e) {
+    if (e.code !== 'Space' && e.key !== ' ') return;
+    const t = e.target;
+    const tag = t?.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || t?.isContentEditable) return;
+    e.preventDefault();
+    playback.toggle();
+  }
+  document.addEventListener('keydown', _onKeydown);
 
   function _updateHead() {
     const es  = editorState.get();
     const doc = store.get();
     const fc  = doc.meta.frameCount ?? 1;
+    const fps = doc.meta.fps ?? 12;
     const playMode = doc.meta.playback ?? 'loop';
-    playBtn.textContent  = es.playing ? '정지' : '재생';
-    loopBtn.textContent  = (_LOOP_LABELS[playMode]) + ' ▾';
-    autoKeyBtn.style.background = es.autoKey ? 'var(--toolon)' : '';
-    autoKeyBtn.style.color      = es.autoKey ? 'var(--acc)' : '';
-    snapBtn.style.background    = es.snap    ? 'var(--toolon)' : '';
-    snapBtn.style.color         = es.snap    ? 'var(--acc)' : '';
-    tlSnapBtn.style.background  = es.tlSnap  ? 'var(--toolon)' : '';
-    tlSnapBtn.style.color       = es.tlSnap  ? 'var(--acc)' : '';
-    if (frameInfo) frameInfo.textContent = `${es.f + 1} / ${fc}`;
+    playBtn.innerHTML = '';
+    playBtn.appendChild(iconButton(es.playing ? 'pause' : 'play', {}).firstChild);
+    playBtn.title = es.playing ? '멈춤 (Space)' : '재생 (Space)';
+    playBtn.setAttribute('aria-label', es.playing ? '멈춤' : '재생');
+    frameCur.textContent = String(es.f + 1);
+    frameTot.textContent = ` / ${fc}`;
+    timeEl.textContent   = `${(es.f / fps).toFixed(2)}초`;
+    for (const b of loopBtns) b.classList.toggle('is-on', b.dataset.mode === playMode);
+    autoKeyBtn.classList.toggle('is-on', !!es.autoKey);
+    snapCanvasBtn.classList.toggle('is-on', !!es.snap);
+    snapTlBtn.classList.toggle('is-on', !!es.tlSnap);
   }
 
   const unsubES = editorState.subscribe(_updateHead);
   const unsubSt = store.subscribe({ meta: true }, _updateHead);
-
   _updateHead();
 
   function destroy() {
+    document.removeEventListener('keydown', _onKeydown);
     unsubES();
     unsubSt();
     layerList.destroy();
     trackCanvas.destroy();
-    layerAdd.destroy();
   }
 
   return { destroy };

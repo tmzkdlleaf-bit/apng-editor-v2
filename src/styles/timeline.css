@@ -4,6 +4,49 @@
   flex-shrink: 0;
 }
 
+/* ── 재생줄(머리줄) item 5 ─────────────────────────────────────────── */
+.timeline-head { min-height: 36px; }
+.tl-transport { display: flex; align-items: center; gap: 2px; }
+.tl-sep { width: 1px; height: 18px; background: var(--line); margin: 0 var(--sp-1); flex: none; }
+.tl-frame-info { display: flex; align-items: baseline; gap: 2px; font-size: var(--fs-2); color: var(--text2); }
+.tl-frame-cur {
+  background: transparent; border: 1px solid transparent; border-radius: var(--r-1);
+  color: var(--text); font: inherit; font-variant-numeric: tabular-nums;
+  padding: 1px 4px; cursor: pointer; min-width: 20px; text-align: right;
+}
+.tl-frame-cur:hover { border-color: var(--btnline); background: var(--input); }
+.tl-frame-cur:focus-visible { outline: 2px solid var(--acc); outline-offset: 1px; }
+.tl-frame-tot { color: var(--dim); font-variant-numeric: tabular-nums; }
+.tl-time { color: var(--dim); margin-left: var(--sp-2); font-variant-numeric: tabular-nums; }
+.tl-frame-input {
+  width: 48px; font: inherit; font-variant-numeric: tabular-nums;
+  background: var(--input); color: var(--text);
+  border: 1px solid var(--acc); border-radius: var(--r-1); padding: 1px 4px; text-align: right;
+}
+.tl-loop-group { display: flex; align-items: center; gap: 2px; }
+
+/* ── 레이어 목록 머리 칸(item 2): 트랙 눈금자(24px)와 높이 맞춤, sticky 고정 ── */
+.tl-layers-head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  height: 24px;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  padding: 0 var(--sp-1);
+  background: var(--tl);
+  border-bottom: 1px solid var(--line2);
+}
+.tl-add-wrap { position: relative; flex: none; }
+.tl-layers-head .tl-add-btn {
+  height: 20px; padding: 0 var(--sp-2);
+  font-size: var(--fs-1); line-height: 1;
+  background: var(--btn); color: var(--text2);
+  border: 1px solid var(--btnline); border-radius: var(--r-1); cursor: pointer;
+}
+.tl-layers-head .tl-add-btn:hover { color: var(--text); border-color: var(--line); }
+
 .layer-add-menu {
   position: absolute;
   top: calc(100% + 4px);

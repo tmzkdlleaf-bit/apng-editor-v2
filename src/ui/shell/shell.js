@@ -64,15 +64,7 @@ export function init(store, editorState, projectApi = null) {
 
       <div data-region="timeline" style="position:relative;">
         <div class="resize-handle" id="tl-resize"></div>
-        <div class="timeline-head">
-          <button data-action="play" title="재생/정지">재생</button>
-          <span class="sep"></span>
-          <span class="tl-frame-info">프레임: -/-</span>
-          <span class="sep"></span>
-          <button data-action="loop-mode">반복 ▾</button>
-          <button data-action="auto-key">자동 키</button>
-          <button data-action="snap">스냅</button>
-        </div>
+        <div class="timeline-head"></div>
         <div class="timeline-body">
           <div class="timeline-layers"></div>
           <div class="timeline-tracks"></div>

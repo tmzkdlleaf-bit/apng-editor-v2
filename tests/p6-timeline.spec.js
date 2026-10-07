@@ -396,36 +396,30 @@ test.describe('P6 — 재생 / 타임라인 / 레이어 추가 / 인스펙터', 
   });
 
   // ── 루프 모드 (B2: doc.meta.playback) ───────────────────────────────────
-  test('[재생 B2] 루프 모드 버튼 → doc.meta.playback 변경 (loop→once→pingpong→loop)', async ({ page }) => {
-    const loopBtn = page.locator('[data-action="loop-mode"]');
+  test('[재생 B2] 반복 모드 버튼 → doc.meta.playback 변경 (아이콘 3개 중 선택)', async ({ page }) => {
+    const mode = () => page.evaluate(() => window.__store.get().meta.playback ?? 'loop');
+    expect(await mode()).toBe('loop');
 
-    let mode = await page.evaluate(() => window.__store.get().meta.playback ?? 'loop');
-    expect(mode).toBe('loop');
+    await page.click('.tl-loop-group [data-mode="once"]');
+    expect(await mode()).toBe('once');
 
-    await loopBtn.click();
-    mode = await page.evaluate(() => window.__store.get().meta.playback ?? 'loop');
-    expect(mode).toBe('once');
+    await page.click('.tl-loop-group [data-mode="pingpong"]');
+    expect(await mode()).toBe('pingpong');
 
-    await loopBtn.click();
-    mode = await page.evaluate(() => window.__store.get().meta.playback ?? 'loop');
-    expect(mode).toBe('pingpong');
+    await page.click('.tl-loop-group [data-mode="loop"]');
+    expect(await mode()).toBe('loop');
 
-    await loopBtn.click();
-    mode = await page.evaluate(() => window.__store.get().meta.playback ?? 'loop');
-    expect(mode).toBe('loop');
+    // 선택된 버튼은 is-on 표시
+    await page.click('.tl-loop-group [data-mode="once"]');
+    await expect(page.locator('.tl-loop-group [data-mode="once"]')).toHaveClass(/is-on/);
   });
 
-  test('[재생 B2] 루프 모드 변경 → 되돌리기 가능', async ({ page }) => {
-    const loopBtn = page.locator('[data-action="loop-mode"]');
-    await loopBtn.click();
+  test('[재생 B2] 반복 모드 변경 → 되돌리기 가능', async ({ page }) => {
+    await page.click('.tl-loop-group [data-mode="once"]');
+    expect(await page.evaluate(() => window.__store.get().meta.playback ?? 'loop')).toBe('once');
 
-    const mode = await page.evaluate(() => window.__store.get().meta.playback ?? 'loop');
-    expect(mode).toBe('once');
-
-    // 되돌리기
     await page.click('[data-action="undo"]');
-    const modeAfterUndo = await page.evaluate(() => window.__store.get().meta.playback ?? 'loop');
-    expect(modeAfterUndo).toBe('loop');
+    expect(await page.evaluate(() => window.__store.get().meta.playback ?? 'loop')).toBe('loop');
   });
 
   // ── 끝난 조건 시나리오 ──────────────────────────────────────────────────
