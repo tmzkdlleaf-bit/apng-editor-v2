@@ -208,7 +208,7 @@ test.describe('P6 — 재생 / 타임라인 / 레이어 추가 / 인스펙터', 
 
     await page.click('[data-action="add-layer"]');
     await page.waitForSelector('.layer-add-menu', { state: 'visible' });
-    await page.click('.layer-add-item[data-kind="rect"]');
+    await page.click('.shape-grid-item[data-shape="rect"]');
 
     const after = await page.evaluate(() => window.__store.get().order.length);
     expect(after).toBe(before + 1);
@@ -217,7 +217,7 @@ test.describe('P6 — 재생 / 타임라인 / 레이어 추가 / 인스펙터', 
   test('[레이어 추가] 원 추가 → shape.kind=ellipse', async ({ page }) => {
     await page.click('[data-action="add-layer"]');
     await page.waitForSelector('.layer-add-menu', { state: 'visible' });
-    await page.click('.layer-add-item[data-kind="ellipse"]');
+    await page.click('.shape-grid-item[data-shape="ellipse"]');
 
     const newLayer = await page.evaluate(() => {
       const doc = window.__store.get();
@@ -245,7 +245,7 @@ test.describe('P6 — 재생 / 타임라인 / 레이어 추가 / 인스펙터', 
   test('[레이어 추가] 추가 후 자동 선택됨', async ({ page }) => {
     await page.click('[data-action="add-layer"]');
     await page.waitForSelector('.layer-add-menu', { state: 'visible' });
-    await page.click('.layer-add-item[data-kind="rect"]');
+    await page.click('.shape-grid-item[data-shape="rect"]');
 
     const sel = await page.evaluate(() => window.__editorState.get().selection);
     expect(sel.length).toBe(1);
@@ -394,7 +394,7 @@ test.describe('P6 — 재생 / 타임라인 / 레이어 추가 / 인스펙터', 
   test('[상단바] 작업 후 되돌리기 활성화', async ({ page }) => {
     await page.click('[data-action="add-layer"]');
     await page.waitForSelector('.layer-add-menu', { state: 'visible' });
-    await page.click('.layer-add-item[data-kind="rect"]');
+    await page.click('.shape-grid-item[data-shape="rect"]');
 
     const undoBtn = page.locator('[data-action="undo"]');
     const isDisabled = await undoBtn.evaluate((el) => el.disabled);

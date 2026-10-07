@@ -3,22 +3,19 @@ import { createLayer } from '../core/doc/schema.js';
 import { groupSelection } from './group-ops.js';
 import { putAsset } from '../core/io/assets.js';
 import { showToast } from './shell/status.js';
+import { SHAPE_PACK, shapePreviewSvg } from './shapes-pack.js';
 
-// AddMenu 설계: 이미지 / 글자 / 도형 / 이펙트 / 그룹 / 조정 / 움직이는 이미지 / PSD
+// AddMenu 설계: 이미지 / 움직이는 이미지 / 글자 / 도형(격자) / 이펙트 / 그룹 / 조정 / PSD
 // 이번에 안 되는 항목은 disabled + "준비 중"
 const _MENU = [
   { kind: 'image',    label: '이미지',                type: 'image' },
-  { kind: 'anim',     label: '움직이는 이미지 (GIF·APNG)', disabled: true },
+  { kind: 'anim',     label: '움직이는 이미지 (GIF·APNG·WebP)', disabled: true },
   { kind: 'text',     label: '글자',                  type: 'text'  },
-  { group: '도형' },
-  { kind: 'rect',     label: '사각형',   type: 'shape', shape: { kind: 'rect',    w: 100, h: 100, fill: '#5eb8f0', stroke: null } },
-  { kind: 'ellipse',  label: '원',       type: 'shape', shape: { kind: 'ellipse', w: 80,  h: 80,  fill: '#f0a35e', stroke: null } },
-  { kind: 'triangle', label: '삼각형',   type: 'shape', shape: { kind: 'polygon', sides: 3, w: 80, h: 80, fill: '#9b59b6', stroke: null } },
-  { kind: 'hexagon',  label: '육각형',   type: 'shape', shape: { kind: 'polygon', sides: 6, w: 80, h: 80, fill: '#2ecc71', stroke: null } },
+  { group: '도형', grid: 'shapes' },
   { group: '기타' },
   { kind: 'effect',   label: '이펙트',   disabled: true },
   { kind: 'group',    label: '그룹',     type: 'group' },
-  { kind: 'adjust',   label: '조정',     disabled: true },
+  { kind: 'adjust',   label: '조정',     type: 'adjust' },
   { kind: 'psd',      label: 'PSD',      disabled: true },
 ];
 
@@ -39,6 +36,22 @@ export function createLayerAddMenu(store, editorState, containerEl) {
       g.className = 'layer-add-group';
       g.textContent = item.group;
       menu.appendChild(g);
+      // 도형 격자(F2-3): 아이콘 미리보기 버튼들
+      if (item.grid === 'shapes') {
+        const grid = document.createElement('div');
+        grid.className = 'shape-grid';
+        for (const def of SHAPE_PACK) {
+          const b = document.createElement('button');
+          b.className = 'shape-grid-item';
+          b.dataset.shape = def.key;
+          b.title = def.label;
+          b.setAttribute('aria-label', def.label);
+          b.innerHTML = shapePreviewSvg(def);
+          b.addEventListener('click', (e) => { e.stopPropagation(); _addShape(def.shape()); _close(); });
+          grid.appendChild(b);
+        }
+        menu.appendChild(grid);
+      }
       continue;
     }
     const el = document.createElement('button');
@@ -129,10 +142,25 @@ export function createLayerAddMenu(store, editorState, containerEl) {
       layer.text  = '텍스트';
       layer.size  = 48;
       layer.color = '#ffffff';
+    } else if (item.type === 'adjust') {
+      // 조정 레이어: 아래 레이어 전체에 보정. 처음엔 중립(보정 섹션에서 값 조절).
+      layer.name = '조정';
+      layer.adjust = {};
     }
 
     const topIndex = doc.order.length;
     store.apply({ type: 'addLayer', layer, index: topIndex });
+    editorState.set({ selection: [layer.id] });
+  }
+
+  // 도형 격자에서 고른 도형을 중앙에 추가
+  function _addShape(shapeObj) {
+    const doc = store.get();
+    const layer = createLayer('shape', { name: '도형' });
+    layer.transform.x.value = Math.round(doc.meta.width / 2);
+    layer.transform.y.value = Math.round(doc.meta.height / 2);
+    layer.shape = { ...shapeObj };
+    store.apply({ type: 'addLayer', layer, index: doc.order.length });
     editorState.set({ selection: [layer.id] });
   }
 

@@ -7,7 +7,8 @@ import { makeSectionShell } from './section-shell.js';
 import { createCurveGraph } from '../controls/curve-graph.js';
 
 // adjust 를 적용할 수 있는 레이어 타입(렌더가 adjust 를 처리하는 것만).
-const ADJUST_TYPES = new Set(['image', 'anim']);
+// 'adjust' = 조정 레이어(아래 레이어 전체에 보정) — 같은 보정 섹션 UI 재사용(F2-2).
+const ADJUST_TYPES = new Set(['image', 'anim', 'adjust']);
 
 // 기본 보정 필드 정의 [key, label, min, max, step, default, unit]
 const BASIC = [

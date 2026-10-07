@@ -104,6 +104,22 @@
   background: var(--tl);
 }
 
+/* 도형 격자(F2-3) */
+.shape-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 2px;
+  padding: var(--sp-1) var(--sp-2);
+}
+.shape-grid-item {
+  display: flex; align-items: center; justify-content: center;
+  width: 30px; height: 30px; padding: 0;
+  background: transparent; border: 1px solid transparent; border-radius: var(--r-1);
+  color: var(--text2); cursor: pointer;
+}
+.shape-grid-item:hover { background: var(--btn); color: var(--acctext); border-color: var(--accline); }
+.shape-grid-item .shape-preview { display: block; }
+
 /* 레이어 행 */
 .tl-row {
   display: flex;

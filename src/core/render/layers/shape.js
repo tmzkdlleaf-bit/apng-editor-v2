@@ -78,6 +78,14 @@ function _drawShape(ctx, shape) {
       if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
     }
     ctx.closePath();
+  } else if (kind === 'path') {
+    // shape.points: [{x,y}] (0..1 정규화) → 도형 중심 기준 로컬 좌표로.
+    const pts = Array.isArray(shape.points) ? shape.points : [];
+    for (let i = 0; i < pts.length; i++) {
+      const px = (pts[i].x - 0.5) * w, py = (pts[i].y - 0.5) * h;
+      if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+    if (shape.closed !== false) ctx.closePath();
   } else if (kind === 'line') {
     ctx.moveTo(-w / 2, 0);
     ctx.lineTo( w / 2, 0);
@@ -103,7 +111,8 @@ export function renderShapeLayer(outputCtx, layer, worldTr, totalAlpha, rctx) {
 
   // 콘텐츠 캐시 키 (프레임 무관 — 도형 속성만)
   const cacheKey = `${layer.id}:shape:${shape.kind}:${shape.w}:${shape.h}:${JSON.stringify(shape.fill)}` +
-    `:${JSON.stringify(shape.stroke)}:${shape.radius ?? 0}:${shape.sides ?? 6}:${shape.innerRatio ?? 0.5}`;
+    `:${JSON.stringify(shape.stroke)}:${shape.radius ?? 0}:${shape.sides ?? 6}:${shape.innerRatio ?? 0.5}` +
+    (shape.kind === 'path' ? `:${JSON.stringify(shape.points)}` : '');
 
   let contentCanvas = cache?.get(cacheKey);
   if (!contentCanvas) {
