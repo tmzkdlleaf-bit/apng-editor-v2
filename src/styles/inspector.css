@@ -120,6 +120,12 @@
   outline-offset: -2px;
 }
 
+/* 읽기 전용 정보 섹션(움직이는 이미지·그룹·카메라 자리) */
+.info-row { display: flex; justify-content: space-between; gap: var(--sp-2); font-size: var(--fs-2); padding: 1px 0; }
+.info-label { color: var(--dim); }
+.info-value { color: var(--text); font-variant-numeric: tabular-nums; }
+.info-note { margin-top: var(--sp-2); font-size: var(--fs-1); color: var(--faint); }
+
 /* 글자 내용 입력 */
 .prop-row.prop-col { flex-direction: column; align-items: stretch; gap: var(--sp-1); }
 .text-content-area {

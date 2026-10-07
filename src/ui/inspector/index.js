@@ -7,6 +7,7 @@ import { createAdjustSection }     from './adjust-section.js';
 import { createTextSection }       from './text-section.js';
 import { createShapeSection }      from './shape-section.js';
 import { createTintSection, createMatteSection, createOutlineSection, createExitSection } from './fx-sections.js';
+import { createAnimSection, createGroupSection, createCameraSection } from './info-sections.js';
 import { makePlaceholderSection }  from './section-shell.js';
 
 const _TYPE_KO = {
@@ -43,16 +44,20 @@ export function initInspector(containerEl, store, editorState, getStageDeps = nu
   const appearance = createAppearanceSection(store, editorState);    // 모습
   const shape      = createShapeSection(store, editorState);         // 도형(F1)
   const text       = createTextSection(store, editorState);          // 글자(F1)
+  const anim       = createAnimSection(store, editorState);          // 움직이는 이미지 자리(F1-9)
+  const group      = createGroupSection(store, editorState);         // 그룹 자리(F1-9)
   const adjust     = createAdjustSection(store, editorState);        // 보정(F1)
   const tint       = createTintSection(store, editorState);          // 색 덮기(F1)
   const matte      = createMatteSection(store, editorState, getStageDeps); // 트랙 매트(F1)
   const outline    = createOutlineSection(store, editorState);       // 외곽선(F1)
   const exit       = createExitSection(store, editorState);          // 흩어지며 퇴장(F1)
+  const camera     = createCameraSection(store, editorState);        // 카메라 자리(F1-9)
   const align      = createAlignSection(store, editorState);         // 정렬
 
-  const sections = [layout, motion, appearance, shape, text, adjust, tint, matte, outline, exit, align];
-  // 자기 레이어 타입에서만 보이는(스스로 display 를 관리하는) 섹션 — 블랭킷 토글에서 제외.
-  const selfManaged = new Set([shape, text, adjust, tint, matte, outline, exit]);
+  const sections = [layout, motion, appearance, shape, text, anim, group, adjust, tint, matte, outline, exit, camera, align];
+  // 스스로 display 를 관리하는 섹션 — 인스펙터의 블랭킷 토글이 전혀 건드리지 않는다
+  // (레이어 타입/카메라 키 유무에 따라 각자 숨김/표시).
+  const selfManaged = new Set([shape, text, anim, group, adjust, tint, matte, outline, exit, camera]);
   for (const s of sections) scrollEl.appendChild(s.el);
   scrollEl.appendChild(emptyEl);
 
@@ -61,11 +66,16 @@ export function initInspector(containerEl, store, editorState, getStageDeps = nu
     const doc = store.get();
     const show = ids.length > 0;
 
-    emptyEl.style.display = show ? 'none' : 'block';
+    // self-managed 섹션은 각자 숨김/표시를 결정하므로 건드리지 않는다.
+    // (레이어 타입에 맞는 섹션만 자기 _refresh 로 보이고, 카메라는 키 유무로.)
     for (const s of sections) {
-      if (selfManaged.has(s)) { if (!show) s.el.style.display = 'none'; continue; }
+      if (selfManaged.has(s)) continue;
       s.el.style.display = show ? '' : 'none';
     }
+
+    // "레이어를 선택하세요" 안내: 선택이 없고 카메라 섹션도 안 보일 때만.
+    const camVisible = camera.el.style.display !== 'none';
+    emptyEl.style.display = (!show && !camVisible) ? 'block' : 'none';
 
     if (!show) {
       summaryEl.style.display = 'none';
