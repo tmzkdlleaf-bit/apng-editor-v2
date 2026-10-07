@@ -260,14 +260,19 @@ export function createTextSection(store, editorState) {
     if (!list.length) return;
     const doc = store.get();
     const t = doc.layers[list[0]];
-    if (document.activeElement !== textarea) textarea.value = t.text ?? '';
+    // item 10: 여러 선택 시 값이 다르면 숫자 칸 '혼합'
+    const multi = list.length > 1;
+    const diff = (key, def) => { const a = list.map((id) => doc.layers[id][key] ?? def); return !a.every((v) => v === a[0]); };
+    const setNum = (field, key, def) => { if (multi && diff(key, def)) field.setMixed(t[key] ?? def); else field.setValue(t[key] ?? def); };
+
+    if (document.activeElement !== textarea) textarea.value = multi && diff('text', '') ? '' : (t.text ?? '');
     fontDd.setValue(t.font ?? 'IBM Plex Sans KR');
-    sizeField.setValue(t.size ?? 48);
+    setNum(sizeField, 'size', 48);
     weightDd.setValue(String(t.weight ?? 400));
     color.setValue(t.color ?? '#ffffff');
     alignDd.setValue(t.align ?? 'center');
-    lhField.setValue(t.lineHeight ?? 1.3);
-    lsField.setValue(t.letterSpacing ?? 0);
+    setNum(lhField, 'lineHeight', 1.3);
+    setNum(lsField, 'letterSpacing', 0);
 
     const st = t.stroke;
     strokeEnable.input.checked = !!st;

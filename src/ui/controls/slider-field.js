@@ -53,10 +53,17 @@ export function createSliderField({
     numField.setValue(_current);
   }
 
+  // 여러 레이어 값이 다를 때: 숫자 칸은 '혼합' 표시, 슬라이더는 base 위치.
+  function setMixed(base = 0) {
+    _current = Math.max(min, Math.min(max, base));
+    sliderEl.value = String(_current);
+    numField.setMixed(base);
+  }
+
   function getValue() { return _current; }
 
   el.appendChild(sliderEl);
   el.appendChild(numField.el);
 
-  return { el, setValue, getValue };
+  return { el, setValue, setMixed, getValue };
 }

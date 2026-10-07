@@ -73,12 +73,19 @@ export function initStage(containerEl, store, editorState) {
   // 폰트 로딩 전/후 글자 렌더가 달라진다 → 로딩이 끝나면 글자 레이어 캐시를 비우고 다시 그린다.
   // (document.fonts 는 각 웹 폰트가 로드될 때마다 loadingdone 을 쏜다.)
   if (typeof document !== 'undefined' && document.fonts?.addEventListener) {
-    document.fonts.addEventListener('loadingdone', () => {
+    document.fonts.addEventListener('loadingdone', (ev) => {
+      // 방금 로드된 폰트 패밀리만 추림.
+      const loaded = new Set();
+      for (const ff of (ev.fontfaces ?? [])) loaded.add(String(ff.family).replace(/^["']|["']$/g, ''));
+      if (!loaded.size) return;
       const doc = store.get();
+      let hit = false;
       for (const id of Object.keys(doc.layers ?? {})) {
-        if (doc.layers[id]?.type === 'text') engine.invalidate(id);
+        const ly = doc.layers[id];
+        if (ly?.type === 'text' && loaded.has(ly.font)) { engine.invalidate(id); hit = true; }
       }
-      requestScene();
+      // 그 폰트를 '실제로 쓰는' 글자 레이어가 있을 때만 다시 그린다(무관한 폰트 로딩은 무시).
+      if (hit) requestScene();
     });
   }
 

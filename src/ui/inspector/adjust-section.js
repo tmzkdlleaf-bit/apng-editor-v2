@@ -179,7 +179,14 @@ export function createAdjustSection(store, editorState) {
     const doc = store.get();
     const first = doc.layers[ids[0]].adjust ?? {};
 
-    for (const [key, , , , , def] of BASIC) basicFields[key].setValue(first[key] ?? def);
+    // item 10: 여러 선택 시 값이 다르면 '혼합' 표시
+    const vals = (key, def) => ids.map((id) => (doc.layers[id].adjust ?? {})[key] ?? def);
+    const allSame = (arr) => arr.every((v) => v === arr[0]);
+    for (const [key, , , , , def] of BASIC) {
+      const vs = vals(key, def);
+      if (ids.length > 1 && !allSame(vs)) basicFields[key].setMixed(vs[0]);
+      else basicFields[key].setValue(first[key] ?? def);
+    }
     const lv = first.levels ?? {};
     for (const [key, , , , , def] of LEVELS) levelFields[key].setValue(lv[key] ?? def);
     const hsl = first.hsl ?? {};

@@ -167,8 +167,12 @@ export function createShapeSection(store, editorState) {
     const sh = _cur();
     const kind = sh.kind ?? 'rect';
     kindDd.setValue(kind);
-    wField.setValue(sh.w ?? 100);
-    hField.setValue(sh.h ?? 100);
+    // item 10: 여러 도형 선택 시 W/H 가 다르면 '혼합'
+    const multi = list.length > 1;
+    const doc = store.get();
+    const diffShape = (k, def) => { const a = list.map((id) => (doc.layers[id].shape ?? {})[k] ?? def); return !a.every((v) => v === a[0]); };
+    if (multi && diffShape('w', 100)) wField.setMixed(sh.w ?? 100); else wField.setValue(sh.w ?? 100);
+    if (multi && diffShape('h', 100)) hField.setMixed(sh.h ?? 100); else hField.setValue(sh.h ?? 100);
 
     // 채움 타입
     const fill = sh.fill;
