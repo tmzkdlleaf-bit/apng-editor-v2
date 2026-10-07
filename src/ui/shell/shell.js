@@ -150,7 +150,7 @@ export function init(store, editorState, projectApi = null) {
 
   // 인스펙터
   const inspectorEl = app.querySelector('[data-region="inspector"]');
-  initInspector(inspectorEl, store, editorState);
+  initInspector(inspectorEl, store, editorState, () => ({ overlay: stage.overlayCanvas, assets: stage.assets }));
 
   // 내보내기 화면 (E3) — 상단 [내보내기] 버튼 + Ctrl+E
   const exportUI = initExport(store, editorState, projectApi);

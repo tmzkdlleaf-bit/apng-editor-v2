@@ -120,6 +120,12 @@
   outline-offset: -2px;
 }
 
+/* 효과 섹션 체크박스 줄(색 덮기·매트·외곽선·퇴장) */
+.fx-check { display: inline-flex; align-items: center; gap: var(--sp-2); font-size: var(--fs-2); color: var(--text); cursor: pointer; }
+.fx-check input { margin: 0; }
+/* 매트 소스 드롭다운 항목의 종류 아이콘 */
+.dropdown-option .icon, .dropdown-value .icon { color: var(--dim); }
+
 /* 보정 섹션(F1) */
 .adj-subtitle { font-size: var(--fs-1); color: var(--faint); margin: var(--sp-2) 0 2px; }
 .adj-advanced { margin-top: var(--sp-2); border-top: 1px solid var(--line2); padding-top: var(--sp-2); }
