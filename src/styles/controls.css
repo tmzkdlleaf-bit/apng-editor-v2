@@ -1,0 +1,73 @@
+/* 공통 컨트롤 — 드롭다운 등. 토큰 색만, 다크/라이트 모두. */
+
+/* ── 드롭다운(직접 만든 select 대체) ─────────────────────────────── */
+.dropdown {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  min-height: 26px;
+  padding: 2px var(--sp-2);
+  background: var(--input);
+  color: var(--text);
+  border: 1px solid var(--btnline);
+  border-radius: var(--r-1);
+  font: inherit;
+  font-size: var(--fs-2);
+  cursor: pointer;
+  box-sizing: border-box;
+  width: 100%;
+  text-align: left;
+}
+.dropdown:hover { border-color: var(--line); }
+.dropdown.is-open { border-color: var(--acc); }
+.dropdown:focus-visible { outline: 2px solid var(--acc); outline-offset: 1px; }
+.dropdown[disabled] { opacity: 0.55; cursor: default; }
+
+.dropdown-value {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+.dropdown-caret {
+  flex: none;
+  width: 0; height: 0;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 5px solid var(--dim);
+}
+.dropdown.is-open .dropdown-caret { border-top-color: var(--acc); }
+
+/* body 에 fixed 로 띄우는 목록 */
+.dropdown-list {
+  position: fixed;
+  z-index: 9000;
+  max-height: 280px;
+  overflow-y: auto;
+  padding: var(--sp-1);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--r-2);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  box-sizing: border-box;
+}
+.dropdown-option {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-1) var(--sp-2);
+  border-radius: var(--r-1);
+  font-size: var(--fs-2);
+  color: var(--text);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.dropdown-option.is-active { background: var(--btn); }
+.dropdown-option[aria-selected="true"] {
+  color: var(--acctext);
+  font-weight: 500;
+}
+.dropdown-option[aria-selected="true"].is-active { background: var(--selrow); }

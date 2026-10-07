@@ -1,4 +1,5 @@
 :root[data-theme="dark"] {
+  color-scheme: dark;  /* 스크롤바·체크박스 등 기본 컨트롤 색을 테마에 맞춘다 */
   --bg:       #16171a;
   --panel:    #1e2024;
   --tl:       #1a1c1f;
@@ -30,6 +31,7 @@
 }
 
 :root[data-theme="light"] {
+  color-scheme: light;
   --bg:       #eceae6;
   --panel:    #f8f7f4;
   --tl:       #f2f0ec;

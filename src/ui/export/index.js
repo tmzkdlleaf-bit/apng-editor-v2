@@ -8,6 +8,7 @@ import { exportAnimation, getExportWarnings } from '../../export/index.js';
 import { fitToTarget, exportMany } from '../../export/fit.js';
 import { showToast } from '../shell/status.js';
 import { saveFile } from '../../platform/index.js';
+import { createDropdown } from '../controls/dropdown.js';
 
 const SETTINGS_KEY = 'apng2.exportSettings';
 const SCALE_MULS = [1, 0.75, 0.5, 0.25];
@@ -15,10 +16,11 @@ const APNG_COLORS = [{ v: 0, label: '무손실' }, { v: 256, label: '256색' }, 
 
 function createCanvas(w, h) { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; }
 
+// 용량은 1000 단위(KB = 1000바이트). 1,000,000바이트 이상은 MB.
 function fmtBytes(b) {
   if (b == null) return '-';
-  if (b >= 1024 * 1024) return (b / 1024 / 1024).toFixed(2) + ' MB';
-  return (b / 1024).toFixed(1) + ' KB';
+  if (b >= 1000 * 1000) return (b / 1000 / 1000).toFixed(2) + ' MB';
+  return (b / 1000).toFixed(1) + ' KB';
 }
 function fmtDuration(ms) { return (ms / 1000).toFixed(2) + '초'; }
 
@@ -51,6 +53,7 @@ export function initExport(store, editorState, projectApi = null) {
   let lastResult = null;   // { blob, url, bytes, width, height, frameCount, durationMs, format, filename }
   const multiResults = []; // 함께 만들기 결과
   const together = new Set();
+  const _dds = [];  // 현재 떠 있는 드롭다운들(재렌더·닫기 때 정리)
 
   let settings = loadSettings();
 
@@ -131,7 +134,7 @@ export function initExport(store, editorState, projectApi = null) {
     const preset = getPreset(settings.presetId);
     const modifiedTag = settings.modified ? ' <span class="ex-modified">(수정됨)</span>' : '';
     const colorField = settings.format === 'apng'
-      ? `<label>색상 수</label><select class="ex-ctl" data-k="colors">${APNG_COLORS.map((c) => `<option value="${c.v}" ${settings.colors === c.v ? 'selected' : ''}>${c.label}</option>`).join('')}</select>`
+      ? `<label>색상 수</label><span class="ex-dd" data-dd="colors"></span>`
       : settings.format === 'webp'
       ? `<label>품질</label><span class="ex-quality-row"><input class="ex-ctl" data-k="lossless" type="checkbox" ${settings.lossless ? 'checked' : ''} id="ex-ll"><label for="ex-ll" class="ex-inline">무손실</label><input class="ex-ctl" data-k="quality" type="range" min="30" max="100" value="${settings.quality}" ${settings.lossless ? 'disabled' : ''}><span id="ex-qval">${settings.quality}</span></span>`
       : `<label>색상 수</label><span class="ex-note">GIF는 256색 고정(투명 1비트)</span>`;
@@ -139,7 +142,7 @@ export function initExport(store, editorState, projectApi = null) {
     settingsEl.innerHTML = `
       <div class="ex-row"><label>용도</label>
         <span class="ex-preset-pick">
-          <select class="ex-ctl" data-k="presetId">${presets.map((p) => `<option value="${p.id}" ${settings.presetId === p.id ? 'selected' : ''}>${p.name}</option>`).join('')}</select>
+          <span class="ex-dd" data-dd="presetId"></span>
           <span class="ex-preset-name">${preset ? '' : ''}${modifiedTag}</span>
         </span>
       </div>
@@ -149,7 +152,7 @@ export function initExport(store, editorState, projectApi = null) {
         </span>
       </div>
       <div class="ex-row"><label>크기</label>
-        <select class="ex-ctl" data-k="scaleMul">${SCALE_MULS.map((s) => `<option value="${s}" ${settings.scaleMul === s ? 'selected' : ''}>${s}×</option>`).join('')}</select>
+        <span class="ex-dd" data-dd="scaleMul"></span>
       </div>
       <div class="ex-row">${colorField}</div>
       <div class="ex-row"><label>투명 여백</label><label class="ex-inline"><input type="checkbox" class="ex-ctl" data-k="trim" ${settings.trim ? 'checked' : ''}>잘라내기</label></div>
@@ -167,9 +170,15 @@ export function initExport(store, editorState, projectApi = null) {
       const ev = (el.type === 'range') ? 'input' : 'change';
       el.addEventListener(ev, () => onControl(el));
     });
-    // 용도 select 변경은 "수정됨"이 아니라 프리셋 적용
-    const presetSel = settingsEl.querySelector('[data-k="presetId"]');
-    presetSel?.addEventListener('change', () => applyPreset(presetSel.value));
+
+    // 드롭다운 마운트(select 대체). 이전 드롭다운은 정리.
+    _destroyDropdowns();
+    // 용도: 변경은 "수정됨"이 아니라 프리셋 적용
+    _mountDropdown('presetId', presets.map((p) => ({ value: p.id, label: p.name })), settings.presetId, (v) => applyPreset(v));
+    _mountDropdown('scaleMul', SCALE_MULS.map((s) => ({ value: String(s), label: `${s * 100}%` })), String(settings.scaleMul), (v) => _setSetting('scaleMul', parseFloat(v)));
+    if (settings.format === 'apng') {
+      _mountDropdown('colors', APNG_COLORS.map((c) => ({ value: String(c.v), label: c.label })), String(settings.colors), (v) => _setSetting('colors', parseFloat(v)));
+    }
 
     renderTarget();
     renderTogether();
@@ -197,6 +206,31 @@ export function initExport(store, editorState, projectApi = null) {
       renderTarget();
     }
     scheduleEstimate();
+  }
+
+  // 드롭다운(용도/크기/색상 수)에서 값이 바뀌었을 때 — onControl 의 색상/크기 경로와 동일.
+  function _setSetting(k, v) {
+    settings[k] = v;
+    settings.modified = true;
+    const nameSpan = settingsEl.querySelector('.ex-preset-name');
+    if (nameSpan && !nameSpan.querySelector('.ex-modified')) {
+      nameSpan.innerHTML = ' <span class="ex-modified">(수정됨)</span>';
+    }
+    saveSettings();
+    renderTarget();
+    scheduleEstimate();
+  }
+
+  function _mountDropdown(key, options, value, onChange) {
+    const mount = settingsEl.querySelector(`.ex-dd[data-dd="${key}"]`);
+    if (!mount) return;
+    const dd = createDropdown({ ariaLabel: mount.previousElementSibling?.textContent || key, options, value, onChange });
+    mount.appendChild(dd.el);
+    _dds.push(dd);
+  }
+  function _destroyDropdowns() {
+    _dds.forEach((d) => d.destroy());
+    _dds.length = 0;
   }
 
   function applyPreset(id) {
@@ -501,6 +535,7 @@ export function initExport(store, editorState, projectApi = null) {
     if (estCtrl) { estCtrl.abort(); estCtrl = null; }
     if (lastResult?.url) { URL.revokeObjectURL(lastResult.url); }
     lastResult = null;
+    _destroyDropdowns();
   }
 
   // 이벤트 배선

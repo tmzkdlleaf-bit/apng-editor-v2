@@ -1,5 +1,6 @@
 // 인스펙터 모습 섹션 — 블렌드·불투명도 + (도형) 크기·채우기 + (글자) 내용·크기·색
 import { createNumberField } from '../controls/number-field.js';
+import { createDropdown } from '../controls/dropdown.js';
 import { makeSectionShell } from './section-shell.js';
 
 const _BLEND = [
@@ -17,19 +18,17 @@ export function createAppearanceSection(store, editorState) {
   const blendLabel = document.createElement('label');
   blendLabel.className = 'num-label';
   blendLabel.textContent = '블렌드';
-  const blendSel = document.createElement('select');
-  blendSel.className = 'blend-select';
-  for (const [v, ko] of _BLEND) {
-    const opt = document.createElement('option');
-    opt.value = v; opt.textContent = ko;
-    blendSel.appendChild(opt);
-  }
-  blendRow.append(blendLabel, blendSel);
-  blendSel.addEventListener('change', () => {
-    const ids = editorState.get().selection;
-    const cmds = ids.map(id => ({ type: 'setLayer', id, patch: { blend: blendSel.value } }));
-    if (cmds.length) store.apply(cmds.length === 1 ? cmds[0] : { type: 'batch', cmds });
+  const blend = createDropdown({
+    ariaLabel: '블렌드 모드',
+    options: _BLEND.map(([value, label]) => ({ value, label })),
+    value: 'normal',
+    onChange(v) {
+      const ids = editorState.get().selection;
+      const cmds = ids.map(id => ({ type: 'setLayer', id, patch: { blend: v } }));
+      if (cmds.length) store.apply(cmds.length === 1 ? cmds[0] : { type: 'batch', cmds });
+    },
   });
+  blendRow.append(blendLabel, blend.el);
 
   // ── 불투명도 ────────────────────────────────────────────────────────
   let _opBatch = false;
@@ -154,7 +153,7 @@ export function createAppearanceSection(store, editorState) {
     const first = doc.layers[ids[0]];
     if (!first) return;
 
-    blendSel.value = first.blend ?? 'normal';
+    blend.setValue(first.blend ?? 'normal');
     opacityField.setValue(Math.round((first.opacity ?? 1) * 100));
 
     const shapeLayers = _shapeIds().map(id => doc.layers[id]);
@@ -180,6 +179,6 @@ export function createAppearanceSection(store, editorState) {
   const unsubES    = editorState.subscribe((p) => { if ('selection' in p) _refresh(); });
   _refresh();
 
-  function destroy() { unsubStore(); unsubES(); clearTimeout(_textTimer); }
+  function destroy() { unsubStore(); unsubES(); clearTimeout(_textTimer); blend.destroy(); }
   return { el: section, destroy };
 }

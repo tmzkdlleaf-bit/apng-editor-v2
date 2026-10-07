@@ -14,8 +14,13 @@ async function openModal(page) {
 async function waitEstimate(page) {
   await page.waitForFunction(() => !!window.__exportUI.getLastResult(), null, { timeout: 20000 });
 }
+// 커스텀 드롭다운에서 값 고르기(트리거 클릭 → body 목록의 항목 클릭).
+async function pickDropdown(page, dd, value) {
+  await page.click(`.ex-settings .ex-dd[data-dd="${dd}"] .dropdown`);
+  await page.click(`.dropdown-list [data-value="${value}"]`);
+}
 async function pickPreset(page, id) {
-  await page.selectOption('.ex-settings [data-k="presetId"]', id);
+  await pickDropdown(page, 'presetId', id);
 }
 
 test.describe('E3 — 내보내기 화면', () => {
@@ -32,14 +37,14 @@ test.describe('E3 — 내보내기 화면', () => {
     await pickPreset(page, 'discord-sticker');
     // 형식 APNG, 색상 수 칸 보임
     expect(await page.evaluate(() => window.__exportUI.getState().format)).toBe('apng');
-    await expect(page.locator('.ex-settings [data-k="colors"]')).toBeVisible();
+    await expect(page.locator('.ex-settings .ex-dd[data-dd="colors"]')).toBeVisible();
     // GIF로 바꾸면 색상 수 대신 고정 안내
     await page.check('.ex-settings input[name="ex-format"][value="gif"]');
-    await expect(page.locator('.ex-settings [data-k="colors"]')).toHaveCount(0);
+    await expect(page.locator('.ex-settings .ex-dd[data-dd="colors"]')).toHaveCount(0);
     await expect(page.locator('.ex-note')).toContainText('256색 고정');
     // 다시 APNG
     await page.check('.ex-settings input[name="ex-format"][value="apng"]');
-    await expect(page.locator('.ex-settings [data-k="colors"]')).toBeVisible();
+    await expect(page.locator('.ex-settings .ex-dd[data-dd="colors"]')).toBeVisible();
 
     await waitEstimate(page);
     await page.click('#ex-run');
@@ -55,7 +60,7 @@ test.describe('E3 — 내보내기 화면', () => {
     await openModal(page);
     await pickPreset(page, 'ccfolia-apng');
     expect(await page.evaluate(() => window.__exportUI.getState().modified)).toBe(false);
-    await page.selectOption('.ex-settings [data-k="scaleMul"]', '0.5');
+    await pickDropdown(page, 'scaleMul', '0.5');
     await expect(page.locator('.ex-modified')).toBeVisible();
     expect(await page.evaluate(() => window.__exportUI.getState().modified)).toBe(true);
   });
@@ -72,8 +77,8 @@ test.describe('E3 — 내보내기 화면', () => {
     const r = await page.evaluate(() => ({ res: window.__exportUI.getLastResult(), st: window.__exportUI.getState() }));
     expect(r.res.bytes).toBeLessThanOrEqual(1_000_000);
     expect(r.st.colors).toBe(256);      // 고른 값으로 칸이 바뀜
-    // 색상 수 select도 256을 가리킴
-    expect(await page.inputValue('.ex-settings [data-k="colors"]')).toBe('256');
+    // 색상 수 드롭다운도 256을 가리킴
+    expect(await page.getAttribute('.ex-settings .ex-dd[data-dd="colors"] .dropdown', 'data-value')).toBe('256');
   });
 
   test('[5] 함께 만들기 2개 → 결과 2줄, 각 저장 동작', async ({ page }) => {
@@ -126,7 +131,7 @@ test.describe('E3 — 내보내기 화면', () => {
     await openApp(page);
     await openModal(page);
     await pickPreset(page, 'discord-emoji');
-    await page.selectOption('.ex-settings [data-k="scaleMul"]', '0.5');
+    await pickDropdown(page, 'scaleMul', '0.5');
     await page.keyboard.press('Escape');
     await expect(page.locator('.export-modal')).toBeHidden();
     await openModal(page);
