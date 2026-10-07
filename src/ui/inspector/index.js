@@ -3,6 +3,7 @@
 import { createLayoutSection }     from './layout-section.js';
 import { createAppearanceSection } from './appearance-section.js';
 import { createAlignSection }      from './align-section.js';
+import { createAdjustSection }     from './adjust-section.js';
 import { makePlaceholderSection }  from './section-shell.js';
 
 const _TYPE_KO = {
@@ -37,11 +38,13 @@ export function initInspector(containerEl, store, editorState) {
   const layout     = createLayoutSection(store, editorState);        // 배치
   const motion     = makePlaceholderSection('움직임', '프리셋 모션 · 클립 — 준비 중');
   const appearance = createAppearanceSection(store, editorState);    // 모습
-  const adjust     = makePlaceholderSection('보정', '밝기 · 대비 · 색조 — 준비 중');
+  const adjust     = createAdjustSection(store, editorState);        // 보정(F1)
   const outline    = makePlaceholderSection('외곽선 · 색 덮기 · 매트', '준비 중');
   const align      = createAlignSection(store, editorState);         // 정렬
 
   const sections = [layout, motion, appearance, adjust, outline, align];
+  // 자기 레이어 타입에서만 보이는(스스로 display 를 관리하는) 섹션 — 블랭킷 토글에서 제외.
+  const selfManaged = new Set([adjust]);
   for (const s of sections) scrollEl.appendChild(s.el);
   scrollEl.appendChild(emptyEl);
 
@@ -51,7 +54,10 @@ export function initInspector(containerEl, store, editorState) {
     const show = ids.length > 0;
 
     emptyEl.style.display = show ? 'none' : 'block';
-    for (const s of sections) s.el.style.display = show ? '' : 'none';
+    for (const s of sections) {
+      if (selfManaged.has(s)) { if (!show) s.el.style.display = 'none'; continue; }
+      s.el.style.display = show ? '' : 'none';
+    }
 
     if (!show) {
       summaryEl.style.display = 'none';
