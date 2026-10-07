@@ -1,5 +1,27 @@
 /* 공통 컨트롤 — 드롭다운 등. 토큰 색만, 다크/라이트 모두. */
 
+/* ── 아이콘 ──────────────────────────────────────────────────────── */
+.icon { display: inline-block; vertical-align: middle; flex: none; color: inherit; }
+
+/* 아이콘만 있는 버튼 */
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px; height: 28px;
+  padding: 0;
+  background: transparent;
+  color: var(--text2);
+  border: 1px solid transparent;
+  border-radius: var(--r-1);
+  cursor: pointer;
+}
+.icon-btn:hover { background: var(--btn); color: var(--text); }
+.icon-btn:focus-visible { outline: 2px solid var(--acc); outline-offset: 1px; }
+.icon-btn.is-on { background: var(--toolon); color: var(--acctext); border-color: var(--accline); }
+.icon-btn[disabled] { opacity: 0.45; cursor: default; }
+.icon-btn[disabled]:hover { background: transparent; color: var(--text2); }
+
 /* ── 드롭다운(직접 만든 select 대체) ─────────────────────────────── */
 .dropdown {
   display: inline-flex;
