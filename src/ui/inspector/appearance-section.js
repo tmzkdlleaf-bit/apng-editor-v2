@@ -81,50 +81,10 @@ export function createAppearanceSection(store, editorState) {
   shapeWrap.append(shapeTitle, sizeRow, fillRow);
   body.appendChild(shapeWrap);
 
-  // ── 글자 그룹 ───────────────────────────────────────────────────────
-  const textWrap = document.createElement('div');
-  textWrap.className = 'appearance-group';
-  const textTitle = document.createElement('div');
-  textTitle.className = 'appearance-subtitle';
-  textTitle.textContent = '글자';
-  const contentRow = document.createElement('div'); contentRow.className = 'prop-row';
-  const textarea = document.createElement('textarea');
-  textarea.className = 'text-input-area'; textarea.rows = 2;
-  textarea.style.cssText = 'width:100%; resize:vertical; font:inherit; background:var(--bg2); color:var(--fg); border:1px solid var(--line2); padding:4px; font-size:12px; box-sizing:border-box;';
-  contentRow.appendChild(textarea);
-  let _textTimer = null;
-  textarea.addEventListener('input', () => {
-    clearTimeout(_textTimer);
-    _textTimer = setTimeout(() => _applyText({ text: textarea.value }), 200);
-  });
-  const txtRow = document.createElement('div'); txtRow.className = 'prop-row-2';
-  let _textBatch = false;
-  const sizeTextField = createNumberField({
-    label: '크기', step: 1, min: 1, max: 999, defaultValue: 48,
-    onBegin() { if (_textBatch) return; _textBatch = true; store.begin('글자 크기'); },
-    onChange(v) { if (_textBatch) _previewText({ size: v }); },
-    onCommit() { _textBatch = false; store.commit(); },
-    onCancel() { _textBatch = false; store.cancel(); },
-  });
-  txtRow.append(sizeTextField.el);
-  const colorRow = document.createElement('div'); colorRow.className = 'prop-row';
-  const colorLabel = document.createElement('label');
-  colorLabel.className = 'num-label'; colorLabel.textContent = '색상';
-  const colorInput = document.createElement('input');
-  colorInput.type = 'color'; colorInput.className = 'color-input';
-  colorRow.append(colorLabel, colorInput);
-  colorInput.addEventListener('input', () => _applyText({ color: colorInput.value }));
-  textWrap.append(textTitle, contentRow, txtRow, colorRow);
-  body.appendChild(textWrap);
-
   // ── 적용 헬퍼 ───────────────────────────────────────────────────────
   function _shapeIds() {
     const doc = store.get();
     return editorState.get().selection.filter(id => doc.layers[id]?.type === 'shape');
-  }
-  function _textIds() {
-    const doc = store.get();
-    return editorState.get().selection.filter(id => doc.layers[id]?.type === 'text');
   }
   function _previewShape(props) {
     const doc = store.get();
@@ -136,17 +96,9 @@ export function createAppearanceSection(store, editorState) {
     const cmds = _shapeIds().map(id => ({ type: 'setLayer', id, patch: { shape: { ...doc.layers[id].shape, ...props } } }));
     if (cmds.length) store.apply(cmds.length === 1 ? cmds[0] : { type: 'batch', cmds });
   }
-  function _previewText(props) {
-    const cmds = _textIds().map(id => ({ type: 'setLayer', id, patch: props }));
-    if (cmds.length) store.preview(cmds.length === 1 ? cmds[0] : { type: 'batch', cmds });
-  }
-  function _applyText(props) {
-    const cmds = _textIds().map(id => ({ type: 'setLayer', id, patch: props }));
-    if (cmds.length) store.apply(cmds.length === 1 ? cmds[0] : { type: 'batch', cmds });
-  }
 
   function _refresh() {
-    if (_opBatch || _shapeBatch || _textBatch) return;
+    if (_opBatch || _shapeBatch) return;
     const ids = editorState.get().selection;
     const doc = store.get();
     if (!ids.length) return;
@@ -164,21 +116,12 @@ export function createAppearanceSection(store, editorState) {
       hField.setValue(sh.h ?? 100);
       if (sh.fill) fillInput.value = sh.fill;
     }
-
-    const textLayers = _textIds().map(id => doc.layers[id]);
-    textWrap.style.display = textLayers.length ? '' : 'none';
-    if (textLayers.length) {
-      const t = textLayers[0];
-      if (document.activeElement !== textarea) textarea.value = t.text ?? '';
-      sizeTextField.setValue(t.size ?? 48);
-      if (t.color) colorInput.value = t.color;
-    }
   }
 
   const unsubStore = store.subscribe({ layers: true }, () => _refresh());
   const unsubES    = editorState.subscribe((p) => { if ('selection' in p) _refresh(); });
   _refresh();
 
-  function destroy() { unsubStore(); unsubES(); clearTimeout(_textTimer); blend.destroy(); }
+  function destroy() { unsubStore(); unsubES(); blend.destroy(); }
   return { el: section, destroy };
 }

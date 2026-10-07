@@ -3,6 +3,7 @@ import { docToScreen, screenToDoc, docOrigin } from './transform.js';
 import { drawOverlay } from './gizmo.js';
 import { initDrag } from './drag.js';
 import { initView } from './view.js';
+import { initTextEdit } from './text-edit.js';
 import { createAssets } from '../assets.js';
 import { effects as effectsRegistry } from '../../effects/registry.js';
 import motionRegistry from '../../motions/registry.js';
@@ -67,6 +68,18 @@ export function initStage(containerEl, store, editorState) {
     if (_sceneReq) return;
     _sceneReq = true;
     requestAnimationFrame(_doScene);
+  }
+
+  // 폰트 로딩 전/후 글자 렌더가 달라진다 → 로딩이 끝나면 글자 레이어 캐시를 비우고 다시 그린다.
+  // (document.fonts 는 각 웹 폰트가 로드될 때마다 loadingdone 을 쏜다.)
+  if (typeof document !== 'undefined' && document.fonts?.addEventListener) {
+    document.fonts.addEventListener('loadingdone', () => {
+      const doc = store.get();
+      for (const id of Object.keys(doc.layers ?? {})) {
+        if (doc.layers[id]?.type === 'text') engine.invalidate(id);
+      }
+      requestScene();
+    });
   }
 
   function requestOverlay() {
@@ -227,6 +240,7 @@ export function initStage(containerEl, store, editorState) {
 
   const drag = initDrag(overlayCanvas, store, editorState, _onSnapLines, _onDraftMode, () => _lastRenderMs > 16, assets);
   const cleanupView = initView(containerEl, overlayCanvas, store, editorState);
+  const textEdit = initTextEdit(overlayCanvas, containerEl, store, editorState, assets);
 
   store.subscribe({ any: true }, () => {
     requestScene();

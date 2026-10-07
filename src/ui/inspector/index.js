@@ -4,6 +4,7 @@ import { createLayoutSection }     from './layout-section.js';
 import { createAppearanceSection } from './appearance-section.js';
 import { createAlignSection }      from './align-section.js';
 import { createAdjustSection }     from './adjust-section.js';
+import { createTextSection }       from './text-section.js';
 import { createTintSection, createMatteSection, createOutlineSection, createExitSection } from './fx-sections.js';
 import { makePlaceholderSection }  from './section-shell.js';
 
@@ -39,6 +40,7 @@ export function initInspector(containerEl, store, editorState, getStageDeps = nu
   const layout     = createLayoutSection(store, editorState);        // 배치
   const motion     = makePlaceholderSection('움직임', '프리셋 모션 · 클립 — 준비 중');
   const appearance = createAppearanceSection(store, editorState);    // 모습
+  const text       = createTextSection(store, editorState);          // 글자(F1)
   const adjust     = createAdjustSection(store, editorState);        // 보정(F1)
   const tint       = createTintSection(store, editorState);          // 색 덮기(F1)
   const matte      = createMatteSection(store, editorState, getStageDeps); // 트랙 매트(F1)
@@ -46,9 +48,9 @@ export function initInspector(containerEl, store, editorState, getStageDeps = nu
   const exit       = createExitSection(store, editorState);          // 흩어지며 퇴장(F1)
   const align      = createAlignSection(store, editorState);         // 정렬
 
-  const sections = [layout, motion, appearance, adjust, tint, matte, outline, exit, align];
+  const sections = [layout, motion, appearance, text, adjust, tint, matte, outline, exit, align];
   // 자기 레이어 타입에서만 보이는(스스로 display 를 관리하는) 섹션 — 블랭킷 토글에서 제외.
-  const selfManaged = new Set([adjust, tint, matte, outline, exit]);
+  const selfManaged = new Set([text, adjust, tint, matte, outline, exit]);
   for (const s of sections) scrollEl.appendChild(s.el);
   scrollEl.appendChild(emptyEl);
 

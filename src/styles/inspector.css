@@ -120,6 +120,16 @@
   outline-offset: -2px;
 }
 
+/* 글자 내용 입력 */
+.prop-row.prop-col { flex-direction: column; align-items: stretch; gap: var(--sp-1); }
+.text-content-area {
+  width: 100%; box-sizing: border-box; resize: vertical; min-height: 44px;
+  font: inherit; font-size: var(--fs-2);
+  background: var(--input); color: var(--text);
+  border: 1px solid var(--btnline); border-radius: var(--r-1); padding: var(--sp-1) var(--sp-2);
+}
+.text-content-area:focus-visible { outline: 2px solid var(--acc); outline-offset: 1px; }
+
 /* 효과 섹션 체크박스 줄(색 덮기·매트·외곽선·퇴장) */
 .fx-check { display: inline-flex; align-items: center; gap: var(--sp-2); font-size: var(--fs-2); color: var(--text); cursor: pointer; }
 .fx-check input { margin: 0; }

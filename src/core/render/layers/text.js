@@ -40,7 +40,7 @@ function _drawLines(ctx, layer, f, frameCount) {
     ctx.shadowColor   = shadow.color   ?? 'rgba(0,0,0,0.5)';
     ctx.shadowOffsetX = shadow.offsetX ?? 2;
     ctx.shadowOffsetY = shadow.offsetY ?? 2;
-    ctx.shadowBlur    = 0;
+    ctx.shadowBlur    = shadow.blur    ?? 0;   // 그림자 흐림(F1) — ctx.shadowBlur 은 사파리도 지원
   }
 
   for (let li = 0; li < lines.length; li++) {
@@ -101,7 +101,7 @@ function _textContentSize(layer) {
   const maxLen    = Math.max(1, ...lines.map(l => l.length));
   const strokePad = layer.stroke?.width ? Math.ceil(layer.stroke.width) + 4 : 4;
   const shadowPad = layer.shadow
-    ? Math.abs(layer.shadow.offsetX ?? 0) + Math.abs(layer.shadow.offsetY ?? 0) + 4
+    ? Math.abs(layer.shadow.offsetX ?? 0) + Math.abs(layer.shadow.offsetY ?? 0) + (layer.shadow.blur ?? 0) + 4
     : 0;
   const pad = strokePad + shadowPad;
   const cw = Math.max(1, Math.ceil(fontSize * 1.8 * maxLen + lSpacing * maxLen + pad * 2));

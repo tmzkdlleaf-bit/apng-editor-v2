@@ -153,6 +153,22 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* 캔버스 글자 바로 편집 입력 칸 */
+.canvas-text-edit {
+  position: absolute;
+  z-index: 20;
+  transform: translate(-50%, -50%);
+  min-width: 80px;
+  background: color-mix(in srgb, var(--panel) 85%, transparent);
+  border: 1px solid var(--acc);
+  border-radius: var(--r-1);
+  padding: 2px 4px;
+  resize: none;
+  outline: none;
+  line-height: 1.2;
+  overflow: hidden;
+}
+
 /* 상단바 캔버스 정보(크기·fps·길이 + 연필) */
 .canvas-info-btn {
   display: inline-flex;
