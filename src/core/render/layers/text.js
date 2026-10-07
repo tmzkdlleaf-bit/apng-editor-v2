@@ -6,6 +6,17 @@ function _cssFont(size, weight, font) {
   return `${weight ?? 400} ${size ?? 48}px ${font ?? 'sans-serif'}`;
 }
 
+// 결정론 진행도 [0,1] — 렌더 경로라 Date.now/random 금지. loop: once(유지)/loop/pingpong.
+function _progress(f, startF, endF, loop) {
+  const dur = Math.max(1, (endF ?? 0) - (startF ?? 0));
+  let t = (f - (startF ?? 0)) / dur;
+  if (loop === 'loop')      t = ((t % 1) + 1) % 1;
+  else if (loop === 'pingpong') { const m = ((t % 2) + 2) % 2; t = m > 1 ? 2 - m : m; }
+  else                      t = Math.max(0, Math.min(1, t)); // once
+  return t;
+}
+function _smooth(t) { t = Math.max(0, Math.min(1, t)); return t * t * (3 - 2 * t); }
+
 function _drawLines(ctx, layer, f, frameCount) {
   const text         = layer.text         ?? '';
   const color        = layer.color        ?? '#ffffff';
@@ -15,6 +26,7 @@ function _drawLines(ctx, layer, f, frameCount) {
   const shadow       = layer.shadow;
   const stroke       = layer.stroke;
   const reveal       = layer.reveal;
+  const charAnim     = layer.charAnim;
   const fontSize     = layer.size         ?? 48;
 
   ctx.font         = _cssFont(layer.size, layer.weight, layer.font);
@@ -25,17 +37,6 @@ function _drawLines(ctx, layer, f, frameCount) {
   const lines      = String(text).split('\n');
   const totalChars = lines.join('').length;
 
-  let visibleChars = totalChars;
-  if (reveal) {
-    const progress = frameCount <= 1 ? 1 : f / (frameCount - 1);
-    visibleChars = Math.round(progress * totalChars);
-  }
-
-  const lh     = fontSize * lineHeight;
-  const totalH = lines.length * lh;
-  let charIdx  = 0;
-  let startY   = -totalH / 2;
-
   if (shadow) {
     ctx.shadowColor   = shadow.color   ?? 'rgba(0,0,0,0.5)';
     ctx.shadowOffsetX = shadow.offsetX ?? 2;
@@ -43,41 +44,97 @@ function _drawLines(ctx, layer, f, frameCount) {
     ctx.shadowBlur    = shadow.blur    ?? 0;   // 그림자 흐림(F1) — ctx.shadowBlur 은 사파리도 지원
   }
 
-  for (let li = 0; li < lines.length; li++) {
-    const line = lines[li];
-    const y    = startY + li * lh;
+  const lh     = fontSize * lineHeight;
+  const totalH = lines.length * lh;
+  const startY = -totalH / 2;
 
-    if (letterSpacing !== 0) {
-      let curX = _lineStartX(ctx, line, letterSpacing, align);
-      for (let ci = 0; ci < line.length; ci++) {
-        if (charIdx >= visibleChars) break;
-        const ch = line[ci];
-        if (stroke) {
-          ctx.strokeStyle = stroke.color ?? '#000000';
-          ctx.lineWidth   = stroke.width ?? 2;
-          ctx.strokeText(ch, curX, y);
-        }
-        ctx.fillText(ch, curX, y);
-        curX += ctx.measureText(ch).width + letterSpacing;
-        charIdx++;
-      }
-      if (charIdx >= visibleChars) break;
-    } else {
-      const visibleLine = line.slice(0, Math.max(0, visibleChars - charIdx));
-      if (stroke) {
-        ctx.strokeStyle = stroke.color ?? '#000000';
-        ctx.lineWidth   = stroke.width ?? 2;
-        ctx.strokeText(visibleLine, 0, y);
-      }
-      ctx.fillText(visibleLine, 0, y);
-      charIdx += line.length;
-      if (charIdx >= visibleChars) break;
-    }
+  // 타자기: 공개된 글자 수(글자/단어 단위). reveal 없으면 전부.
+  let visibleChars = totalChars;
+  if (reveal) {
+    const p = _progress(f, reveal.startF ?? 0, reveal.endF ?? (frameCount - 1), reveal.loop ?? 'once');
+    if ((reveal.mode ?? 'char') === 'word') visibleChars = _wordReveal(lines, p);
+    else visibleChars = Math.round(p * totalChars);
   }
 
-  ctx.shadowColor = 'transparent';
-  ctx.shadowOffsetX = ctx.shadowOffsetY = 0;
+  // 글자별 애니메이션이 있으면 글자마다 alpha/translate/scale 을 달리 적용(char-by-char).
+  const perChar = !!charAnim || letterSpacing !== 0 || !!reveal;
+
+  if (!perChar) {
+    // 정적 빠른 경로(기존과 동일)
+    for (let li = 0; li < lines.length; li++) {
+      const y = startY + li * lh;
+      if (stroke) { ctx.strokeStyle = stroke.color ?? '#000000'; ctx.lineWidth = stroke.width ?? 2; ctx.strokeText(lines[li], 0, y); }
+      ctx.fillText(lines[li], 0, y);
+    }
+    _clearShadow(ctx);
+    return;
+  }
+
+  // char-by-char
+  const animP = charAnim ? _progress(f, charAnim.startF ?? 0, charAnim.endF ?? (frameCount - 1), charAnim.loop ?? 'once') : 1;
+  const stagger = Math.max(0, Math.min(0.95, charAnim?.stagger ?? 0.7));
+  const type = charAnim?.type ?? 'fade';
+
+  let charIdx = 0;
+  const baseAlpha = ctx.globalAlpha;
+  for (let li = 0; li < lines.length; li++) {
+    const line = lines[li];
+    const y = startY + li * lh;
+    let curX = _lineStartX(ctx, line, letterSpacing, align);
+    const prevAlign = ctx.textAlign;
+    ctx.textAlign = 'left'; // 수동 배치
+    for (let ci = 0; ci < line.length; ci++) {
+      const globalIdx = charIdx;
+      charIdx++;
+      const ch = line[ci];
+      const chW = ctx.measureText(ch).width;
+      if (globalIdx >= visibleChars) { curX += chW + letterSpacing; continue; }
+
+      let a = baseAlpha, dx = 0, dy = 0, sc = 1;
+      if (charAnim) {
+        const t0 = totalChars <= 1 ? 0 : stagger * (globalIdx / (totalChars - 1));
+        const lp = _smooth((animP - t0) / Math.max(0.01, 1 - stagger));
+        a = baseAlpha * lp;
+        if (type === 'slideup') dy = (1 - lp) * fontSize * 0.6;
+        else if (type === 'pop') sc = 0.2 + 0.8 * lp;
+      }
+      if (a <= 0.003) { curX += chW + letterSpacing; continue; }
+
+      ctx.save();
+      ctx.globalAlpha = a;
+      const cx = curX + chW / 2;
+      ctx.translate(cx, y + fontSize / 2 + dy);
+      if (sc !== 1) ctx.scale(sc, sc);
+      if (stroke) { ctx.strokeStyle = stroke.color ?? '#000000'; ctx.lineWidth = stroke.width ?? 2; ctx.strokeText(ch, -chW / 2, -fontSize / 2); }
+      ctx.fillText(ch, -chW / 2, -fontSize / 2);
+      ctx.restore();
+      curX += chW + letterSpacing;
+    }
+    ctx.textAlign = prevAlign;
+
+    // 커서(타자기): 공개가 끝나지 않았으면 마지막 글자 뒤에 깜빡이는 막대
+    if (reveal?.cursor && visibleChars < totalChars && charIdx >= visibleChars && charIdx - line.length < visibleChars) {
+      const blink = (f % 12) < 6 ? 1 : 0.15;
+      ctx.save(); ctx.globalAlpha = baseAlpha * blink; ctx.fillRect(curX, y, Math.max(2, fontSize * 0.06), fontSize); ctx.restore();
+    }
+  }
+  _clearShadow(ctx);
 }
+
+function _wordReveal(lines, p) {
+  // 단어 단위 공개 → 공개된 '글자 수'로 환산
+  const flat = lines.join('\n');
+  const words = flat.split(/(\s+)/); // 공백 보존
+  const realWords = words.filter((w) => w.trim().length);
+  const showW = Math.round(p * realWords.length);
+  let shown = 0, chars = 0, done = 0;
+  for (const tok of words) {
+    if (tok.trim().length) { if (done >= showW) break; done++; }
+    chars += tok.length;
+  }
+  return chars;
+}
+function _clearShadow(ctx) { ctx.shadowColor = 'transparent'; ctx.shadowOffsetX = ctx.shadowOffsetY = ctx.shadowBlur = 0; }
 
 function _lineStartX(ctx, line, letterSpacing, align) {
   const totalW = [...line].reduce((s, ch) => s + ctx.measureText(ch).width + letterSpacing, 0);

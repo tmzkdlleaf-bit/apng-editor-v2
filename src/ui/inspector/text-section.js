@@ -3,6 +3,7 @@
 // 타자기·글자별 애니메이션·캔버스 더블클릭 편집은 뒤 묶음(렌더 구현 포함).
 import { makeSectionShell } from './section-shell.js';
 import { createNumberField } from '../controls/number-field.js';
+import { createSliderField } from '../controls/slider-field.js';
 import { createDropdown } from '../controls/dropdown.js';
 import { createColorField } from '../controls/color-field.js';
 
@@ -173,6 +174,84 @@ export function createTextSection(store, editorState) {
     _commit(); _refresh();
   });
 
+  // ── 타자기 효과(reveal) ─────────────────────────────────────────────
+  _subtitle(body, '타자기 효과');
+  const rvEnable = _checkbox('글자가 차례로 나타남');
+  const rvMode = createDropdown({
+    ariaLabel: '타자기 단위',
+    options: [{ value: 'char', label: '글자 단위' }, { value: 'word', label: '단어 단위' }],
+    onChange: (v) => { _begin('타자기'); _setObj('reveal', { mode: v }, true); _commit(); },
+  });
+  const rvCursor = _checkbox('커서 표시');
+  const rvStart = createNumberField({
+    label: '시작 프레임', min: 0, max: 9999, step: 1, defaultValue: 0,
+    onBegin: () => _begin('타자기'), onChange: (v) => { if (_batch) _setObj('reveal', { startF: Math.round(v) }, true); },
+    onCommit: _commit, onCancel: _cancel,
+  });
+  const rvEnd = createNumberField({
+    label: '끝 프레임', min: 0, max: 9999, step: 1, defaultValue: 12,
+    onBegin: () => _begin('타자기'), onChange: (v) => { if (_batch) _setObj('reveal', { endF: Math.round(v) }, true); },
+    onCommit: _commit, onCancel: _cancel,
+  });
+  const rvLoop = createDropdown({
+    ariaLabel: '타자기 반복',
+    options: [{ value: 'once', label: '1회' }, { value: 'loop', label: '반복' }],
+    onChange: (v) => { _begin('타자기'); _setObj('reveal', { loop: v }, true); _commit(); },
+  });
+  const rvModeRow = _row('단위', rvMode.el);
+  const rvStartRow = document.createElement('div'); rvStartRow.className = 'prop-row'; rvStartRow.appendChild(rvStart.el);
+  const rvEndRow = document.createElement('div'); rvEndRow.className = 'prop-row'; rvEndRow.appendChild(rvEnd.el);
+  const rvLoopRow = _row('반복', rvLoop.el);
+  body.append(rvEnable.row, rvModeRow, rvCursor.row, rvStartRow, rvEndRow, rvLoopRow);
+  rvEnable.input.addEventListener('change', () => {
+    _begin('타자기');
+    const fc = store.get().meta.frameCount ?? 24;
+    _set({ reveal: rvEnable.input.checked ? { mode: 'char', cursor: true, startF: 0, endF: fc - 1, loop: 'once' } : null }, true);
+    _commit(); _refresh();
+  });
+  rvCursor.input.addEventListener('change', () => { _begin('타자기'); _setObj('reveal', { cursor: rvCursor.input.checked }, true); _commit(); });
+
+  // ── 글자별 애니메이션(charAnim) ─────────────────────────────────────
+  _subtitle(body, '글자별 애니메이션');
+  const caEnable = _checkbox('글자마다 등장 애니메이션');
+  const caType = createDropdown({
+    ariaLabel: '애니메이션 종류',
+    options: [{ value: 'fade', label: '페이드' }, { value: 'slideup', label: '슬라이드업' }, { value: 'pop', label: '팝' }],
+    onChange: (v) => { _begin('글자 애니'); _setObj('charAnim', { type: v }, true); _commit(); },
+  });
+  const caStagger = createSliderField({
+    label: '시차', min: 0, max: 95, step: 1, unit: '%', defaultValue: 70,
+    onBegin: () => _begin('글자 애니'), onChange: (v) => { if (_batch) _setObj('charAnim', { stagger: v / 100 }, true); },
+    onCommit: _commit, onCancel: _cancel,
+  });
+  const caStart = createNumberField({
+    label: '시작 프레임', min: 0, max: 9999, step: 1, defaultValue: 0,
+    onBegin: () => _begin('글자 애니'), onChange: (v) => { if (_batch) _setObj('charAnim', { startF: Math.round(v) }, true); },
+    onCommit: _commit, onCancel: _cancel,
+  });
+  const caEnd = createNumberField({
+    label: '끝 프레임', min: 0, max: 9999, step: 1, defaultValue: 12,
+    onBegin: () => _begin('글자 애니'), onChange: (v) => { if (_batch) _setObj('charAnim', { endF: Math.round(v) }, true); },
+    onCommit: _commit, onCancel: _cancel,
+  });
+  const caLoop = createDropdown({
+    ariaLabel: '글자 애니 반복',
+    options: [{ value: 'once', label: '1회' }, { value: 'loop', label: '반복' }, { value: 'pingpong', label: '핑퐁' }],
+    onChange: (v) => { _begin('글자 애니'); _setObj('charAnim', { loop: v }, true); _commit(); },
+  });
+  const caTypeRow = _row('종류', caType.el);
+  const caStaggerRow = document.createElement('div'); caStaggerRow.className = 'prop-row'; caStaggerRow.appendChild(caStagger.el);
+  const caStartRow = document.createElement('div'); caStartRow.className = 'prop-row'; caStartRow.appendChild(caStart.el);
+  const caEndRow = document.createElement('div'); caEndRow.className = 'prop-row'; caEndRow.appendChild(caEnd.el);
+  const caLoopRow = _row('반복', caLoop.el);
+  body.append(caEnable.row, caTypeRow, caStaggerRow, caStartRow, caEndRow, caLoopRow);
+  caEnable.input.addEventListener('change', () => {
+    _begin('글자 애니');
+    const fc = store.get().meta.frameCount ?? 24;
+    _set({ charAnim: caEnable.input.checked ? { type: 'fade', stagger: 0.7, startF: 0, endF: fc - 1, loop: 'once' } : null }, true);
+    _commit(); _refresh();
+  });
+
   // ── 새로고침 ────────────────────────────────────────────────────────
   function _refresh() {
     if (_batch) return;
@@ -200,6 +279,22 @@ export function createTextSection(store, editorState) {
     shadowEnable.input.checked = !!sh;
     for (const r of [shBlurRow, shXYRow, shCRow]) r.style.display = sh ? '' : 'none';
     if (sh) { shBlur.setValue(sh.blur ?? 0); shDx.setValue(sh.offsetX ?? 2); shDy.setValue(sh.offsetY ?? 2); shadowColor.setValue(sh.color ?? '#000000'); }
+
+    const rv = t.reveal;
+    rvEnable.input.checked = !!rv;
+    for (const r of [rvModeRow, rvCursor.row, rvStartRow, rvEndRow, rvLoopRow]) r.style.display = rv ? '' : 'none';
+    if (rv) {
+      rvMode.setValue(rv.mode ?? 'char'); rvCursor.input.checked = rv.cursor !== false;
+      rvStart.setValue(rv.startF ?? 0); rvEnd.setValue(rv.endF ?? 12); rvLoop.setValue(rv.loop ?? 'once');
+    }
+
+    const ca = t.charAnim;
+    caEnable.input.checked = !!ca;
+    for (const r of [caTypeRow, caStaggerRow, caStartRow, caEndRow, caLoopRow]) r.style.display = ca ? '' : 'none';
+    if (ca) {
+      caType.setValue(ca.type ?? 'fade'); caStagger.setValue(Math.round((ca.stagger ?? 0.7) * 100));
+      caStart.setValue(ca.startF ?? 0); caEnd.setValue(ca.endF ?? 12); caLoop.setValue(ca.loop ?? 'once');
+    }
   }
 
   const unsubStore = store.subscribe({ layers: true }, _refresh);
@@ -210,6 +305,7 @@ export function createTextSection(store, editorState) {
     unsubStore(); unsubES();
     fontDd.destroy(); weightDd.destroy(); alignDd.destroy();
     color.destroy(); strokeColor.destroy(); shadowColor.destroy();
+    rvMode.destroy(); rvLoop.destroy(); caType.destroy(); caLoop.destroy();
   }
   return { el: section, destroy };
 }
