@@ -48,57 +48,11 @@ export function createAppearanceSection(store, editorState) {
 
   body.append(blendRow, opacityField.el);
 
-  // ── 도형 그룹 ───────────────────────────────────────────────────────
-  const shapeWrap = document.createElement('div');
-  shapeWrap.className = 'appearance-group';
-  const shapeTitle = document.createElement('div');
-  shapeTitle.className = 'appearance-subtitle';
-  shapeTitle.textContent = '도형';
-  const sizeRow = document.createElement('div'); sizeRow.className = 'prop-row-2';
-  let _shapeBatch = false;
-  const wField = createNumberField({
-    label: 'W', step: 1, min: 1, max: 9999, defaultValue: 100,
-    onBegin() { if (_shapeBatch) return; _shapeBatch = true; store.begin('도형 크기'); },
-    onChange(v) { if (_shapeBatch) _previewShape({ w: v }); },
-    onCommit() { _shapeBatch = false; store.commit(); },
-    onCancel() { _shapeBatch = false; store.cancel(); },
-  });
-  const hField = createNumberField({
-    label: 'H', step: 1, min: 1, max: 9999, defaultValue: 100,
-    onBegin() { if (_shapeBatch) return; _shapeBatch = true; store.begin('도형 크기'); },
-    onChange(v) { if (_shapeBatch) _previewShape({ h: v }); },
-    onCommit() { _shapeBatch = false; store.commit(); },
-    onCancel() { _shapeBatch = false; store.cancel(); },
-  });
-  sizeRow.append(wField.el, hField.el);
-  const fillRow = document.createElement('div'); fillRow.className = 'prop-row';
-  const fillLabel = document.createElement('label');
-  fillLabel.className = 'num-label'; fillLabel.textContent = '채우기';
-  const fillInput = document.createElement('input');
-  fillInput.type = 'color'; fillInput.className = 'color-input';
-  fillRow.append(fillLabel, fillInput);
-  fillInput.addEventListener('input', () => _applyShape({ fill: fillInput.value }));
-  shapeWrap.append(shapeTitle, sizeRow, fillRow);
-  body.appendChild(shapeWrap);
-
-  // ── 적용 헬퍼 ───────────────────────────────────────────────────────
-  function _shapeIds() {
-    const doc = store.get();
-    return editorState.get().selection.filter(id => doc.layers[id]?.type === 'shape');
-  }
-  function _previewShape(props) {
-    const doc = store.get();
-    const cmds = _shapeIds().map(id => ({ type: 'setLayer', id, patch: { shape: { ...doc.layers[id].shape, ...props } } }));
-    if (cmds.length) store.preview(cmds.length === 1 ? cmds[0] : { type: 'batch', cmds });
-  }
-  function _applyShape(props) {
-    const doc = store.get();
-    const cmds = _shapeIds().map(id => ({ type: 'setLayer', id, patch: { shape: { ...doc.layers[id].shape, ...props } } }));
-    if (cmds.length) store.apply(cmds.length === 1 ? cmds[0] : { type: 'batch', cmds });
-  }
+  // 도형·글자 세부 속성은 전용 섹션(shape-section.js / text-section.js)이 담당한다.
+  // 여기(모습)는 공통 속성(블렌드·불투명도)만.
 
   function _refresh() {
-    if (_opBatch || _shapeBatch) return;
+    if (_opBatch) return;
     const ids = editorState.get().selection;
     const doc = store.get();
     if (!ids.length) return;
@@ -107,15 +61,6 @@ export function createAppearanceSection(store, editorState) {
 
     blend.setValue(first.blend ?? 'normal');
     opacityField.setValue(Math.round((first.opacity ?? 1) * 100));
-
-    const shapeLayers = _shapeIds().map(id => doc.layers[id]);
-    shapeWrap.style.display = shapeLayers.length ? '' : 'none';
-    if (shapeLayers.length) {
-      const sh = shapeLayers[0].shape ?? {};
-      wField.setValue(sh.w ?? 100);
-      hField.setValue(sh.h ?? 100);
-      if (sh.fill) fillInput.value = sh.fill;
-    }
   }
 
   const unsubStore = store.subscribe({ layers: true }, () => _refresh());

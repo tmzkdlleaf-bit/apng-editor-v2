@@ -2,10 +2,34 @@
 import { applyTransform } from '../matrix.js';
 import { blendToComposite } from '../blend.js';
 
-// layer.shape: { kind, w, h, radius, sides, fill(색 문자열), stroke({color,width}|null) }
+// fill 을 canvas fillStyle 로 해석. 문자열이면 단색, 객체면 그라디언트.
+//   fill = '#rrggbb'  또는  { type:'linear'|'radial', angle, stops:[{offset,color}, ...] }
+// 경로는 도형 중심(0,0) 기준 로컬 좌표(-w/2..w/2)에 그려지므로 그라디언트도 그 좌표계로.
+function _resolveFill(ctx, fill, w, h) {
+  if (!fill) return null;
+  if (typeof fill === 'string') return fill;
+  const stops = (Array.isArray(fill.stops) && fill.stops.length >= 2)
+    ? fill.stops
+    : [{ offset: 0, color: '#ffffff' }, { offset: 1, color: '#000000' }];
+  let grad;
+  if (fill.type === 'radial') {
+    grad = ctx.createRadialGradient(0, 0, 0, 0, 0, Math.max(w, h) / 2);
+  } else {
+    const ang = (fill.angle ?? 0) * Math.PI / 180;
+    const dx = Math.cos(ang) * w / 2, dy = Math.sin(ang) * h / 2;
+    grad = ctx.createLinearGradient(-dx, -dy, dx, dy);
+  }
+  for (const s of stops) {
+    const off = Math.max(0, Math.min(1, s.offset ?? 0));
+    grad.addColorStop(off, s.color ?? '#000000');
+  }
+  return grad;
+}
+
+// layer.shape: { kind, w, h, radius, sides, innerRatio, fill(문자열|그라디언트), stroke({color,width}|null) }
 function _drawShape(ctx, shape) {
   const kind   = shape.kind ?? 'rect';
-  const fill   = shape.fill;   // 색 문자열 '#rrggbb' 또는 null
+  const fill   = shape.fill;
   const stroke = shape.stroke; // { color, width } 또는 null
   const w      = shape.w ?? 100;
   const h      = shape.h ?? 100;
@@ -42,13 +66,25 @@ function _drawShape(ctx, shape) {
       if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
     }
     ctx.closePath();
+  } else if (kind === 'star') {
+    const points = Math.max(3, shape.sides ?? 5);
+    const outer  = Math.min(w, h) / 2;
+    const inner  = outer * Math.max(0.1, Math.min(0.9, shape.innerRatio ?? 0.5));
+    const startA = -Math.PI / 2;
+    for (let i = 0; i < points * 2; i++) {
+      const r = (i % 2 === 0) ? outer : inner;
+      const angle = startA + (i / (points * 2)) * Math.PI * 2;
+      const px = Math.cos(angle) * r, py = Math.sin(angle) * r;
+      if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+    ctx.closePath();
   } else if (kind === 'line') {
     ctx.moveTo(-w / 2, 0);
     ctx.lineTo( w / 2, 0);
   }
 
   if (fill && kind !== 'line') {
-    ctx.fillStyle = fill;
+    ctx.fillStyle = _resolveFill(ctx, fill, w, h);
     ctx.fill();
   }
 
@@ -66,8 +102,8 @@ export function renderShapeLayer(outputCtx, layer, worldTr, totalAlpha, rctx) {
   const shape = layer.shape ?? {};
 
   // 콘텐츠 캐시 키 (프레임 무관 — 도형 속성만)
-  const cacheKey = `${layer.id}:shape:${shape.kind}:${shape.w}:${shape.h}:${shape.fill}` +
-    `:${JSON.stringify(shape.stroke)}:${shape.radius ?? 0}:${shape.sides ?? 6}`;
+  const cacheKey = `${layer.id}:shape:${shape.kind}:${shape.w}:${shape.h}:${JSON.stringify(shape.fill)}` +
+    `:${JSON.stringify(shape.stroke)}:${shape.radius ?? 0}:${shape.sides ?? 6}:${shape.innerRatio ?? 0.5}`;
 
   let contentCanvas = cache?.get(cacheKey);
   if (!contentCanvas) {
