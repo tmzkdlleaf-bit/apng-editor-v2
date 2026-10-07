@@ -81,7 +81,13 @@ export function initExport(store, editorState, projectApi = null) {
       </div>
       <div class="ex-body">
         <div class="ex-left">
-          <div class="ex-preview-wrap"><img class="ex-preview" alt="출력 미리보기"></div>
+          <div class="ex-preview-wrap">
+            <img class="ex-preview" alt="출력 미리보기" style="display:none;">
+            <div class="ex-preview-empty" id="ex-preview-empty">
+              <div class="ex-preview-msg">만드는 중…</div>
+              <div class="ex-preview-bar"><div class="ex-preview-bar-fill" id="ex-preview-bar-fill"></div></div>
+            </div>
+          </div>
           <div class="ex-info" id="ex-info">-</div>
         </div>
         <div class="ex-right">
@@ -114,6 +120,7 @@ export function initExport(store, editorState, projectApi = null) {
 
   const $ = (sel) => modal.querySelector(sel);
   const previewImg = $('.ex-preview');
+  const previewEmpty = $('#ex-preview-empty');
   const infoEl = $('#ex-info');
   const sizeEl = $('#ex-size');
   const targetEl = $('#ex-target');
@@ -147,9 +154,9 @@ export function initExport(store, editorState, projectApi = null) {
         </span>
       </div>
       <div class="ex-row"><label>형식</label>
-        <span class="ex-formats">
-          ${['apng', 'webp', 'gif'].map((f) => `<label class="ex-inline"><input type="radio" name="ex-format" class="ex-ctl" data-k="format" value="${f}" ${settings.format === f ? 'checked' : ''}>${f.toUpperCase()}</label>`).join('')}
-        </span>
+        <div class="ex-seg" role="group" aria-label="형식">
+          ${['apng', 'webp', 'gif'].map((f) => `<button type="button" class="ex-seg-btn${settings.format === f ? ' is-on' : ''}" data-format="${f}">${f.toUpperCase()}</button>`).join('')}
+        </div>
       </div>
       <div class="ex-row"><label>크기</label>
         <span class="ex-dd" data-dd="scaleMul"></span>
@@ -169,6 +176,18 @@ export function initExport(store, editorState, projectApi = null) {
     settingsEl.querySelectorAll('.ex-ctl').forEach((el) => {
       const ev = (el.type === 'range') ? 'input' : 'change';
       el.addEventListener(ev, () => onControl(el));
+    });
+
+    // 형식 세그먼트 버튼
+    settingsEl.querySelectorAll('.ex-seg-btn').forEach((b) => {
+      b.addEventListener('click', () => {
+        if (b.dataset.format === settings.format) return;
+        settings.format = b.dataset.format;
+        settings.modified = true;
+        saveSettings();
+        renderSettings();      // 형식에 따라 색상/품질 칸이 바뀜
+        scheduleEstimate();
+      });
     });
 
     // 드롭다운 마운트(select 대체). 이전 드롭다운은 정리.
@@ -260,11 +279,11 @@ export function initExport(store, editorState, projectApi = null) {
     const t = currentTarget();
     fitBtn.style.display = t == null ? 'none' : '';
     if (t == null) { targetEl.textContent = '목표 용량 없음'; targetEl.className = 'ex-target'; return; }
-    targetEl.textContent = `목표 ${(t / 1024).toFixed(0)} KB 이하`;
+    targetEl.textContent = `목표 ${fmtBytes(t)} 이하`;
     const bytes = lastResult?.bytes;
     if (bytes != null) {
       const ok = bytes <= t;
-      targetEl.textContent = `목표 ${(t / 1024).toFixed(0)} KB — ${ok ? '안에 듦' : '넘음'}`;
+      targetEl.textContent = `목표 ${fmtBytes(t)} 이하 · ${ok ? '안에 듦' : '넘음'}`;
       targetEl.className = 'ex-target ' + (ok ? 'ok' : 'over');
     } else {
       targetEl.className = 'ex-target';
@@ -309,9 +328,17 @@ export function initExport(store, editorState, projectApi = null) {
     result.url = url;
     lastResult = result;
     previewImg.src = url;
+    previewImg.style.display = '';           // 결과 보이기
+    previewEmpty.style.display = 'none';
     infoEl.textContent = `${result.width} × ${result.height} · ${result.frameCount}프레임 · ${fmtDuration(result.durationMs)}`;
     sizeEl.textContent = fmtBytes(result.bytes);
     renderTarget();
+  }
+
+  // 결과 나오기 전: 체커 배경 + "만드는 중…" placeholder 표시(깨진 이미지 아이콘 방지).
+  function showPreviewPending() {
+    previewImg.style.display = 'none';
+    previewEmpty.style.display = '';
   }
 
   function buildOpts(extra = {}) {
@@ -334,6 +361,7 @@ export function initExport(store, editorState, projectApi = null) {
     if (!open || !deps) return;
     clearTimeout(estTimer);
     sizeEl.textContent = '계산 중…';
+    if (!lastResult) showPreviewPending();   // 아직 결과 없으면 "만드는 중…" 유지
     estTimer = setTimeout(async () => {
       if (estCtrl) estCtrl.abort();
       estCtrl = new AbortController();

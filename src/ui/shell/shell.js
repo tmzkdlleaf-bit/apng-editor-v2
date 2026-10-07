@@ -7,6 +7,7 @@ import { initInspector }  from '../inspector/index.js';
 import { initExport }     from '../export/index.js';
 import { startUpdateCheck } from '../update-banner.js';
 import { isDesktop }      from '../../platform/index.js';
+import { iconMarkup } from '../icons.js';
 
 const TL_KEY     = 'apng2.timelineHeight';
 const TL_DEFAULT = 340;
@@ -44,18 +45,16 @@ export function init(store, editorState, projectApi = null) {
         <span class="save-status" id="save-status"></span>
       </div>
       <div class="sep"></div>
-      <button data-action="undo" title="되돌리기 (Ctrl+Z)">되돌리기</button>
-      <button data-action="redo" title="다시하기 (Ctrl+Shift+Z)">다시하기</button>
+      <button class="icon-btn" data-action="undo" aria-label="되돌리기" title="되돌리기 (Ctrl+Z)">${iconMarkup('undo')}</button>
+      <button class="icon-btn" data-action="redo" aria-label="다시하기" title="다시하기 (Ctrl+Shift+Z)">${iconMarkup('redo')}</button>
       <div class="topbar-center"></div>
       <div class="topbar-right">
         <button class="canvas-info-btn" id="canvas-info" title="캔버스 설정">-</button>
         <div class="sep"></div>
-        <button data-action="toggle-theme" id="btn-theme" title="테마 전환">
-          ${currentTheme() === 'dark' ? '라이트' : '다크'}
-        </button>
-        <button data-action="help" title="도움말">?</button>
+        <button class="icon-btn" data-action="toggle-theme" id="btn-theme"></button>
+        <button class="icon-btn" data-action="help" aria-label="도움말" title="도움말">${iconMarkup('help')}</button>
         <div class="sep"></div>
-        <button data-action="export" class="accent">내보내기</button>
+        <button data-action="export" class="btn accent"><span class="btn-icon">${iconMarkup('export')}</span>내보내기</button>
       </div>
     </div>
 
@@ -80,12 +79,17 @@ export function init(store, editorState, projectApi = null) {
   const mainArea = app.querySelector('#main-area');
   setTlHeight(mainArea, getStoredTlHeight());
 
-  // 테마 전환
+  // 테마 전환 — 해/달 아이콘 + 툴팁("…로")
   const themeBtn = app.querySelector('#btn-theme');
-  themeBtn.addEventListener('click', () => {
-    toggleTheme();
-    themeBtn.textContent = currentTheme() === 'dark' ? '라이트' : '다크';
-  });
+  function _updateThemeBtn() {
+    const dark = currentTheme() === 'dark';
+    // 다크면 '라이트로' 전환(해), 라이트면 '다크로' 전환(달)
+    themeBtn.innerHTML = iconMarkup(dark ? 'sun' : 'moon');
+    themeBtn.title = dark ? '라이트 테마로' : '다크 테마로';
+    themeBtn.setAttribute('aria-label', dark ? '라이트 테마로' : '다크 테마로');
+  }
+  _updateThemeBtn();
+  themeBtn.addEventListener('click', () => { toggleTheme(); _updateThemeBtn(); });
 
   // 되돌리기 / 다시하기 버튼
   const undoBtn = app.querySelector('[data-action="undo"]');
@@ -170,18 +174,19 @@ export function init(store, editorState, projectApi = null) {
   }
 
   // 캔버스 정보 + 설정 다이어로그 (D3)
+  // 상단바: 크기·fps·길이 + 연필 아이콘(클릭=캔버스 설정). 확대율은 캔버스 오른쪽 아래에만.
   const canvasInfoEl = app.querySelector('#canvas-info');
   function _updateCanvasInfo() {
-    const es   = editorState.get();
     const doc  = store.get();
-    const zoom = Math.round(es.zoom * 100);
-    const w    = doc.meta.width;
-    const h    = doc.meta.height;
-    canvasInfoEl.textContent = `${zoom}%  ${w}×${h}`;
+    const { width: w, height: h, fps, frameCount } = doc.meta;
+    const dur = (frameCount / Math.max(1, fps)).toFixed(1);
+    canvasInfoEl.innerHTML = `<span class="ci-text">${w} × ${h} · ${fps}fps · ${dur}초</span>`
+      + `<span class="ci-pencil">${iconMarkup('pencil', { size: 13 })}</span>`;
   }
   _updateCanvasInfo();
-  editorState.subscribe((p) => { if ('zoom' in p) _updateCanvasInfo(); });
   store.subscribe({ meta: true }, _updateCanvasInfo);
+
+  // 확대율 표시는 캔버스 뷰(src/ui/canvas/view.js 의 .stage-zoom)가 이미 담당한다(오른쪽 아래).
 
   canvasInfoEl.addEventListener('click', () => _openCanvasSettings());
 

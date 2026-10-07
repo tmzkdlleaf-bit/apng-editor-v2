@@ -81,7 +81,16 @@ export function createLayerAddMenu(store, editorState, containerEl) {
 
   btn.addEventListener('click', (e) => {
     e.stopPropagation();
-    menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+    if (menu.style.display !== 'none') { menu.style.display = 'none'; return; }
+    // 메뉴는 fixed 로 띄워 타임라인 스크롤 영역에 안 잘리게 한다. 아래 공간이 좁으면 위로 연다.
+    menu.style.display = 'block';
+    const r  = btn.getBoundingClientRect();
+    const mh = menu.offsetHeight;
+    const below = window.innerHeight - r.bottom;
+    menu.style.left = r.left + 'px';
+    menu.style.top  = (below < mh + 8 && r.top > below)
+      ? Math.max(4, r.top - mh - 4) + 'px'
+      : (r.bottom + 4) + 'px';
   });
 
   document.addEventListener('click', _close);

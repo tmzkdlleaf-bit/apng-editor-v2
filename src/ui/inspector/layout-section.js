@@ -5,12 +5,14 @@ import { buildPropCmd, getStartValue } from '../canvas/edit-prop.js';
 import { evalProp } from '../../core/anim/prop.js';
 import { makeSectionShell } from './section-shell.js';
 
+// mul = 표시 배수(저장은 raw). 배율·투명도는 0–100%로 보이되 저장은 0–1(마이그레이션 없음).
+// 배치의 투명도는 키프레임 대상이라 "투명도(움직임)"로 모습의 "불투명도"와 구분한다.
 const _PROPS = [
-  { path: 'transform.x',        label: 'X',        step: 1,    min: -9999, max: 9999, unit: '',  def: 0 },
-  { path: 'transform.y',        label: 'Y',        step: 1,    min: -9999, max: 9999, unit: '',  def: 0 },
-  { path: 'transform.scale',    label: '배율',     step: 0.01, min: 0.01,  max: 99,   unit: '',  def: 1 },
-  { path: 'transform.rotation', label: '회전',     step: 1,    min: -360,  max: 360,  unit: '°', def: 0 },
-  { path: 'transform.alpha',    label: '불투명도', step: 0.01, min: 0,     max: 1,    unit: '',  def: 1 },
+  { path: 'transform.x',        label: 'X',           step: 1, min: -9999, max: 9999, unit: '',  def: 0,   mul: 1 },
+  { path: 'transform.y',        label: 'Y',           step: 1, min: -9999, max: 9999, unit: '',  def: 0,   mul: 1 },
+  { path: 'transform.scale',    label: '배율',        step: 1, min: 1,      max: 9900, unit: '%', def: 100, mul: 100 },
+  { path: 'transform.rotation', label: '회전',        step: 1, min: -360,   max: 360,  unit: '°', def: 0,   mul: 1 },
+  { path: 'transform.alpha',    label: '투명도(움직임)', step: 1, min: 0,   max: 100,  unit: '%', def: 100, mul: 100 },
 ];
 
 function _getProp(layer, path) {
@@ -48,11 +50,12 @@ export function createLayoutSection(store, editorState) {
         const ids = es.selection;
         if (!ids.length) return;
         const doc = store.get();
+        const mul = pd.mul ?? 1;
         const cmds = [];
         for (const id of ids) {
           if (!doc.layers[id]) continue;
-          const base = _origVals?.[id] ?? 0;
-          const target = info?.relative ? base + info.delta : v;
+          const base = _origVals?.[id] ?? 0;               // 저장 단위
+          const target = info?.relative ? base + (info.delta / mul) : (v / mul);
           cmds.push(buildPropCmd(doc, id, pd.path, target, es.f, es.autoKey));
         }
         if (cmds.length) store.preview(cmds.length === 1 ? cmds[0] : { type: 'batch', cmds });
@@ -123,9 +126,10 @@ export function createLayoutSection(store, editorState) {
         const prop = _getProp(doc.layers[id], pd.path);
         return prop ? evalProp(prop, f) : pd.def;
       });
+      const mul = pd.mul ?? 1;
       const allEqual = vals.every(v => Math.abs(v - vals[0]) < 1e-6);
-      if (allEqual) fields[pd.path].setValue(vals[0]);
-      else          fields[pd.path].setMixed(vals[0]);
+      if (allEqual) fields[pd.path].setValue(vals[0] * mul);
+      else          fields[pd.path].setMixed(vals[0] * mul);
 
       // 마름모 상태
       const atF = ids.map(id => (_getProp(doc.layers[id], pd.path)?.keys ?? []).some(k => k.f === f));

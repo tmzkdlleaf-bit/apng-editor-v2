@@ -35,6 +35,16 @@ f.setValue(n); f.setMixed(base); f.getValue();  // setMixed = 여러 값이 다�
 ## color-field.js — 색 고르기 *(F1에서 추가 예정)*
 견본 + 16진수 입력 + 최근 색 8개 + 스포이트(브라우저 `EyeDropper` 있으면). 추가되면 이 문서도 갱신.
 
+## 버튼 (base.css) — 3종 × 2크기
+HTML `<button>` 에 클래스만 붙인다(별도 컴포넌트 아님). 토큰 색·높이 고정.
+- **기본**: 클래스 없음 `<button>` — 테두리 있는 보통 버튼(28px).
+- **강조**: `<button class="accent">` — 주요 동작(내보내기 등).
+- **조용한**: `<button class="quiet">` — 테두리/배경 없는 보조 동작.
+- 크기: 기본(28px) · 작게 `<button class="sm">`(22px).
+- 아이콘+글자: `<button class="accent"><span class="btn-icon">${iconMarkup('export')}</span>내보내기</button>`.
+- 아이콘만: `.icon-btn`(위 icons.js) 또는 `iconButton()`.
+- 비활성 `disabled` 는 대비를 유지(흐리되 읽힘). 키보드 포커스 테두리는 모든 컨트롤에 자동(`:focus-visible`).
+
 ## ../icons.js — 아이콘 세트 (SVG, 16px, 선 1.5, currentColor)
 ```js
 import { createIcon, iconMarkup, iconButton } from '../icons.js';

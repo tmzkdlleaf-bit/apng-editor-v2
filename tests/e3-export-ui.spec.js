@@ -38,12 +38,12 @@ test.describe('E3 — 내보내기 화면', () => {
     // 형식 APNG, 색상 수 칸 보임
     expect(await page.evaluate(() => window.__exportUI.getState().format)).toBe('apng');
     await expect(page.locator('.ex-settings .ex-dd[data-dd="colors"]')).toBeVisible();
-    // GIF로 바꾸면 색상 수 대신 고정 안내
-    await page.check('.ex-settings input[name="ex-format"][value="gif"]');
+    // GIF로 바꾸면 색상 수 대신 고정 안내 (형식은 세그먼트 버튼)
+    await page.click('.ex-settings .ex-seg-btn[data-format="gif"]');
     await expect(page.locator('.ex-settings .ex-dd[data-dd="colors"]')).toHaveCount(0);
     await expect(page.locator('.ex-note')).toContainText('256색 고정');
     // 다시 APNG
-    await page.check('.ex-settings input[name="ex-format"][value="apng"]');
+    await page.click('.ex-settings .ex-seg-btn[data-format="apng"]');
     await expect(page.locator('.ex-settings .ex-dd[data-dd="colors"]')).toBeVisible();
 
     await waitEstimate(page);

@@ -150,7 +150,18 @@
   color: var(--dim);
   pointer-events: none;
   user-select: none;
+  font-variant-numeric: tabular-nums;
 }
+
+/* 상단바 캔버스 정보(크기·fps·길이 + 연필) */
+.canvas-info-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  color: var(--text2);
+}
+.canvas-info-btn:hover { color: var(--text); }
+.canvas-info-btn .ci-pencil { display: inline-flex; color: var(--faint); }
 
 .stage-tools {
   position: absolute;

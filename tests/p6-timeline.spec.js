@@ -373,10 +373,16 @@ test.describe('P6 — 재생 / 타임라인 / 레이어 추가 / 인스펙터', 
   });
 
   // ── 상단 바 ──────────────────────────────────────────────────────────────
-  test('[상단바] 캔버스 정보 표시 (zoom%)', async ({ page }) => {
+  test('[상단바] 캔버스 정보 = 크기·fps·길이(확대율은 캔버스 모서리)', async ({ page }) => {
     const info = page.locator('#canvas-info');
     const text = await info.textContent();
-    expect(text).toMatch(/\d+%/);
+    // 크기·fps·길이 표시, 확대율(%)은 여기 없음
+    expect(text).toMatch(/\d+\s*×\s*\d+/);
+    expect(text).toContain('fps');
+    expect(text).toContain('초');
+    expect(text).not.toMatch(/%/);
+    // 확대율은 캔버스 오른쪽 아래 .stage-zoom 에만
+    await expect(page.locator('[data-region="canvas"] .stage-zoom')).toContainText('%');
   });
 
   test('[상단바] 되돌리기 버튼 초기 비활성화', async ({ page }) => {

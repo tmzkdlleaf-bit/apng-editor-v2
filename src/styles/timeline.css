@@ -48,14 +48,12 @@
 .tl-layers-head .tl-add-btn:hover { color: var(--text); border-color: var(--line); }
 
 .layer-add-menu {
-  position: absolute;
-  top: calc(100% + 4px);
-  left: 0;
+  position: fixed;          /* 타임라인 스크롤 영역에 안 잘리게 뷰포트 기준으로 띄움 */
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: var(--r-2);
   box-shadow: 0 4px 16px rgba(0,0,0,0.3);
-  z-index: 200;
+  z-index: 500;
   min-width: 120px;
   overflow: hidden;
 }
