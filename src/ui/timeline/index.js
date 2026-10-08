@@ -11,7 +11,7 @@ const _LOOP_MODES = [
   { mode: 'pingpong', icon: 'pingpong', label: '핑퐁' },
 ];
 
-export function initTimeline(timelineEl, store, editorState, playback) {
+export function initTimeline(timelineEl, store, editorState, playback, deps = {}) {
   const head     = timelineEl.querySelector('.timeline-head');
   const layersEl = timelineEl.querySelector('.timeline-layers');
   const tracksEl = timelineEl.querySelector('.timeline-tracks');
@@ -60,7 +60,7 @@ export function initTimeline(timelineEl, store, editorState, playback) {
   head.append(transport, sep(), frameWrap, sep(), loopGroup, sep(), autoKeyBtn, snapCanvasBtn, snapTlBtn);
 
   // 레이어 목록(머리 칸에 [+ 레이어] 포함) · 트랙 캔버스
-  const layerList   = initLayerList(layersEl, store, editorState);
+  const layerList   = initLayerList(layersEl, store, editorState, deps);
   const trackCanvas = initTrackCanvas(tracksEl, layersEl, store, editorState, playback);
 
   // ── 동작 ────────────────────────────────────────────────────────────

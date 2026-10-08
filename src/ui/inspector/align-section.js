@@ -3,6 +3,7 @@
 import { makeSectionShell } from './section-shell.js';
 import { getDocWorldTr, getLayerBounds } from '../canvas/hit.js';
 import { buildPropCmd } from '../canvas/edit-prop.js';
+import { createDropdown } from '../controls/dropdown.js';
 
 // 회전 무시한 doc 공간 축 정렬 bbox 와 anchor 오프셋 정보
 function _layerBox(doc, id, f) {
@@ -38,6 +39,29 @@ export function createAlignSection(store, editorState) {
     (axis === 'h' ? rowH : rowV).appendChild(btn);
   }
   body.append(rowH, rowV);
+
+  // 분배(F2-9) — 3개 이상 선택 시 가로·세로 간격 균등
+  const distRow = document.createElement('div'); distRow.className = 'align-row';
+  for (const [key, label] of [['dist-h', '가로 분배'], ['dist-v', '세로 분배']]) {
+    const b = document.createElement('button');
+    b.className = 'align-btn'; b.dataset.align = key; b.textContent = label;
+    b.title = label + ' (3개 이상 선택)';
+    b.addEventListener('click', () => _distribute(key === 'dist-h' ? 'x' : 'y'));
+    distRow.appendChild(b);
+  }
+  body.appendChild(distRow);
+
+  // 그리드 간격(F2-9) — 8·16·32·64·128px
+  const gridRow = document.createElement('div'); gridRow.className = 'prop-row';
+  const gridLabel = document.createElement('label'); gridLabel.className = 'num-label'; gridLabel.textContent = '그리드 간격';
+  const gridDd = createDropdown({
+    ariaLabel: '그리드 간격',
+    options: [8, 16, 32, 64, 128].map((v) => ({ value: String(v), label: `${v}px` })),
+    value: String(editorState.get().gridStep ?? 32),
+    onChange: (v) => editorState.set({ gridStep: parseInt(v, 10) }),
+  });
+  gridRow.append(gridLabel, gridDd.el);
+  body.appendChild(gridRow);
 
   function _align(key) {
     const es  = editorState.get();
@@ -86,5 +110,31 @@ export function createAlignSection(store, editorState) {
     if (cmds.length) store.apply(cmds.length === 1 ? cmds[0] : { type: 'batch', cmds });
   }
 
-  return { el: section, destroy() {} };
+  // 분배 — 3개 이상, 가장자리 둘은 고정, 중간을 중심 기준 균등 간격. 기록 1건.
+  function _distribute(axis) {
+    const es  = editorState.get();
+    const doc = store.get();
+    const ids = es.selection.filter(id => doc.layers[id] && !doc.layers[id].locked);
+    if (ids.length < 3) return;
+    const f = es.f;
+    const items = ids.map(id => ({ id, box: _layerBox(doc, id, f) })).filter(x => x.box);
+    if (items.length < 3) return;
+    const cKey = axis === 'x' ? 'cx' : 'cy';
+    items.sort((a, b) => a.box[cKey] - b.box[cKey]);
+    const min = items[0].box[cKey];
+    const max = items[items.length - 1].box[cKey];
+    const step = (max - min) / (items.length - 1);
+    const path = axis === 'x' ? 'transform.x' : 'transform.y';
+    const ofs  = axis === 'x' ? 'ox' : 'oy';
+    const cmds = [];
+    for (let i = 1; i < items.length - 1; i++) {
+      const it = items[i];
+      const targetC = min + step * i;
+      const newVal = targetC - it.box[ofs] * it.box.s; // 중심 → anchor 역산
+      cmds.push(buildPropCmd(doc, it.id, path, newVal, f, es.autoKey));
+    }
+    if (cmds.length) store.apply(cmds.length === 1 ? cmds[0] : { type: 'batch', cmds });
+  }
+
+  return { el: section, destroy() { gridDd.destroy(); } };
 }

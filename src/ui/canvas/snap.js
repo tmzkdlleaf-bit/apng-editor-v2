@@ -15,7 +15,7 @@ function _candidates(doc, es, excludeIds) {
 
   // 그리드
   if (es.grid) {
-    const step = 50;
+    const step = es.gridStep ?? 50;
     for (let gx = 0; gx <= docW; gx += step) pts.push({ x: gx, y: null });
     for (let gy = 0; gy <= docH; gy += step) pts.push({ x: null, y: gy });
   }

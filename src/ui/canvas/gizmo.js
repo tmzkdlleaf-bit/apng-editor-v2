@@ -17,7 +17,7 @@ export function drawOverlay(ctx, doc, es, snapLines = [], W, H) {
 
   // 그리드
   if (grid) {
-    const step = 50;
+    const step = es.gridStep ?? 50;
     ctx.save();
     ctx.strokeStyle = 'rgba(255,255,255,0.08)';
     ctx.lineWidth = 1;

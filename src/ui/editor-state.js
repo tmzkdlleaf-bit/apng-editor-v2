@@ -6,6 +6,7 @@ export function createEditorState(initial = {}) {
     panX: 0,
     panY: 0,
     grid: false,
+    gridStep: 32,       // F2-9: 그리드 간격(px) 8·16·32·64·128
     snap: true,
     autoKey: false,
     groupEdit: null,

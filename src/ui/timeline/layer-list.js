@@ -1,6 +1,7 @@
-// 타임라인 레이어 목록 패널 (왼쪽) — 그룹 계층 + 펼침 하위 행 + 끌어 놓기
+// 타임라인 레이어 목록 패널 (왼쪽) — 그룹 계층 + 펼침 하위 행 + 끌어 놓기 + 썸네일
 import { computeRows, isSelfOrDescendant } from './rows.js';
 import { createLayerAddMenu } from '../layer-add.js';
+import { createThumbnailer } from './thumbnail.js';
 
 const ROW_H  = 28; // C3: 28px
 const INDENT = 12; // G1: 단계당 들여쓰기 px
@@ -10,11 +11,15 @@ const _TYPE_CHAR = {
   group: '▦', anim: '▶', adjust: '◎', instance: '⬡',
 };
 
-export function initLayerList(containerEl, store, editorState) {
+export function initLayerList(containerEl, store, editorState, deps = {}) {
   let _dragId     = null;
   let _dragStartY = 0;
   let _dragging   = false;
   let _dropInfo   = null;
+
+  // 썸네일(F2-4) — 에셋 어댑터가 있을 때만(데모/실앱). 없으면 썸네일 생략.
+  const _thumbs = deps.assets ? createThumbnailer(deps.assets, 20) : null;
+  if (typeof window !== 'undefined') window.__thumbnailer = _thumbs; // 테스트용(렌더 횟수)
 
   // item 2: 트랙 눈금자(24px)와 높이를 맞춘 머리 칸 — sticky 로 맨 위에 고정.
   //   이 칸이 있어야 왼쪽 레이어 행과 오른쪽 트랙 행의 화면 y 가 한 칸도 안 어긋난다.
@@ -123,6 +128,17 @@ export function initLayerList(containerEl, store, editorState) {
     typeEl.className = 'tl-type';
     typeEl.textContent = _TYPE_CHAR[layer.type] ?? '?';
 
+    // 썸네일(20×20, frame 0 기준, 내용 바뀔 때만 다시 그림)
+    let thumbEl = null;
+    if (_thumbs) {
+      thumbEl = document.createElement('span');
+      thumbEl.className = 'tl-thumb';
+      try {
+        const c = _thumbs.getThumb(store.get(), layer);
+        if (c) { c.classList.add('tl-thumb-canvas'); thumbEl.appendChild(c); }
+      } catch {}
+    }
+
     const nameEl = document.createElement('span');
     nameEl.className = 'tl-name';
     nameEl.textContent = layer.name || layer.type;
@@ -131,7 +147,9 @@ export function initLayerList(containerEl, store, editorState) {
       _startRename(layer.id, nameEl);
     });
 
-    row.append(expandBtn, eyeBtn, lockBtn, typeEl, nameEl);
+    row.append(expandBtn, eyeBtn, lockBtn, typeEl);
+    if (thumbEl) row.append(thumbEl);
+    row.append(nameEl);
 
     // 클릭 → 선택
     row.addEventListener('click', (e) => {

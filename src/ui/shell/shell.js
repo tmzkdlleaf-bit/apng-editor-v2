@@ -146,7 +146,7 @@ export function init(store, editorState, projectApi = null) {
 
   // 타임라인
   const timelineEl = app.querySelector('[data-region="timeline"]');
-  initTimeline(timelineEl, store, editorState, playback);
+  initTimeline(timelineEl, store, editorState, playback, { assets: stage.assets });
 
   // 인스펙터
   const inspectorEl = app.querySelector('[data-region="inspector"]');

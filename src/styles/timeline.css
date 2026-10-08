@@ -228,6 +228,15 @@
   flex-shrink: 0;
 }
 
+/* 레이어 썸네일(F2-4) */
+.tl-thumb {
+  width: 20px; height: 20px; flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 1px solid var(--line2); border-radius: 2px; overflow: hidden;
+  background: var(--input);
+}
+.tl-thumb-canvas { width: 20px; height: 20px; display: block; object-fit: contain; }
+
 .tl-name {
   flex: 1;
   font-size: var(--fs-2);
