@@ -32,6 +32,18 @@ export function initLayerList(containerEl, store, editorState, deps = {}) {
   addWrap.className = 'tl-add-wrap';
   const layerAdd = createLayerAddMenu(store, editorState, addWrap);
   headEl.appendChild(addWrap);
+  // F2-6: 카메라 편집 진입 — 누르면 카메라 선택(인스펙터 카메라 섹션·캔버스 영역).
+  const camBtn = document.createElement('button');
+  camBtn.className = 'tl-cam-btn';
+  camBtn.textContent = '카메라';
+  camBtn.title = '카메라 편집(X·Y·줌 키프레임)';
+  camBtn.addEventListener('click', () => {
+    const on = !editorState.get().cameraActive;
+    editorState.set({ cameraActive: on, ...(on ? { selection: [] } : {}) });
+    camBtn.classList.toggle('is-on', on);
+  });
+  headEl.appendChild(camBtn);
+  const _unsubCam = editorState.subscribe((p) => { if ('cameraActive' in p) camBtn.classList.toggle('is-on', !!editorState.get().cameraActive); });
   containerEl.appendChild(headEl);
 
   function _rebuild() {
@@ -57,7 +69,8 @@ export function initLayerList(containerEl, store, editorState, deps = {}) {
 
   function _makeCameraRow(depth) {
     const r = document.createElement('div');
-    r.className = 'tl-row tl-row-camera';
+    r.className = 'tl-row tl-row-camera'
+      + (editorState.get().cameraActive ? ' tl-row-sel' : '');
     r.style.height = ROW_H + 'px';
     r.dataset.kind = 'camera';
     _indent(r, depth);
@@ -65,6 +78,8 @@ export function initLayerList(containerEl, store, editorState, deps = {}) {
     name.className = 'tl-name';
     name.textContent = '카메라';
     r.appendChild(name);
+    // F2-6: 클릭 → 카메라 선택(인스펙터 카메라 섹션·캔버스 영역 표시)
+    r.addEventListener('click', () => editorState.set({ cameraActive: true, selection: [] }));
     return r;
   }
 
@@ -183,7 +198,7 @@ export function initLayerList(containerEl, store, editorState, deps = {}) {
       } else {
         editorState.set({ selection: [id] });
       }
-      editorState.set({ focusRegion: 'timeline' });
+      editorState.set({ focusRegion: 'timeline', cameraActive: false });
     });
 
     // 드래그 시작
@@ -388,8 +403,10 @@ export function initLayerList(containerEl, store, editorState, deps = {}) {
   document.addEventListener('pointerup',   _onPointerUp);
 
   const unsubStore = store.subscribe({ layers: true }, () => _rebuild());
+  // 카메라 키 변화(meta 스코프)로 카메라 행이 생기거나 사라지므로 meta 에도 구독.
+  const unsubMeta  = store.subscribe({ meta: true }, () => _rebuild());
   const unsubES    = editorState.subscribe((patch) => {
-    if ('selection' in patch || 'expanded' in patch) _rebuild();
+    if ('selection' in patch || 'expanded' in patch || 'cameraActive' in patch) _rebuild();
   });
 
   _rebuild();
@@ -399,7 +416,9 @@ export function initLayerList(containerEl, store, editorState, deps = {}) {
     document.removeEventListener('pointerup',   _onPointerUp);
     _closeRowMenu();
     layerAdd.destroy();
+    _unsubCam();
     unsubStore();
+    unsubMeta();
     unsubES();
   }
 

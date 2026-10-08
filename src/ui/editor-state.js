@@ -19,6 +19,7 @@ export function createEditorState(initial = {}) {
     expanded: {},       // 타임라인 레이어 펼침 상태 { layerId: true }
     focusRegion: 'canvas', // 'canvas' | 'timeline' — 복사/삭제 대상 결정
     tlSnap: true,       // item 7: 타임라인 머리줄 스냅 (키·클립 → 프레임·재생선·다른 키)
+    cameraActive: false, // F2-6: 카메라 행 선택(인스펙터 카메라 섹션·캔버스 영역 표시)
   };
 
   for (const k of Object.keys(initial)) {

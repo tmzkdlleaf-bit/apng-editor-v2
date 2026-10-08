@@ -36,6 +36,8 @@ export function keyedProps(layer) {
 export function computeRows(doc, expanded = {}) {
   const rows = [];
 
+  // 카메라 행은 키프레임이 있을 때 표시(키를 넣으면 트랙에서 스크럽). 카메라 편집 진입은
+  // 레이어 머리 칸의 "카메라" 버튼(editorState.cameraActive)으로 — 트랙 레이아웃을 바꾸지 않는다.
   if (cameraHasKeys(doc)) {
     rows.push({ kind: 'camera', depth: 0 });
   }

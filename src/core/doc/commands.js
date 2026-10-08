@@ -207,6 +207,35 @@ export function applyCommand(doc, cmd) {
       break;
     }
 
+    case 'setCameraProp': {
+      // 카메라(doc.camera.x/y/zoom) 값·키프레임. prop 은 { value, keys }.
+      const { prop: which, value, f, ease = 'linear' } = cmd;
+      if (!['x', 'y', 'zoom'].includes(which)) break;
+      const propPath = ['camera', which];
+      const prop = _get(doc, propPath);
+      if (!prop) break;
+      if (f !== undefined) {
+        const keys = [...(prop.keys ?? [])];
+        const idx = keys.findIndex(k => k.f === f);
+        if (idx !== -1) keys[idx] = { ...keys[idx], v: value, ease };
+        else { keys.push({ f, v: value, ease }); keys.sort((a, b) => a.f - b.f); }
+        _pa(doc, patches, [...propPath, 'keys'], keys);
+      } else {
+        if (prop.keys?.length) throw new Error('키프레임이 있는 카메라 값은 f를 지정');
+        _pa(doc, patches, [...propPath, 'value'], value);
+      }
+      break;
+    }
+
+    case 'removeCameraKey': {
+      const { prop: which, f } = cmd;
+      if (!['x', 'y', 'zoom'].includes(which)) break;
+      const prop = _get(doc, ['camera', which]);
+      if (!prop?.keys) break;
+      _pa(doc, patches, ['camera', which, 'keys'], prop.keys.filter(k => k.f !== f));
+      break;
+    }
+
     case 'offsetProp': {
       const { id, path: dotPath, delta } = cmd;
       if (!doc.layers[id]) break;

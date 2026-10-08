@@ -1,5 +1,6 @@
 import { getDocWorldTr, getLayerBounds } from './hit.js';
 import { docToScreen, localToScreen } from './transform.js';
+import { evalCamera } from '../../core/anim/evaluate.js';
 
 function _drawHandle(ctx, sx, sy, size = 6) {
   ctx.fillRect(sx - size / 2, sy - size / 2, size, size);
@@ -46,6 +47,28 @@ export function drawOverlay(ctx, doc, es, snapLines = [], W, H) {
     ctx.strokeStyle = 'rgba(255,255,255,0.15)';
     ctx.lineWidth = 1;
     ctx.strokeRect(p1.x, p1.y, p2.x - p1.x, p2.y - p1.y);
+    ctx.restore();
+  }
+
+  // 카메라 영역(F2-6) — cameraActive 일 때 점선 사각형으로 카메라가 담는 범위 표시.
+  if (es.cameraActive) {
+    const cam = evalCamera(doc, f);
+    const czoom = cam.zoom ?? 1;
+    const cx = docW / 2, cy = docH / 2;
+    const tx = cx * (1 - czoom) + czoom * (cam.x ?? 0);
+    const ty = cy * (1 - czoom) + czoom * (cam.y ?? 0);
+    // 카메라가 담는 doc 영역: screen=zoom*p+t ∈ [0,doc] → p ∈ [-t/zoom, (doc-t)/zoom]
+    const rx0 = -tx / czoom, ry0 = -ty / czoom;
+    const rx1 = (docW - tx) / czoom, ry1 = (docH - ty) / czoom;
+    const a = docToScreen(rx0, ry0, zoom, panX, panY, W, H, docW, docH);
+    const b = docToScreen(rx1, ry1, zoom, panX, panY, W, H, docW, docH);
+    ctx.save();
+    ctx.strokeStyle = 'var(--acc)';
+    ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--acc').trim() || '#f0a35e';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([6, 4]);
+    ctx.strokeRect(a.x, a.y, b.x - a.x, b.y - a.y);
+    ctx.setLineDash([]);
     ctx.restore();
   }
 

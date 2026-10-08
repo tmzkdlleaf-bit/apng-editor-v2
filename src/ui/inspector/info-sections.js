@@ -1,7 +1,6 @@
 // 인스펙터 — 움직이는 이미지 · 그룹 · 카메라 섹션 자리(F1-9).
 // 이번에는 "틀과 표시만"(읽기 전용 정보). 실제 편집(재생 설정·기준점·카메라 키프레임)은 F2.
 import { makeSectionShell } from './section-shell.js';
-import { cameraHasKeys } from '../timeline/rows.js';
 
 function _infoRow(label, value) {
   const row = document.createElement('div'); row.className = 'info-row';
@@ -36,32 +35,6 @@ export function createAnimSection(store, editorState) {
     );
   }
   return _wire(section, store, editorState, _refresh);
-}
-
-// ── 카메라 정보 ───────────────────────────────────────────────────────────
-// 카메라는 레이어가 아니라 문서 속성(doc.camera). 키프레임이 있을 때(타임라인 카메라 행) 표시.
-export function createCameraSection(store, editorState) {
-  const { section, body } = makeSectionShell('카메라', true);
-
-  function _refresh() {
-    const doc = store.get();
-    const show = cameraHasKeys(doc);
-    section.style.display = show ? '' : 'none';
-    if (!show) return;
-    const cam = doc.camera ?? {};
-    const kx = (cam.x?.keys ?? []).length, ky = (cam.y?.keys ?? []).length, kz = (cam.zoom?.keys ?? []).length;
-    body.textContent = '';
-    body.append(
-      _infoRow('X', `${Math.round(cam.x?.value ?? 0)}  (키 ${kx})`),
-      _infoRow('Y', `${Math.round(cam.y?.value ?? 0)}  (키 ${ky})`),
-      _infoRow('줌', `${Math.round((cam.zoom?.value ?? 1) * 100)}%  (키 ${kz})`),
-      _note('카메라 키프레임 편집은 다음 업데이트에 들어갑니다.'),
-    );
-  }
-  // 카메라는 selection 과 무관 — 문서(meta/camera) 변화에도 갱신
-  const unsubStore = store.subscribe({ any: true }, _refresh);
-  _refresh();
-  return { el: section, destroy() { unsubStore(); } };
 }
 
 function _wire(section, store, editorState, refresh) {

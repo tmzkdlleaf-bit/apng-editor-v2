@@ -7,8 +7,9 @@ import { createAdjustSection }     from './adjust-section.js';
 import { createTextSection }       from './text-section.js';
 import { createShapeSection }      from './shape-section.js';
 import { createTintSection, createMatteSection, createOutlineSection, createExitSection } from './fx-sections.js';
-import { createAnimSection, createCameraSection } from './info-sections.js';
+import { createAnimSection } from './info-sections.js';
 import { createGroupSection } from './group-section.js';
+import { createCameraSection } from './camera-section.js';
 import { createInstanceSection } from './instance-section.js';
 import { makePlaceholderSection }  from './section-shell.js';
 

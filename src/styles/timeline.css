@@ -46,6 +46,14 @@
   border: 1px solid var(--btnline); border-radius: var(--r-1); cursor: pointer;
 }
 .tl-layers-head .tl-add-btn:hover { color: var(--text); border-color: var(--line); }
+.tl-cam-btn {
+  height: 20px; padding: 0 var(--sp-2); margin-left: var(--sp-1);
+  font-size: var(--fs-1); line-height: 1;
+  background: var(--btn); color: var(--text2);
+  border: 1px solid var(--btnline); border-radius: var(--r-1); cursor: pointer;
+}
+.tl-cam-btn:hover { color: var(--text); border-color: var(--line); }
+.tl-cam-btn.is-on { background: var(--toolon); color: var(--acctext); border-color: var(--accline); }
 
 .layer-add-menu {
   position: fixed;          /* 타임라인 스크롤 영역에 안 잘리게 뷰포트 기준으로 띄움 */
