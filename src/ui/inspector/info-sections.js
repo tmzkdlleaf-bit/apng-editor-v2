@@ -38,30 +38,6 @@ export function createAnimSection(store, editorState) {
   return _wire(section, store, editorState, _refresh);
 }
 
-// ── 그룹 정보 ─────────────────────────────────────────────────────────────
-export function createGroupSection(store, editorState) {
-  const { section, body } = makeSectionShell('그룹', true);
-  const ids = () => { const doc = store.get(); return editorState.get().selection.filter((id) => doc.layers[id]?.type === 'group'); };
-
-  function _refresh() {
-    const list = ids();
-    section.style.display = list.length ? '' : 'none';
-    if (!list.length) return;
-    const doc = store.get();
-    const g = doc.layers[list[0]];
-    const n = (g.childOrder ?? []).length;
-    const ax = g.anchor?.x ?? 0.5, ay = g.anchor?.y ?? 0.5;
-    body.textContent = '';
-    body.append(
-      _infoRow('자식 수', `${n}개`),
-      _infoRow('기준점', `${Math.round(ax * 100)}% , ${Math.round(ay * 100)}%`),
-      _infoRow('컴포넌트', g.isComponent ? '예' : '아니오'),
-      _note('기준점 편집·컴포넌트화는 다음 업데이트에 들어갑니다.'),
-    );
-  }
-  return _wire(section, store, editorState, _refresh);
-}
-
 // ── 카메라 정보 ───────────────────────────────────────────────────────────
 // 카메라는 레이어가 아니라 문서 속성(doc.camera). 키프레임이 있을 때(타임라인 카메라 행) 표시.
 export function createCameraSection(store, editorState) {

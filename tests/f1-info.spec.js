@@ -25,8 +25,8 @@ test('F1-9 — 그룹 선택 → 그룹 정보(자식 수) 표시, 이미지 선
 
   const groupSec = page.locator('.inspector-section', { hasText: '그룹' });
   await expect(groupSec).toBeVisible();
-  await groupSec.locator('.inspector-section-header').first().click(); // 펼치기
-  await expect(groupSec.locator('.info-value').first()).toContainText('개'); // 자식 N개
+  // 새 그룹 섹션은 기본 펼침 — 자식 수(N개) 표시
+  await expect(groupSec.locator('.info-value').first()).toContainText('개');
 
   // 이미지 선택 → 그룹 섹션 숨김
   const imgId = await page.evaluate(() => window.__store.get().order.find((id) => window.__store.get().layers[id]?.type === 'image'));
