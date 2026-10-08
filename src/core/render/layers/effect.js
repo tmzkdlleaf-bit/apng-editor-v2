@@ -57,15 +57,35 @@ export function renderEffectLayer(outputCtx, layer, worldTr, totalAlpha, rctx) {
   }
   // scope=box: 중심 원점(0,0)에서 그림 — 블리팅 시 -ew/2 오프셋으로 중앙 정렬
 
+  // 소스 슬롯(F4-5): 효과 정의의 sources[{key}] 마다 layer.sources 에서 소스 레이어를 찾아
+  // 렌더해 전달한다. 자기 자신·조상은 UI 에서 막는다(여기선 방어적으로 건너뜀).
+  const _sourceCanvases = [];
+  const sourcesForRender = [];
+  if (Array.isArray(effect.sources) && effect.sources.length && rctx.renderMask) {
+    const map = {};
+    for (const s of (layer.sources ?? [])) { if (s && s.key) map[s.key] = s.sourceId; }
+    for (const def of effect.sources) {
+      const sid = map[def.key];
+      const src = sid ? rctx.doc.layers[sid] : null;
+      let canvas = null;
+      if (src && sid !== layer.id) {
+        canvas = rctx.renderMask(src, f, width, height, { mode: 'alpha', ignoreVisible: true });
+        if (canvas) _sourceCanvases.push(canvas);
+      }
+      sourcesForRender.push({ key: def.key, canvas });
+    }
+  }
+
   effect.render(contentCtx, {
     f,
     frameCount,
     w: ew,    // 문서 단위
     h: eh,    // 문서 단위
     rng,
-    sources: [],
+    sources: sourcesForRender,
     scale: renderScale,
   }, layer.params ?? {});
+  for (const c of _sourceCanvases) pool.release(c);
 
   const hasMask = !!(layer.mask && rctx.renderMask);
 

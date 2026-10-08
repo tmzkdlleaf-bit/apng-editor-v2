@@ -164,7 +164,8 @@ export function createRenderEngine(opts = {}) {
         if (viewOffsetX || viewOffsetY) {
           maskCtx.translate(-viewOffsetX, -viewOffsetY);
         }
-        if (sourceLayer.visible !== false) {
+        // 효과 소스 슬롯(ignoreVisible)은 숨김 레이어도 재료로 그린다.
+        if (maskOpts?.ignoreVisible || sourceLayer.visible !== false) {
           _renderLayer(maskCtx, sourceLayer, camTr, rctx);
         }
       });
