@@ -4,6 +4,8 @@
 import { initLayerList }   from './layer-list.js';
 import { initTrackCanvas } from './track-canvas.js';
 import { iconButton } from '../icons.js';
+import { createMotionRecorder } from '../motion-record.js';
+import { showToast } from '../shell/status.js';
 
 const _LOOP_MODES = [
   { mode: 'loop',     icon: 'loop',     label: '반복' },
@@ -56,8 +58,31 @@ export function initTimeline(timelineEl, store, editorState, playback, deps = {}
   const snapCanvasBtn = iconButton('magnet', { label: '캔버스 스냅', title: '캔버스 스냅 (격자·가장자리에 붙임)' });
   const snapTlBtn     = iconButton('magnet', { label: '타임라인 스냅', title: '타임라인 스냅 (키·클립을 프레임·재생선에 붙임)' });
 
+  // ── 모션 기록(F3-5) ─────────────────────────────────────────────────
+  const recBtn = document.createElement('button');
+  recBtn.className = 'tl-rec-btn';
+  recBtn.title = '모션 기록 — 재생 중 드래그한 움직임을 키로 녹화 (Esc 취소)';
+  recBtn.setAttribute('aria-label', '모션 기록');
+  recBtn.innerHTML = '<span class="tl-rec-dot"></span>';
+  const recorder = createMotionRecorder({
+    store, editorState, playback,
+    getStage: () => (typeof window !== 'undefined' ? window.__stage : null),
+  });
+  recBtn.addEventListener('click', () => {
+    if (recorder.state() !== 'idle') { recorder.cancel(); return; }
+    if (!editorState.get().selection.length) { showToast('레이어를 선택하세요.'); return; }
+    recorder.start();
+  });
+  const _recLabel = document.createElement('span'); _recLabel.className = 'tl-rec-label';
+  recBtn.appendChild(_recLabel);
+  recorder.onStateChange((st) => {
+    recBtn.classList.toggle('is-count', st === 'count');
+    recBtn.classList.toggle('is-rec', st === 'recording');
+    _recLabel.textContent = st === 'count' ? String(recorder.countLabel()) : (st === 'recording' ? '●REC' : '');
+  });
+
   const sep = () => { const s = document.createElement('span'); s.className = 'tl-sep'; return s; };
-  head.append(transport, sep(), frameWrap, sep(), loopGroup, sep(), autoKeyBtn, snapCanvasBtn, snapTlBtn);
+  head.append(transport, sep(), frameWrap, sep(), loopGroup, sep(), autoKeyBtn, snapCanvasBtn, snapTlBtn, sep(), recBtn);
 
   // 레이어 목록(머리 칸에 [+ 레이어] 포함) · 트랙 캔버스
   const layerList   = initLayerList(layersEl, store, editorState, deps);
@@ -133,6 +158,7 @@ export function initTimeline(timelineEl, store, editorState, playback, deps = {}
 
   function destroy() {
     document.removeEventListener('keydown', _onKeydown);
+    recorder.destroy();
     unsubES();
     unsubSt();
     layerList.destroy();
