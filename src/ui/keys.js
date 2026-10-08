@@ -2,6 +2,7 @@
 
 import { buildPropCmd, getStartValue } from './canvas/edit-prop.js';
 import { groupSelection, ungroupSelection } from './group-ops.js';
+import { openLoopCheck } from './loop-check.js';
 
 function _isInputFocused() {
   const el = document.activeElement;
@@ -47,6 +48,13 @@ export function initKeys(store, editorState, getDragging = () => false) {
     if (ctrl && (e.key === 'y' || e.key === 'Y' || (e.shiftKey && e.key.toLowerCase() === 'z'))) {
       e.preventDefault();
       store.redo();
+      return;
+    }
+
+    // ── 루프 검사 도구 (F4-7) Ctrl+Shift+L ──────────────────────────────
+    if (ctrl && e.shiftKey && e.key.toLowerCase() === 'l') {
+      e.preventDefault();
+      openLoopCheck(store, editorState);
       return;
     }
 

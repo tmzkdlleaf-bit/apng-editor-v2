@@ -172,6 +172,19 @@
 .mg-name { font-size: var(--fs-1); color: var(--text); text-align: center; line-height: 1.1; }
 .mg-kind { font-size: 9px; color: var(--faint); }
 
+/* 루프 검사 도구(F4-7) */
+.loopcheck-modal { position: fixed; inset: 0; z-index: 9400; background: rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; }
+.loopcheck-panel { width: 420px; max-height: 70vh; display: flex; flex-direction: column; background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-2); box-shadow: 0 12px 40px rgba(0,0,0,0.5); }
+.loopcheck-head { display: flex; align-items: center; justify-content: space-between; padding: var(--sp-3); border-bottom: 1px solid var(--line2); font-size: var(--fs-3); font-weight: 500; color: var(--text); }
+.loopcheck-close { width: 24px; height: 24px; padding: 0; background: transparent; border: none; color: var(--dim); font-size: var(--fs-4); cursor: pointer; }
+.loopcheck-close:hover { color: var(--text); }
+.loopcheck-body { overflow-y: auto; padding: var(--sp-2); }
+.loopcheck-ok { padding: var(--sp-3); color: var(--acctext); font-size: var(--fs-2); }
+.loopcheck-row { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3); width: 100%; text-align: left; padding: var(--sp-2); background: transparent; border: none; border-radius: var(--r-1); cursor: pointer; }
+.loopcheck-row:hover { background: var(--selrow); }
+.lc-name { color: var(--text); font-size: var(--fs-2); }
+.lc-diff { color: var(--danger); font-size: var(--fs-1); font-variant-numeric: tabular-nums; }
+
 /* 이펙트 갤러리(F4-1) */
 .fx-gallery { width: 340px; }
 .fx-search { width: 100%; box-sizing: border-box; margin-bottom: var(--sp-2); height: 26px;
