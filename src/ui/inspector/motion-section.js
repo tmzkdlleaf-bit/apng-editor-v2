@@ -8,6 +8,8 @@ import { getMotion } from '../../motions/registry.js';
 import { defaultParams } from '../../motions/contract.js';
 import { EASE_LABELS } from '../../core/anim/easing.js';
 import { showToast } from '../shell/status.js';
+import { straightenPath } from '../canvas/path-edit.js';
+import { motionPathKeyFrames } from '../canvas/gizmo.js';
 
 // 모션이 바꾸는 transform 속성(x/y/scale/rotation/alpha)을 샘플로 알아낸다(덮어쓰기 확인용).
 function _affectedProps(motion) {
@@ -40,6 +42,13 @@ export function createMotionSection(store, editorState) {
     openMotionGallery(addBtn, { onPick: (m) => _applyMotion(m) });
   });
   body.appendChild(addBtn);
+
+  // 경로 직선화(F3-4) — 단일 레이어에 경로 키가 3개 이상일 때
+  const straightenBtn = document.createElement('button');
+  straightenBtn.className = 'quiet sm'; straightenBtn.textContent = '경로 직선화';
+  straightenBtn.style.marginLeft = 'var(--sp-2)';
+  straightenBtn.addEventListener('click', () => { const l = ids(); if (l.length === 1) { straightenPath(store, l[0]); } });
+  body.appendChild(straightenBtn);
 
   // 클립 목록
   const listWrap = document.createElement('div'); listWrap.className = 'motion-clip-list';
@@ -180,6 +189,9 @@ export function createMotionSection(store, editorState) {
     const list = ids();
     section.style.display = list.length ? '' : 'none';
     if (!list.length) return;
+    // 경로 직선화 버튼 — 단일 레이어·경로 키 3개 이상
+    const canStraighten = list.length === 1 && motionPathKeyFrames(store.get().layers[list[0]]).length >= 3;
+    straightenBtn.style.display = canStraighten ? '' : 'none';
     // 선택 클립이 사라졌으면 해제
     const { clips } = _layerClips();
     if (_selectedClip && !clips.some((c) => c.id === _selectedClip)) _selectedClip = null;

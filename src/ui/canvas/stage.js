@@ -4,6 +4,7 @@ import { drawOverlay } from './gizmo.js';
 import { initDrag } from './drag.js';
 import { initView } from './view.js';
 import { initTextEdit } from './text-edit.js';
+import { initPathEdit } from './path-edit.js';
 import { createAssets } from '../assets.js';
 import { effects as effectsRegistry } from '../../effects/registry.js';
 import motionRegistry from '../../motions/registry.js';
@@ -248,6 +249,7 @@ export function initStage(containerEl, store, editorState) {
   const drag = initDrag(overlayCanvas, store, editorState, _onSnapLines, _onDraftMode, () => _lastRenderMs > 16, assets);
   const cleanupView = initView(containerEl, overlayCanvas, store, editorState);
   const textEdit = initTextEdit(overlayCanvas, containerEl, store, editorState, assets);
+  const pathEdit = initPathEdit(overlayCanvas, store, editorState);
 
   store.subscribe({ any: true }, () => {
     requestScene();

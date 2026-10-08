@@ -1,6 +1,15 @@
 import { getDocWorldTr, getLayerBounds } from './hit.js';
 import { docToScreen, localToScreen } from './transform.js';
 import { evalCamera } from '../../core/anim/evaluate.js';
+import { evalProp } from '../../core/anim/prop.js';
+
+// 선택 레이어의 위치 경로 점(키 있는 x 또는 y) — 보조 캔버스에 그린다. 장면 재렌더와 무관.
+export function motionPathKeyFrames(layer) {
+  const set = new Set();
+  for (const k of (layer?.transform?.x?.keys ?? [])) set.add(k.f);
+  for (const k of (layer?.transform?.y?.keys ?? [])) set.add(k.f);
+  return [...set].sort((a, b) => a - b);
+}
 
 function _drawHandle(ctx, sx, sy, size = 6) {
   ctx.fillRect(sx - size / 2, sy - size / 2, size, size);
@@ -70,6 +79,32 @@ export function drawOverlay(ctx, doc, es, snapLines = [], W, H) {
     ctx.strokeRect(a.x, a.y, b.x - a.x, b.y - a.y);
     ctx.setLineDash([]);
     ctx.restore();
+  }
+
+  // 모션 경로(F3-4) — 단일 선택 + x/y 키가 있을 때. 보조 캔버스만(장면 재렌더 없음).
+  if (selection.length === 1) {
+    const layer = doc.layers[selection[0]];
+    const keyFs = layer ? motionPathKeyFrames(layer) : [];
+    if (layer && keyFs.length >= 2) {
+      const acc = getComputedStyle(document.documentElement).getPropertyValue('--acc').trim() || '#f0a35e';
+      const px = layer.transform.x, py = layer.transform.y;
+      const toScr = (ff) => docToScreen(evalProp(px, ff), evalProp(py, ff), zoom, panX, panY, W, H, docW, docH);
+      // 점선 경로
+      ctx.save();
+      ctx.strokeStyle = acc; ctx.globalAlpha = 0.7; ctx.lineWidth = 1.5; ctx.setLineDash([4, 4]);
+      ctx.beginPath();
+      const fc2 = doc.meta.frameCount ?? 1;
+      for (let ff = 0; ff < fc2; ff++) { const s = toScr(ff); ff ? ctx.lineTo(s.x, s.y) : ctx.moveTo(s.x, s.y); }
+      ctx.stroke();
+      ctx.setLineDash([]); ctx.globalAlpha = 1;
+      // 키프레임 점(빈 원)
+      ctx.fillStyle = '#ffffff'; ctx.strokeStyle = acc; ctx.lineWidth = 1.5;
+      for (const kf of keyFs) { const s = toScr(kf); ctx.beginPath(); ctx.arc(s.x, s.y, 4, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); }
+      // 현재 프레임 점(채운 원)
+      const cur = toScr(f);
+      ctx.fillStyle = acc; ctx.beginPath(); ctx.arc(cur.x, cur.y, 5, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+    }
   }
 
   // 선택 기즈모
