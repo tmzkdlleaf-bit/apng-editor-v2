@@ -1,6 +1,8 @@
 // 타임라인 트랙 캔버스 — 키프레임, 클립, 플레이헤드, 하위 속성 행
 import { computeRows, keyedProps, TRANSFORM_PROPS } from './rows.js';
 import { EASE_LABELS } from '../../core/anim/easing.js';
+import { easeCurveSvg } from '../controls/ease-preview.js';
+import { createBezierEditor } from '../controls/bezier-editor.js';
 
 const ROW_H    = 28;  // C3: 28px
 const HEAD_H   = 24;
@@ -535,6 +537,7 @@ export function initTrackCanvas(tracksEl, layersEl, store, editorState, playback
   let _easeMenu = null;
   function _closeEaseMenu() { if (_easeMenu) { _easeMenu.remove(); _easeMenu = null; } }
 
+  let _bezier = null;
   function _showEaseMenu(clientX, clientY, targets) {
     _closeEaseMenu();
     const menu = document.createElement('div');
@@ -542,9 +545,11 @@ export function initTrackCanvas(tracksEl, layersEl, store, editorState, playback
     for (const [name, label] of Object.entries(EASE_LABELS)) {
       const item = document.createElement('button');
       item.className = 'kf-ease-item';
-      item.textContent = label;
+      // 작은 곡선 그림 + 이름
+      item.innerHTML = `<span class="kf-ease-curve">${easeCurveSvg(name)}</span><span>${label}</span>`;
       item.addEventListener('click', (ev) => {
         ev.stopPropagation();
+        if (name === 'cubicBezier') { _openBezierEditor(targets); return; }
         _applyEase(targets, name);
         _closeEaseMenu();
       });
@@ -556,13 +561,44 @@ export function initTrackCanvas(tracksEl, layersEl, store, editorState, playback
     _easeMenu = menu;
     setTimeout(() => document.addEventListener('pointerdown', _onDocDown, { once: true }), 0);
   }
+
+  // 커스텀 베지어 편집 — 그래프에서 제어점 끌기 + 숫자 입력. 바깥 클릭/적용 시 커밋.
+  function _openBezierEditor(targets) {
+    _closeEaseMenu();
+    if (_bezier) { _bezier.destroy(); _bezier.wrap.remove(); _bezier = null; }
+    const wrap = document.createElement('div');
+    wrap.className = 'kf-ease-menu bezier-popover';
+    const title = document.createElement('div'); title.className = 'bezier-title'; title.textContent = '커스텀 베지어';
+    wrap.appendChild(title);
+    const editor = createBezierEditor({
+      value: [0.25, 0.1, 0.25, 1.0],
+      onCommit: (v) => _applyEase(targets, 'cubicBezier', v),
+    });
+    wrap.appendChild(editor.el);
+    const applyBtn = document.createElement('button'); applyBtn.className = 'accent sm'; applyBtn.textContent = '적용';
+    applyBtn.addEventListener('click', (ev) => { ev.stopPropagation(); _applyEase(targets, 'cubicBezier', editor.getValue()); _closeBezier(); });
+    wrap.appendChild(applyBtn);
+    document.body.appendChild(wrap);
+    const r = { innerWidth: window.innerWidth, innerHeight: window.innerHeight };
+    wrap.style.left = Math.min(200, r.innerWidth - wrap.offsetWidth - 8) + 'px';
+    wrap.style.top  = Math.min(120, r.innerHeight - wrap.offsetHeight - 8) + 'px';
+    _bezier = { wrap, editor, destroy: editor.destroy };
+    const onDown = (e) => { if (!wrap.contains(e.target)) _closeBezier(); };
+    setTimeout(() => document.addEventListener('pointerdown', onDown, true), 0);
+    _bezier.onDown = onDown;
+  }
+  function _closeBezier() {
+    if (!_bezier) return;
+    document.removeEventListener('pointerdown', _bezier.onDown, true);
+    _bezier.editor.destroy(); _bezier.wrap.remove(); _bezier = null;
+  }
   function _onDocDown(e) {
     if (_easeMenu && !_easeMenu.contains(e.target)) _closeEaseMenu();
   }
 
-  function _applyEase(refs, ease) {
+  function _applyEase(refs, ease, bezier = null) {
     const groups = _groupByLayerPath(refs);
-    const cmds = groups.map(g => ({ type: 'setKeysEase', id: g.id, path: g.path, frames: g.frames, ease }));
+    const cmds = groups.map(g => ({ type: 'setKeysEase', id: g.id, path: g.path, frames: g.frames, ease, ...(bezier ? { bezier } : {}) }));
     if (cmds.length) store.apply(cmds.length === 1 ? cmds[0] : { type: 'batch', cmds });
   }
 

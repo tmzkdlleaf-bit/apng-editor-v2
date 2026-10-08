@@ -207,6 +207,18 @@
   cursor: pointer;
 }
 .kf-ease-item:hover { background: var(--selrow); color: var(--acc); }
+.kf-ease-item { display: flex; align-items: center; gap: var(--sp-2); }
+.kf-ease-curve { display: inline-flex; color: var(--acctext); flex: none; }
+.kf-ease-curve .ease-curve { display: block; }
+
+/* 커스텀 베지어 편집기(F3-6) */
+.bezier-popover { padding: var(--sp-2); min-width: 180px; display: flex; flex-direction: column; gap: var(--sp-2); align-items: center; }
+.bezier-title { font-size: var(--fs-2); color: var(--text2); align-self: flex-start; }
+.bezier-canvas { display: block; background: var(--input); border: 1px solid var(--line2); border-radius: var(--r-1); touch-action: none; cursor: crosshair; }
+.bezier-inputs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; width: 100%; }
+.bezier-num { width: 100%; box-sizing: border-box; font-family: var(--font-mono); font-size: var(--fs-1); text-align: center;
+  background: var(--input); color: var(--text); border: 1px solid var(--btnline); border-radius: var(--r-1); padding: 2px; }
+.bezier-num:focus-visible { outline: 2px solid var(--acc); outline-offset: 1px; }
 
 .tl-btn {
   width: 20px;

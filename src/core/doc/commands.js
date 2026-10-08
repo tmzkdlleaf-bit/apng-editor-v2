@@ -309,14 +309,20 @@ export function applyCommand(doc, cmd) {
     }
 
     case 'setKeysEase': {
-      // 지정 프레임의 키들에 이징 적용
-      const { id, path: dotPath, frames, ease } = cmd;
+      // 지정 프레임의 키들에 이징 적용. cubicBezier 면 bezier[x1,y1,x2,y2]도 저장.
+      const { id, path: dotPath, frames, ease, bezier } = cmd;
       if (!doc.layers[id] || !frames?.length) break;
       const propPath = ['layers', id, ...dotPath.split('.')];
       const prop = _get(doc, propPath);
       if (!prop?.keys) break;
       const fSet = new Set(frames);
-      const keys = prop.keys.map(k => fSet.has(k.f) ? { ...k, ease } : k);
+      const keys = prop.keys.map(k => {
+        if (!fSet.has(k.f)) return k;
+        const nk = { ...k, ease };
+        if (ease === 'cubicBezier' && Array.isArray(bezier)) nk.bezier = bezier.slice();
+        else if (ease !== 'cubicBezier' && nk.bezier) delete nk.bezier;
+        return nk;
+      });
       _pa(doc, patches, [...propPath, 'keys'], keys);
       break;
     }
