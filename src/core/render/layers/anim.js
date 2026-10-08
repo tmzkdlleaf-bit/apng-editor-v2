@@ -1,26 +1,39 @@
 import { applyAdjust, hasAdjust, applyBlur } from '../adjust.js';
 import { applyTransform } from '../matrix.js';
 import { blendToComposite } from '../blend.js';
+import { frameIndexAtTime } from '../../io/anim-decode.js';
 
-function _animSourceFrameIndex(timing, srcFrameCount, frameIndex, frameCount) {
+// 시간 기준 소스 프레임 선택 — 프레임 번호가 아니라 "누적 지연(ms)"으로 고른다.
+// 지연이 제각각인 GIF 도 문서 시각 t 에서 원본과 같은 프레임을 보인다.
+function _animSourceFrameIndex(timing, delays, frameIndex, frameCount, fps) {
+  const n = delays.length;
+  if (n <= 1) return 0;
+  const total = delays.reduce((a, b) => a + b, 0);
   const { mode = 'loop', speed = 1, offset = 0 } = timing ?? {};
-  const n = Math.max(1, srcFrameCount);
-  if (mode === 'hold')    return Math.min(n - 1, Math.max(0, Math.round(offset)));
-  if (mode === 'once')    return Math.max(0, Math.min(n - 1, Math.floor(frameIndex * speed + offset)));
+  const docMs = (frameIndex / Math.max(1, fps)) * 1000 * (speed || 1);
+
+  if (mode === 'hold') return Math.max(0, Math.min(n - 1, Math.round(offset)));
   if (mode === 'stretch') {
     const t = frameCount <= 1 ? 0 : frameIndex / (frameCount - 1);
-    return Math.max(0, Math.min(n - 1, Math.round(t * (n - 1))));
+    return frameIndexAtTime(delays, Math.min(total - 0.001, Math.max(0, t) * total));
   }
-  const idx = Math.floor(frameIndex * speed + offset);
-  return ((idx % n) + n) % n;
+  let ts;
+  if (mode === 'once') ts = Math.max(0, Math.min(total - 0.001, docMs));
+  else ts = ((docMs % total) + total) % total; // loop
+  let idx = frameIndexAtTime(delays, ts);
+  const off = Math.round(offset);
+  if (off) idx = mode === 'once' ? Math.max(0, Math.min(n - 1, idx + off)) : (((idx + off) % n) + n) % n;
+  return idx;
 }
 
 export function renderAnimLayer(outputCtx, layer, worldTr, totalAlpha, rctx) {
-  const { assets, pool, cache, width, height, viewOffsetX = 0, viewOffsetY = 0, f, frameCount } = rctx;
-  const frames = assets.getAnimFrames?.(layer.assetId);
-  if (!frames || !frames.length) return;
+  const { assets, pool, cache, width, height, viewOffsetX = 0, viewOffsetY = 0, f, frameCount, doc } = rctx;
+  const animData = assets.getAnimFrames?.(layer.assetId);
+  if (!animData || !animData.frames?.length) return;
+  const { frames, delays } = animData;
 
-  const srcIdx = _animSourceFrameIndex(layer.timing, frames.length, f, frameCount);
+  const fps = doc?.meta?.fps ?? 12;
+  const srcIdx = _animSourceFrameIndex(layer.timing, delays, f, frameCount, fps);
   const bitmap = frames[srcIdx];
   if (!bitmap) return;
 

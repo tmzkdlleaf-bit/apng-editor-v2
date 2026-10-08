@@ -4,12 +4,13 @@ import { groupSelection } from './group-ops.js';
 import { putAsset } from '../core/io/assets.js';
 import { showToast } from './shell/status.js';
 import { SHAPE_PACK, shapePreviewSvg } from './shapes-pack.js';
+import { probeAnim } from '../core/io/anim-decode.js';
 
 // AddMenu 설계: 이미지 / 움직이는 이미지 / 글자 / 도형(격자) / 이펙트 / 그룹 / 조정 / PSD
 // 이번에 안 되는 항목은 disabled + "준비 중"
 const _MENU = [
   { kind: 'image',    label: '이미지',                type: 'image' },
-  { kind: 'anim',     label: '움직이는 이미지 (GIF·APNG·WebP)', disabled: true },
+  { kind: 'anim',     label: '움직이는 이미지 (GIF·APNG·WebP)', type: 'anim' },
   { kind: 'text',     label: '글자',                  type: 'text'  },
   { group: '도형', grid: 'shapes' },
   { group: '기타' },
@@ -88,9 +89,22 @@ export function createLayerAddMenu(store, editorState, containerEl) {
     fileInput.value = '';
   });
 
+  // 움직이는 이미지 파일 입력(GIF·APNG·WebP)
+  const animInput = document.createElement('input');
+  animInput.type = 'file';
+  animInput.accept = 'image/gif,image/png,image/webp';
+  animInput.style.display = 'none';
+  animInput.addEventListener('change', () => {
+    const file = animInput.files[0];
+    if (!file) return;
+    _addAnimFile(file).catch(() => {});
+    animInput.value = '';
+  });
+
   containerEl.appendChild(btn);
   containerEl.appendChild(menu);
   document.body.appendChild(fileInput);
+  document.body.appendChild(animInput);
 
   btn.addEventListener('click', (e) => {
     e.stopPropagation();
@@ -117,6 +131,10 @@ export function createLayerAddMenu(store, editorState, containerEl) {
 
     if (item.kind === 'image') {
       fileInput.click();
+      return;
+    }
+    if (item.type === 'anim') {
+      animInput.click();
       return;
     }
 
@@ -188,7 +206,40 @@ export function createLayerAddMenu(store, editorState, containerEl) {
     editorState.set({ selection: [layer.id] });
   }
 
-  // D1: 캔버스로 끌어다 놓기 — PNG·JPG·WebP
+  // F2-1: 움직이는 이미지 추가 — 여러 프레임이면 anim 레이어, 아니면 정지 이미지로 대체.
+  async function _addAnimFile(file) {
+    const name = file.name.replace(/\.[^.]+$/, '');
+    const { id: assetId, meta } = await putAsset(file, name);
+    if (!meta.width || !meta.height) { showToast('이미지로 읽을 수 없는 파일입니다.'); return; }
+
+    const probe = await probeAnim(file).catch(() => ({ animated: false }));
+    const doc = store.get();
+    const cx = Math.round(doc.meta.width / 2), cy = Math.round(doc.meta.height / 2);
+
+    if (!probe.animated) {
+      // 정지 PNG 등 → 정지 이미지 레이어
+      const layer = createLayer('image', { name, assetId });
+      layer.transform.x.value = cx; layer.transform.y.value = cy;
+      const cmds = [];
+      if (!doc.assets?.[assetId]) cmds.push({ type: 'addAsset', id: assetId, asset: meta });
+      cmds.push({ type: 'addLayer', layer, index: doc.order.length });
+      store.apply(cmds.length === 1 ? cmds[0] : { type: 'batch', cmds });
+      editorState.set({ selection: [layer.id] });
+      return;
+    }
+
+    // 움직이는 이미지 레이어 — 소스 정보(프레임 수·지연·길이)를 에셋 메타에 담는다.
+    const animMeta = { ...meta, animated: true, frameCount: probe.frameCount, delays: probe.delays, durationMs: probe.durationMs };
+    const layer = createLayer('anim', { name, assetId });
+    layer.transform.x.value = cx; layer.transform.y.value = cy;
+    const cmds = [];
+    if (!doc.assets?.[assetId]) cmds.push({ type: 'addAsset', id: assetId, asset: animMeta });
+    cmds.push({ type: 'addLayer', layer, index: doc.order.length });
+    store.apply(cmds.length === 1 ? cmds[0] : { type: 'batch', cmds });
+    editorState.set({ selection: [layer.id] });
+  }
+
+  // D1: 캔버스로 끌어다 놓기 — PNG·JPG·WebP·GIF(움직이는 이미지 자동 판별)
   function setupDropTarget(stageEl) {
     if (!stageEl) return;
 
@@ -202,15 +253,17 @@ export function createLayerAddMenu(store, editorState, containerEl) {
     stageEl.addEventListener('drop', (e) => {
       e.preventDefault();
       const files = [...(e.dataTransfer?.files ?? [])].filter(
-        (f) => f.type === 'image/png' || f.type === 'image/jpeg' || f.type === 'image/webp'
+        (f) => f.type === 'image/png' || f.type === 'image/jpeg' || f.type === 'image/webp' || f.type === 'image/gif'
       );
-      for (const file of files) _addImageFile(file).catch(() => {});
+      // _addAnimFile 이 여러 프레임이면 anim, 아니면 정지 이미지로 분기한다.
+      for (const file of files) _addAnimFile(file).catch(() => {});
     });
   }
 
   function destroy() {
     document.removeEventListener('click', _close);
     fileInput.remove();
+    animInput.remove();
   }
 
   return { btn, menu, destroy, setupDropTarget };

@@ -1,10 +1,13 @@
 // 에셋 어댑터 — IndexedDB Blob → ImageBitmap (동기 getBitmap + 비동기 준비)
 // getBitmap은 동기 반환. 비트맵이 아직 없으면 null을 주고, 준비되면 onReady(assetId)로 알린다.
 import { getAsset } from '../core/io/assets.js';
+import { decodeAnim } from '../core/io/anim-decode.js';
 
 export function createAssets(store, onReady) {
   // assetId → ImageBitmap | null | 'pending'
   const _cache = new Map();
+  // assetId → { frames, delays } | null | 'pending' (움직이는 이미지)
+  const _animCache = new Map();
 
   function _load(assetId) {
     _cache.set(assetId, 'pending');
@@ -29,14 +32,33 @@ export function createAssets(store, onReady) {
     return null;
   }
 
-  function getAnimFrames(_assetId) {
-    // 향후 애니메이션 에셋 지원 예정
+  function _loadAnim(assetId) {
+    _animCache.set(assetId, 'pending');
+    getAsset(assetId)
+      .then((blob) => {
+        if (!blob) { _animCache.set(assetId, null); return null; }
+        return decodeAnim(blob).then((res) => {
+          _animCache.set(assetId, res); // { frames, delays } 또는 null
+          onReady?.(assetId);
+        });
+      })
+      .catch(() => { _animCache.set(assetId, null); });
+  }
+
+  // 움직이는 이미지 프레임 — { frames: ImageBitmap[], delays: number[](ms) } 또는 null(아직/실패).
+  function getAnimFrames(assetId) {
+    if (assetId == null) return null;
+    if (_animCache.has(assetId)) {
+      const v = _animCache.get(assetId);
+      return (v && v !== 'pending') ? v : null;
+    }
+    _loadAnim(assetId);
     return null;
   }
 
   function invalidate(assetId) {
-    if (assetId != null) _cache.delete(assetId);
-    else _cache.clear();
+    if (assetId != null) { _cache.delete(assetId); _animCache.delete(assetId); }
+    else { _cache.clear(); _animCache.clear(); }
   }
 
   return { getBitmap, getAnimFrames, invalidate };
