@@ -31,12 +31,19 @@ export function evalClips(layer, f, ctx, opts = {}) {
     if (!motion) continue;
 
     const cycle = rawCycle ?? length;
+    // 자르기(split)로 나뉜 조각: 위상은 start/length 를 공유하고, 활성 창만 [winStart, winEnd)로 제한한다.
+    // 기본값은 [start, start+length] → 기존 동작과 동일. 창을 나눠도 합치면 프레임별 결과가 같다.
+    const winStart = clip.winStart ?? start;
+    const winEnd   = clip.winEnd   ?? (start + length);
+    const ownsStart = winStart <= start;              // 이 조각이 시작 쪽(before hold)을 담당
+    const ownsEnd   = winEnd   >= (start + length);   // 이 조각이 끝 쪽(after hold)을 담당
 
     let t;
     if (f < start) {
-      if (hold === 'both' || hold === 'before') t = 0;
+      if ((hold === 'both' || hold === 'before') && ownsStart) t = 0;
       else continue;
     } else if (f < start + length) {
+      if (f < winStart || f >= winEnd) continue;      // 이 조각의 활성 창 밖
       if (loop) {
         const rawT = cycle > 0 ? ((f - start) % cycle) / cycle : 0;
         t = clipEase ? ease(clipEase, rawT) : rawT;
@@ -45,10 +52,10 @@ export function evalClips(layer, f, ctx, opts = {}) {
         t = clipEase ? ease(clipEase, rawT) : rawT;
       }
     } else {
-      if (seamProbe && loop && ctx.frameCount !== undefined && (start + length) >= ctx.frameCount) {
+      if (seamProbe && loop && ctx.frameCount !== undefined && (start + length) >= ctx.frameCount && ownsEnd) {
         const rawT = cycle > 0 ? ((f - start) % cycle) / cycle : 0;
         t = clipEase ? ease(clipEase, rawT) : rawT;
-      } else if (hold === 'both' || hold === 'after') {
+      } else if ((hold === 'both' || hold === 'after') && ownsEnd) {
         t = 1;
       } else {
         continue;

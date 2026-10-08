@@ -352,6 +352,38 @@ export function applyCommand(doc, cmd) {
       break;
     }
 
+    case 'splitClip': {
+      // 재생선 f 위치에서 클립을 둘로. 위상(start/length)은 공유, 활성 창만 [.,f)와 [f,.)로 나눈다.
+      const { id, clipId, f, newId: nid } = cmd;
+      const layer = doc.layers[id];
+      if (!layer) break;
+      const clips = layer.clips ?? [];
+      const clip = clips.find(c => c.id === clipId);
+      if (!clip) break;
+      const ws = clip.winStart ?? clip.start;
+      const we = clip.winEnd   ?? (clip.start + clip.length);
+      if (f <= ws || f >= we) break; // 창 밖/경계면 자르지 않음
+      const left  = { ...structuredClone(clip), winStart: ws, winEnd: f };
+      const right = { ...structuredClone(clip), id: nid ?? newId('clp_'), winStart: f, winEnd: we };
+      const next = clips.flatMap(c => c.id === clipId ? [left, right] : [c]);
+      _pa(doc, patches, ['layers', id, 'clips'], next);
+      break;
+    }
+
+    case 'duplicateClip': {
+      const { id, clipId, newId: nid } = cmd;
+      const layer = doc.layers[id];
+      if (!layer) break;
+      const clip = (layer.clips ?? []).find(c => c.id === clipId);
+      if (!clip) break;
+      const dup = structuredClone(clip);
+      dup.id = nid ?? newId('clp_');
+      dup.start = clip.start + clip.length; // 바로 뒤에
+      delete dup.winStart; delete dup.winEnd; // 복제본은 온전한 클립
+      _pa(doc, patches, ['layers', id, 'clips'], [...(layer.clips ?? []), dup]);
+      break;
+    }
+
     case 'group': {
       const { ids } = cmd;
       if (!ids.length) break;

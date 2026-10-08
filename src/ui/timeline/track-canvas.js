@@ -3,6 +3,9 @@ import { computeRows, keyedProps, TRANSFORM_PROPS } from './rows.js';
 import { EASE_LABELS } from '../../core/anim/easing.js';
 import { easeCurveSvg } from '../controls/ease-preview.js';
 import { createBezierEditor } from '../controls/bezier-editor.js';
+import motionRegistry from '../../motions/registry.js';
+
+function _motionsGet(id) { return motionRegistry.get(id); }
 
 const ROW_H    = 28;  // C3: 28px
 const HEAD_H   = 24;
@@ -135,13 +138,16 @@ export function initTrackCanvas(tracksEl, layersEl, store, editorState, playback
     if (row.kind === 'layer') {
       const layer = doc.layers[row.id];
       if (layer) {
-        // 클립 끝단
+        // 클립 끝단 → 트림, 가운데 → 몸통(선택/메뉴)
         if (layer.clips?.length) {
           for (const clip of layer.clips) {
-            const x0 = clip.start * _pxPerF;
-            const x1 = (clip.start + clip.length) * _pxPerF;
+            const ws = clip.winStart ?? clip.start;
+            const we = clip.winEnd ?? (clip.start + clip.length);
+            const x0 = ws * _pxPerF;
+            const x1 = we * _pxPerF;
             if (Math.abs(x - x0) <= CLIP_HIT) return { kind: 'clip-start', id: row.id, clipId: clip.id, origStart: clip.start, origLength: clip.length };
             if (Math.abs(x - x1) <= CLIP_HIT) return { kind: 'clip-end',   id: row.id, clipId: clip.id, origStart: clip.start, origLength: clip.length };
+            if (x > x0 && x < x1) return { kind: 'clip-body', id: row.id, clipId: clip.id };
           }
         }
         for (const f of _mergedKeyFrames(layer)) {
@@ -353,22 +359,56 @@ export function initTrackCanvas(tracksEl, layersEl, store, editorState, playback
     _deleteRefs(hit.refs);
   });
 
-  // 우클릭 → 이징 메뉴 (item 5)
+  // 우클릭 → 키프레임이면 이징 메뉴, 클립 몸통이면 클립 메뉴(F3-3)
   bodyCanvas.addEventListener('contextmenu', (e) => {
     const { x, y } = _bodyXY(e);
     const hit = _hit(x, y);
-    if (hit.kind !== 'keyframe') return;
-    e.preventDefault();
-    const es = editorState.get();
-    const selSet = _selSet(es);
-    let targets = es.kfSelection;
-    // 선택 안 된 키를 우클릭하면 그 키만 대상
-    if (!hit.refs.every(r => selSet.has(_selKey(r.id, r.path, r.f)))) {
-      targets = hit.refs;
-      editorState.set({ kfSelection: hit.refs });
+    if (hit.kind === 'keyframe') {
+      e.preventDefault();
+      const es = editorState.get();
+      const selSet = _selSet(es);
+      let targets = es.kfSelection;
+      if (!hit.refs.every(r => selSet.has(_selKey(r.id, r.path, r.f)))) {
+        targets = hit.refs;
+        editorState.set({ kfSelection: hit.refs });
+      }
+      _showEaseMenu(e.clientX, e.clientY, targets);
+    } else if (hit.kind === 'clip-body' || hit.kind === 'clip-start' || hit.kind === 'clip-end') {
+      e.preventDefault();
+      _showClipMenu(e.clientX, e.clientY, hit.id, hit.clipId);
     }
-    _showEaseMenu(e.clientX, e.clientY, targets);
   });
+
+  // ── 클립 메뉴(F3-3): 루프 토글·자르기·복제·삭제 ───────────────────────
+  let _clipMenu = null;
+  function _closeClipMenu() { if (_clipMenu) { _clipMenu.remove(); _clipMenu = null; document.removeEventListener('pointerdown', _onClipMenuDown, true); } }
+  function _onClipMenuDown(ev) { if (_clipMenu && !_clipMenu.contains(ev.target)) _closeClipMenu(); }
+  function _showClipMenu(clientX, clientY, layerId, clipId) {
+    _closeClipMenu();
+    const doc = store.get();
+    const clip = (doc.layers[layerId]?.clips ?? []).find(c => c.id === clipId);
+    if (!clip) return;
+    const f = editorState.get().f;
+    const items = [
+      [clip.loop ? '루프 끄기' : '루프 켜기', () => store.apply({ type: 'setClip', id: layerId, clipId, patch: { loop: !clip.loop } })],
+      ['재생선에서 자르기', () => store.apply({ type: 'splitClip', id: layerId, clipId, f })],
+      ['복제', () => store.apply({ type: 'duplicateClip', id: layerId, clipId })],
+      ['삭제', () => store.apply({ type: 'removeClip', id: layerId, clipId })],
+    ];
+    const menu = document.createElement('div');
+    menu.className = 'kf-ease-menu';
+    for (const [label, fn] of items) {
+      const b = document.createElement('button');
+      b.className = 'kf-ease-item'; b.textContent = label;
+      b.addEventListener('click', (ev) => { ev.stopPropagation(); _closeClipMenu(); fn(); });
+      menu.appendChild(b);
+    }
+    document.body.appendChild(menu);
+    menu.style.left = Math.min(clientX, window.innerWidth - menu.offsetWidth - 8) + 'px';
+    menu.style.top  = Math.min(clientY, window.innerHeight - menu.offsetHeight - 8) + 'px';
+    _clipMenu = menu;
+    setTimeout(() => document.addEventListener('pointerdown', _onClipMenuDown, true), 0);
+  }
 
   // ── 키프레임 조작 ─────────────────────────────────────────────────────
   function _snapKeyDelta(anchorF, delta) {
@@ -682,6 +722,7 @@ export function initTrackCanvas(tracksEl, layersEl, store, editorState, playback
     const line2     = _cssVar('--line2')   || '#2b2e33';
     const accColor  = _cssVar('--acc')     || '#f0a35e';
     const clipBg    = _cssVar('--clipbg')  || '#4a3524';
+    const clipTextColor = _cssVar('--cliptext') || '#f5d3b0';
     const selRow    = _cssVar('--selrow')  || '#2a241e';
     const dimColor  = _cssVar('--dim')     || '#9a9ea6';
 
@@ -720,11 +761,13 @@ export function initTrackCanvas(tracksEl, layersEl, store, editorState, playback
         ctx.fillRect(0, y0, totalW, ROW_H);
       }
 
-      // 클립 (레이어 행만)
+      // 클립 (레이어 행만) — 창(winStart/winEnd) 기준 막대 + 프리셋 이름 + 루프 표시
       if (row.kind === 'layer' && layer.clips?.length) {
         for (const clip of layer.clips) {
-          const x  = clip.start * _pxPerF;
-          const cw = clip.length * _pxPerF;
+          const ws = clip.winStart ?? clip.start;
+          const we = clip.winEnd ?? (clip.start + clip.length);
+          const x  = ws * _pxPerF;
+          const cw = (we - ws) * _pxPerF;
           ctx.fillStyle = clipBg;
           ctx.fillRect(x + 1, y0 + 4, cw - 2, ROW_H - 8);
           ctx.fillStyle = accColor;
@@ -732,6 +775,18 @@ export function initTrackCanvas(tracksEl, layersEl, store, editorState, playback
           ctx.fillRect(x, y0 + 4, 3, ROW_H - 8);
           ctx.fillRect(x + cw - 3, y0 + 4, 3, ROW_H - 8);
           ctx.globalAlpha = 1;
+          // 프리셋 이름 + 루프(↻)
+          const mot = _motionsGet(clip.motionId);
+          const label = (clip.loop ? '↻ ' : '') + (mot?.name ?? clip.motionId ?? '');
+          if (label && cw > 24) {
+            ctx.save();
+            ctx.beginPath(); ctx.rect(x + 4, y0, cw - 8, ROW_H); ctx.clip();
+            ctx.fillStyle = clipTextColor;
+            ctx.font = '10px ' + (_cssVar('--font-ui') || 'sans-serif');
+            ctx.textBaseline = 'middle';
+            ctx.fillText(label, x + 6, cy);
+            ctx.restore();
+          }
         }
       }
 
