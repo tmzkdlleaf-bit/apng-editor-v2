@@ -60,15 +60,16 @@ export function createLayer(type, init = {}) {
   return { id, ..._commonFields(type), ...extras, ...init };
 }
 
-// motion: { id, group, params: [{key, default}] }
-// init.length 기본값 24 (호출 측에서 doc.meta.frameCount를 넘기면 그 값)
+// motion: { id, kind, defaultLength, params: [{key, default}] }  (contract.js 참고)
+// init.length 기본값: motion.defaultLength → 24
 export function createClip(motion, init = {}) {
   const defaultParams = {};
   for (const p of (motion?.params ?? [])) {
     defaultParams[p.key] = p.default;
   }
-  const length = init.length ?? 24;
+  const length = init.length ?? motion?.defaultLength ?? 24;
   const cycle  = init.cycle  ?? length;
+  const isLoop = (motion?.kind ?? motion?.group) === 'loop';
   return {
     id:       init.id       ?? newId('clp_'),
     motionId: init.motionId ?? motion?.id ?? null,
@@ -78,7 +79,7 @@ export function createClip(motion, init = {}) {
     params:   { ...defaultParams, ...(init.params ?? {}) },
     gain:     init.gain     ?? 1,
     ease:     init.ease     ?? null,
-    loop:     init.loop     !== undefined ? init.loop : (motion?.group === 'loop'),
+    loop:     init.loop     !== undefined ? init.loop : isLoop,
     hold:     init.hold     ?? 'both',
   };
 }
