@@ -172,6 +172,12 @@
 .mg-name { font-size: var(--fs-1); color: var(--text); text-align: center; line-height: 1.1; }
 .mg-kind { font-size: 9px; color: var(--faint); }
 
+/* 이펙트 갤러리(F4-1) */
+.fx-gallery { width: 340px; }
+.fx-search { width: 100%; box-sizing: border-box; margin-bottom: var(--sp-2); height: 26px;
+  background: var(--input); color: var(--text); border: 1px solid var(--btnline); border-radius: var(--r-1); padding: 0 var(--sp-2); font-size: var(--fs-2); }
+.fx-search:focus-visible { outline: 2px solid var(--acc); outline-offset: 1px; }
+
 /* 보정 섹션(F1) */
 .adj-subtitle { font-size: var(--fs-1); color: var(--faint); margin: var(--sp-2) 0 2px; }
 .adj-advanced { margin-top: var(--sp-2); border-top: 1px solid var(--line2); padding-top: var(--sp-2); }

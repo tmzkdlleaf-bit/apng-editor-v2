@@ -5,6 +5,8 @@ import { putAsset } from '../core/io/assets.js';
 import { showToast } from './shell/status.js';
 import { SHAPE_PACK, shapePreviewSvg } from './shapes-pack.js';
 import { probeAnim } from '../core/io/anim-decode.js';
+import { openEffectGallery } from './effect-gallery.js';
+import { getEffect } from '../effects/registry.js';
 
 // AddMenu 설계: 이미지 / 움직이는 이미지 / 글자 / 도형(격자) / 이펙트 / 그룹 / 조정 / PSD
 // 이번에 안 되는 항목은 disabled + "준비 중"
@@ -14,7 +16,7 @@ const _MENU = [
   { kind: 'text',     label: '글자',                  type: 'text'  },
   { group: '도형', grid: 'shapes' },
   { group: '기타' },
-  { kind: 'effect',   label: '이펙트',   disabled: true },
+  { kind: 'effect',   label: '이펙트',   type: 'effect' },
   { kind: 'group',    label: '그룹',     type: 'group' },
   { kind: 'adjust',   label: '조정',     type: 'adjust' },
   { kind: 'psd',      label: 'PSD',      disabled: true },
@@ -137,6 +139,10 @@ export function createLayerAddMenu(store, editorState, containerEl) {
       animInput.click();
       return;
     }
+    if (item.type === 'effect') {
+      openEffectGallery(btn, { onPick: (effect) => _addEffect(effect) });
+      return;
+    }
 
     // 그룹: 선택이 있으면 그것으로 묶고, 없으면 빈 그룹 추가
     if (item.type === 'group') {
@@ -169,6 +175,20 @@ export function createLayerAddMenu(store, editorState, containerEl) {
     const topIndex = doc.order.length;
     store.apply({ type: 'addLayer', layer, index: topIndex });
     editorState.set({ selection: [layer.id] });
+  }
+
+  // 이펙트 추가(F4-1) — 기본 파라미터로 효과 레이어 생성(화면 전체).
+  function _addEffect(effect) {
+    const doc = store.get();
+    const params = {};
+    for (const p of (effect.params ?? [])) params[p.key] = p.default;
+    const layer = createLayer('effect', { name: effect.name.replace(/^\[시험\]\s*/, ''), effectId: effect.id });
+    layer.params = params;
+    layer.seed = Math.floor(Math.random() * 1e6);
+    layer.transform.x.value = 0; layer.transform.y.value = 0;
+    store.apply({ type: 'addLayer', layer, index: doc.order.length });
+    editorState.set({ selection: [layer.id] });
+    return layer.id;
   }
 
   // 도형 격자에서 고른 도형을 중앙에 추가

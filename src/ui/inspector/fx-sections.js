@@ -11,7 +11,7 @@ import { screenToDoc } from '../canvas/transform.js';
 
 // 렌더가 각 효과를 처리하는 레이어 타입.
 const TINT_TYPES    = new Set(['image', 'anim']);
-const MATTE_TYPES   = new Set(['image', 'anim', 'shape', 'text']);
+const MATTE_TYPES   = new Set(['image', 'anim', 'shape', 'text', 'effect']);
 const OUTLINE_TYPES = new Set(['image']); // 렌더는 image 만(anim/shape/text는 자체 획으로 — 보고 참고)
 const EXIT_TYPES    = new Set(['image']);
 
