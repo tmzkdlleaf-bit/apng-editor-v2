@@ -11,6 +11,7 @@ import { createAnimSection } from './info-sections.js';
 import { createGroupSection } from './group-section.js';
 import { createCameraSection } from './camera-section.js';
 import { createInstanceSection } from './instance-section.js';
+import { createMotionSection } from './motion-section.js';
 import { makePlaceholderSection }  from './section-shell.js';
 
 const _TYPE_KO = {
@@ -43,7 +44,7 @@ export function initInspector(containerEl, store, editorState, getStageDeps = nu
 
   // 섹션 (순서 고정)
   const layout     = createLayoutSection(store, editorState);        // 배치
-  const motion     = makePlaceholderSection('움직임', '프리셋 모션 · 클립 — 준비 중');
+  const motion     = createMotionSection(store, editorState);        // 움직임(F3)
   const appearance = createAppearanceSection(store, editorState);    // 모습
   const shape      = createShapeSection(store, editorState);         // 도형(F1)
   const text       = createTextSection(store, editorState);          // 글자(F1)

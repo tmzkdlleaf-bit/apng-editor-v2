@@ -12,21 +12,21 @@ async function openAppWithLayer(page) {
   await page.waitForTimeout(100);
 }
 
-test('U0-6 — "준비 중" 섹션: 펼치면 안내 한 줄 + 항목명', async ({ page }) => {
+// 참고: 인스펙터의 "준비 중" placeholder 섹션은 F1~F3 에서 모두 실제 구현으로 대체되어
+// 더 이상 없다. makePlaceholderSection 컴포넌트 자체(펼침 안내·섹션 머리 버튼)를 검증한다.
+test('U0-6 — placeholder 섹션: 펼치면 안내 한 줄 + 섹션 머리 버튼', async ({ page }) => {
   await openAppWithLayer(page);
-  // 접힌 placeholder 섹션(보정 등) 찾기
-  const r = await page.evaluate(() => {
-    const secs = [...document.querySelectorAll('.inspector-section')];
-    const ph = secs.find((s) => s.querySelector('.inspector-soon'));
-    if (!ph) return { found: false };
-    const header = ph.querySelector('.inspector-section-header');
-    const wasCollapsed = ph.classList.contains('collapsed');
+  const r = await page.evaluate(async () => {
+    const { makePlaceholderSection } = await import('/src/ui/inspector/section-shell.js');
+    const { el } = makePlaceholderSection('테스트', '아직 안 됨 — 예시');
+    document.body.appendChild(el);
+    const header = el.querySelector('.inspector-section-header');
+    const wasCollapsed = el.classList.contains('collapsed');
     header.click(); // 펼치기
-    const msg = ph.querySelector('.inspector-soon-msg')?.textContent ?? '';
-    const visible = getComputedStyle(ph.querySelector('.inspector-section-body')).display !== 'none';
-    return { found: true, wasCollapsed, msg, visible, role: header.getAttribute('role') };
+    const msg = el.querySelector('.inspector-soon-msg')?.textContent ?? '';
+    const visible = getComputedStyle(el.querySelector('.inspector-section-body')).display !== 'none';
+    return { wasCollapsed, msg, visible, role: header.getAttribute('role') };
   });
-  expect(r.found).toBe(true);
   expect(r.wasCollapsed).toBe(true);
   expect(r.msg).toContain('다음 업데이트');
   expect(r.visible).toBe(true);
