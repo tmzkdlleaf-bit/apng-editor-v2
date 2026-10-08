@@ -1,3 +1,5 @@
+import { iconMarkup } from '../icons.js';
+
 const ZOOM_MIN = 0.1;
 const ZOOM_MAX = 16;
 const ZOOM_STEPS = [0.1, 0.125, 0.167, 0.25, 0.333, 0.5, 0.667, 1, 1.5, 2, 3, 4, 6, 8, 12, 16];
@@ -33,10 +35,20 @@ export function initView(containerEl, overlayCanvas, store, editorState) {
   const toolWrap = document.createElement('div');
   toolWrap.className = 'stage-tools';
   toolWrap.innerHTML = `
-    <button data-tool="select" title="선택 (V)" class="active">V</button>
-    <button data-tool="hand"   title="손 도구 (H)">H</button>
+    <button data-tool="select" title="옮기기 (V)" aria-label="옮기기" class="active">${iconMarkup('select-tool')}</button>
+    <button data-tool="edit"   title="편집 — 경로·기준점 (E)" aria-label="편집">${iconMarkup('tool-edit')}</button>
+    <button data-tool="motion" title="움직이기 — 모션 기록·배치 (P)" aria-label="움직이기">${iconMarkup('tool-motion')}</button>
+    <button data-tool="hand"   title="손 도구 (H)" aria-label="손">${iconMarkup('hand')}</button>
   `;
   containerEl.appendChild(toolWrap);
+
+  // 도구별 커서
+  function _cursorFor(tool) {
+    if (tool === 'hand') return 'grab';
+    if (tool === 'edit') return 'crosshair';
+    if (tool === 'motion') return 'cell';
+    return '';
+  }
 
   function _updateZoomEl() {
     const { zoom } = editorState.get();
@@ -162,7 +174,7 @@ export function initView(containerEl, overlayCanvas, store, editorState) {
     toolWrap.querySelectorAll('[data-tool]').forEach(b => {
       b.classList.toggle('active', b.dataset.tool === tool);
     });
-    overlayCanvas.style.cursor = tool === 'hand' ? 'grab' : '';
+    overlayCanvas.style.cursor = _cursorFor(tool);
   });
 
   editorState.subscribe((patch) => {
@@ -171,7 +183,7 @@ export function initView(containerEl, overlayCanvas, store, editorState) {
       toolWrap.querySelectorAll('[data-tool]').forEach(b => {
         b.classList.toggle('active', b.dataset.tool === patch.tool);
       });
-      overlayCanvas.style.cursor = patch.tool === 'hand' ? 'grab' : '';
+      overlayCanvas.style.cursor = _cursorFor(patch.tool);
     }
   });
 

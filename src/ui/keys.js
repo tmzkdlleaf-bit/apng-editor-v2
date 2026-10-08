@@ -105,8 +105,10 @@ export function initKeys(store, editorState, getDragging = () => false) {
       return;
     }
 
-    // ── 도구 전환 ──────────────────────────────────────────────────────
+    // ── 도구 전환 (V 옮기기 · E 편집 · P 움직이기 · H 손) ────────────────
     if (!ctrl && e.key.toLowerCase() === 'v') { editorState.set({ tool: 'select' }); return; }
+    if (!ctrl && e.key.toLowerCase() === 'e') { editorState.set({ tool: 'edit' });   return; }
+    if (!ctrl && e.key.toLowerCase() === 'p') { editorState.set({ tool: 'motion' }); return; }
     if (!ctrl && e.key.toLowerCase() === 'h') { editorState.set({ tool: 'hand' });   return; }
 
     // ── 그리드 토글 ────────────────────────────────────────────────────
