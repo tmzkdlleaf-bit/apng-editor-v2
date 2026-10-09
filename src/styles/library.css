@@ -20,6 +20,32 @@
 .lib-btn:hover { color: var(--text); border-color: var(--line); }
 .lib-btn.lib-danger:hover { color: var(--danger); border-color: var(--danger); }
 
+/* 도움말·단축키(F5-4) */
+.help-modal { position: fixed; inset: 0; z-index: 9500; background: rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; }
+.help-panel { width: 460px; max-height: 76vh; display: flex; flex-direction: column; background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-2); box-shadow: 0 12px 40px rgba(0,0,0,0.5); }
+.help-head { display: flex; align-items: center; justify-content: space-between; padding: var(--sp-3); border-bottom: 1px solid var(--line2); }
+.help-title { font-size: var(--fs-4); font-weight: 600; color: var(--text); }
+.help-close { width: 28px; height: 28px; padding: 0; background: transparent; border: none; color: var(--dim); font-size: var(--fs-5); cursor: pointer; }
+.help-close:hover { color: var(--text); }
+.help-tools { display: flex; gap: var(--sp-2); padding: var(--sp-3); border-bottom: 1px solid var(--line2); }
+.help-search { flex: 1; height: 28px; background: var(--input); color: var(--text); border: 1px solid var(--btnline); border-radius: var(--r-1); padding: 0 var(--sp-2); font-size: var(--fs-2); }
+.help-search:focus-visible { outline: 2px solid var(--acc); outline-offset: 1px; }
+.help-list { overflow-y: auto; padding: var(--sp-2) var(--sp-3); }
+.help-cat { font-size: var(--fs-1); color: var(--faint); margin: var(--sp-2) 0 2px; }
+.help-row { display: flex; align-items: center; gap: var(--sp-3); padding: 3px 0; }
+.help-keys { display: flex; gap: 3px; flex: none; min-width: 120px; }
+.help-keys kbd { font-family: var(--font-mono); font-size: var(--fs-1); background: var(--btn); border: 1px solid var(--btnline); border-bottom-width: 2px; border-radius: var(--r-1); padding: 1px 6px; color: var(--text); }
+.help-label { font-size: var(--fs-2); color: var(--text2); }
+.help-empty { color: var(--dim); padding: var(--sp-3); }
+
+/* 처음 사용 안내(F5-4) */
+.onboard-overlay { position: fixed; inset: 0; z-index: 9700; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; }
+.onboard-bubble { width: 360px; background: var(--panel); border: 1px solid var(--acc); border-radius: var(--r-3); box-shadow: 0 12px 40px rgba(0,0,0,0.5); padding: var(--sp-4); display: flex; flex-direction: column; gap: var(--sp-2); }
+.onboard-step { font-size: var(--fs-1); color: var(--acctext); }
+.onboard-title { font-size: var(--fs-4); font-weight: 600; color: var(--text); }
+.onboard-body { font-size: var(--fs-2); color: var(--text2); line-height: 1.5; }
+.onboard-btns { display: flex; justify-content: space-between; margin-top: var(--sp-2); }
+
 /* 새 프로젝트 다이얼로그 */
 .newproj-dialog { position: fixed; inset: 0; z-index: 9600; background: rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; }
 .newproj-box { width: 440px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-2); box-shadow: 0 12px 40px rgba(0,0,0,0.5); padding: var(--sp-4); display: flex; flex-direction: column; gap: var(--sp-3); }

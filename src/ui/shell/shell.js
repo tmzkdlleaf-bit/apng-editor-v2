@@ -9,6 +9,7 @@ import { startUpdateCheck } from '../update-banner.js';
 import { isDesktop }      from '../../platform/index.js';
 import { iconMarkup } from '../icons.js';
 import { openLibrary } from '../library.js';
+import { openHelp, startOnboarding, maybeStartOnboarding } from '../help.js';
 
 const TL_KEY     = 'apng2.timelineHeight';
 const TL_DEFAULT = 340;
@@ -91,6 +92,11 @@ export function init(store, editorState, projectApi = null) {
   }
   _updateThemeBtn();
   themeBtn.addEventListener('click', () => { toggleTheme(); _updateThemeBtn(); });
+
+  // 도움말(F5-4) — 단축키 안내 + 처음 안내 다시 보기
+  app.querySelector('[data-action="help"]')?.addEventListener('click', () => openHelp(() => startOnboarding()));
+  // 첫 실행이면 처음 안내(데모 모드 제외)
+  if (projectApi) { try { maybeStartOnboarding(); } catch {} }
 
   // 되돌리기 / 다시하기 버튼
   const undoBtn = app.querySelector('[data-action="undo"]');
