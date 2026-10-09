@@ -8,6 +8,7 @@ import { initExport }     from '../export/index.js';
 import { startUpdateCheck } from '../update-banner.js';
 import { isDesktop }      from '../../platform/index.js';
 import { iconMarkup } from '../icons.js';
+import { openLibrary } from '../library.js';
 
 const TL_KEY     = 'apng2.timelineHeight';
 const TL_DEFAULT = 340;
@@ -263,7 +264,7 @@ export function init(store, editorState, projectApi = null) {
     menu.className = 'project-menu';
     menu.style.display = 'none';
     menu.innerHTML = `
-      <button data-act="new">새 프로젝트</button>
+      <button data-act="library">프로젝트 목록 · 새 프로젝트</button>
       <button data-act="export">파일로 내보내기</button>
       <button data-act="import">파일 불러오기</button>
     `;
@@ -283,7 +284,7 @@ export function init(store, editorState, projectApi = null) {
       const act = e.target?.dataset?.act;
       if (!act) return;
       _closeProjMenu();
-      if (act === 'new')    projectApi.newProject?.();
+      if (act === 'library') openLibrary(projectApi, { currentId: projectApi.getId?.() });
       else if (act === 'export') projectApi.exportFile?.();
       else if (act === 'import') { if (isDesktop()) projectApi.openProject?.(); else projFile.click(); }
     });

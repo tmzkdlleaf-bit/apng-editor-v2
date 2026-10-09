@@ -3,8 +3,9 @@ import { init as initShell } from './ui/shell/shell.js';
 import { createStore } from './core/doc/store.js';
 import { createDoc } from './core/doc/schema.js';
 import { createEditorState } from './ui/editor-state.js';
-import { getProject, putProject } from './core/io/idb.js';
+import { getProject, putProject, listProjects, deleteProject as idbDeleteProject } from './core/io/idb.js';
 import { purgeOrphanAssets } from './core/io/assets.js';
+import { createProjectFromTemplate } from './ui/templates.js';
 import { migrate } from './core/io/migrate.js';
 import { buildProjectFile, importProjectFile } from './core/io/project-file.js';
 import { createAutosave } from './core/io/autosave.js';
@@ -67,7 +68,7 @@ const projectApi = {
   getName: () => projectName,
   getId:   () => projectId,
   // 전환 후 새로고침. 테스트에서 바꿔 끼울 수 있게 주입형으로 둔다(location.reload 덮어쓰기는 일부 브라우저에서 막힘).
-  reload: () => location.reload(),
+  reload: () => { if (typeof window !== 'undefined' && window.__noReload) return; location.reload(); },
   async newProject() {
     // 전환 전에 현재 프로젝트의 미저장 변경을 먼저 기록한다(썸네일은 생략).
     if (autosave) { try { await autosave.flush({ withThumb: false }); } catch {} }
@@ -103,6 +104,55 @@ const projectApi = {
       const name = String(r.path ?? '').split(/[\\/]/).pop() || '불러온 프로젝트';
       await _importFromText(r.text, name);
     } catch (err) { showToast('파일을 불러올 수 없습니다: ' + (err?.message ?? '형식 오류')); }
+  },
+
+  // ── 프로젝트 목록(F5-2) ──────────────────────────────────────────────
+  async listProjects() {
+    try { return (await listProjects()).map((p) => ({ id: p.id, name: p.name, updatedAt: p.updatedAt ?? 0, thumb: p.thumb ?? null })); }
+    catch { return []; }
+  },
+  async openProjectById(id) {
+    if (id === projectId) return;
+    if (autosave) { try { await autosave.flush({ withThumb: false }); } catch {} }
+    const rec = await getProject(id);
+    if (!rec) { showToast('프로젝트를 찾을 수 없습니다.'); return; }
+    _setCurrentId(id);
+    projectApi.reload();
+  },
+  // 새 프로젝트(템플릿·프리셋) — 전환+새로고침.
+  async newProjectFromTemplate(templateKey = 'empty', presetKey = 'ccfolia-cutin') {
+    if (autosave) { try { await autosave.flush({ withThumb: false }); } catch {} }
+    const id = _genId();
+    const doc = createProjectFromTemplate(templateKey, presetKey);
+    await putProject({ id, name: '새 프로젝트', doc, updatedAt: Date.now() });
+    _setCurrentId(id);
+    projectApi.reload();
+  },
+  // 복제 — 독립 문서(깊은 복사), 전환하지 않음.
+  async duplicateProject(id) {
+    const rec = await getProject(id);
+    if (!rec) return null;
+    const nid = _genId();
+    const doc = JSON.parse(JSON.stringify(rec.doc));
+    await putProject({ id: nid, name: (rec.name || '프로젝트') + ' 복사', doc, updatedAt: Date.now(), thumb: rec.thumb ?? null });
+    return nid;
+  },
+  async renameProject(id, name) {
+    const rec = await getProject(id);
+    if (!rec) return;
+    await putProject({ ...rec, name, updatedAt: Date.now() });
+    if (id === projectId) { projectName = name; shell?.setProjectName?.(name); } // 내보내기 파일 이름도 따라감(exportFile 이 projectName 사용)
+  },
+  async deleteProject(id) {
+    await idbDeleteProject(id);
+    try { await purgeOrphanAssets(); } catch {}
+    if (id === projectId) {
+      // 현재를 지웠으면 다른 프로젝트로, 없으면 새로.
+      const rest = (await listProjects()).filter((p) => p.id !== id);
+      if (rest.length) { _setCurrentId(rest.sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0))[0].id); }
+      else { const nid = _genId(); await putProject({ id: nid, name: '새 프로젝트', doc: createDoc(), updatedAt: Date.now() }); _setCurrentId(nid); }
+      projectApi.reload();
+    }
   },
 };
 
