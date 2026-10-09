@@ -7,6 +7,7 @@ import { SHAPE_PACK, shapePreviewSvg } from './shapes-pack.js';
 import { probeAnim } from '../core/io/anim-decode.js';
 import { openEffectGallery } from './effect-gallery.js';
 import { getEffect } from '../effects/registry.js';
+import { importPsdFile } from './psd-import.js';
 
 // AddMenu 설계: 이미지 / 움직이는 이미지 / 글자 / 도형(격자) / 이펙트 / 그룹 / 조정 / PSD
 // 이번에 안 되는 항목은 disabled + "준비 중"
@@ -19,7 +20,7 @@ const _MENU = [
   { kind: 'effect',   label: '이펙트',   type: 'effect' },
   { kind: 'group',    label: '그룹',     type: 'group' },
   { kind: 'adjust',   label: '조정',     type: 'adjust' },
-  { kind: 'psd',      label: 'PSD',      disabled: true },
+  { kind: 'psd',      label: 'PSD 가져오기', type: 'psd' },
 ];
 
 export function createLayerAddMenu(store, editorState, containerEl) {
@@ -103,10 +104,24 @@ export function createLayerAddMenu(store, editorState, containerEl) {
     animInput.value = '';
   });
 
+  // PSD 파일 입력
+  const psdInput = document.createElement('input');
+  psdInput.type = 'file';
+  psdInput.accept = '.psd,image/vnd.adobe.photoshop';
+  psdInput.style.display = 'none';
+  psdInput.addEventListener('change', () => {
+    const file = psdInput.files[0];
+    if (!file) return;
+    showToast('PSD 를 분석하는 중...');
+    importPsdFile(file, store, editorState).catch(() => showToast('PSD 를 불러올 수 없습니다.'));
+    psdInput.value = '';
+  });
+
   containerEl.appendChild(btn);
   containerEl.appendChild(menu);
   document.body.appendChild(fileInput);
   document.body.appendChild(animInput);
+  document.body.appendChild(psdInput);
 
   btn.addEventListener('click', (e) => {
     e.stopPropagation();
@@ -137,6 +152,10 @@ export function createLayerAddMenu(store, editorState, containerEl) {
     }
     if (item.type === 'anim') {
       animInput.click();
+      return;
+    }
+    if (item.kind === 'psd') {
+      psdInput.click();
       return;
     }
     if (item.type === 'effect') {
@@ -284,6 +303,7 @@ export function createLayerAddMenu(store, editorState, containerEl) {
     document.removeEventListener('click', _close);
     fileInput.remove();
     animInput.remove();
+    psdInput.remove();
   }
 
   return { btn, menu, destroy, setupDropTarget };

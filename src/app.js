@@ -223,3 +223,4 @@ window.__store       = store;
 window.__editorState = editorState;
 window.__stage       = stage;
 window.__playback    = playback;
+window.__importPsd   = (file, opts) => import('./ui/psd-import.js').then((m) => m.importPsdFile(file, store, editorState, opts));
