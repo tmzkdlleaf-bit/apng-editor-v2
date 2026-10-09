@@ -10,7 +10,7 @@ import { migrate } from './core/io/migrate.js';
 import { buildProjectFile, importProjectFile } from './core/io/project-file.js';
 import { createAutosave } from './core/io/autosave.js';
 import { showToast } from './ui/shell/status.js';
-import { saveFile, openProjectFile } from './platform/index.js';
+import { saveFile, openProjectFile, isDesktop } from './platform/index.js';
 
 const CUR_KEY = 'apng2.currentProject';
 
@@ -185,6 +185,37 @@ if (!isDemo) {
   });
   window.__autosave = autosave;
   window.__project  = projectApi;
+}
+
+// ── 오프라인 설치(PWA, F5-5) ──────────────────────────────────────────────
+// 데스크톱 앱(Tauri)에서는 서비스 워커를 등록하지 않는다.
+if (!isDemo && !isDesktop() && typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+  let _refreshed = false;
+  navigator.serviceWorker.register('./sw.js').then((reg) => {
+    // 새 버전(대기 중 워커)이 있으면 상단에 "새로고침하면 새 버전" 안내.
+    function _offerUpdate(worker) {
+      if (!worker) return;
+      worker.addEventListener('statechange', () => {
+        if (worker.state === 'installed' && navigator.serviceWorker.controller) _showUpdateBar(worker);
+      });
+    }
+    if (reg.waiting && navigator.serviceWorker.controller) _showUpdateBar(reg.waiting);
+    reg.addEventListener('updatefound', () => _offerUpdate(reg.installing));
+  }).catch(() => {});
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (_refreshed || (typeof window !== 'undefined' && window.__noReload)) return;
+    _refreshed = true; location.reload();
+  });
+  function _showUpdateBar(worker) {
+    if (document.querySelector('.pwa-update-bar')) return;
+    const bar = document.createElement('div');
+    bar.className = 'pwa-update-bar';
+    bar.innerHTML = '<span>새 버전이 있습니다.</span>';
+    const btn = document.createElement('button'); btn.className = 'accent sm'; btn.textContent = '새로고침';
+    btn.addEventListener('click', () => { worker.postMessage({ type: 'skip-waiting' }); });
+    bar.appendChild(btn);
+    document.body.appendChild(bar);
+  }
 }
 
 // 테스트/디버그 전역
