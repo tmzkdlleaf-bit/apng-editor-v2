@@ -191,6 +191,7 @@ if (!isDemo) {
 // 데스크톱 앱(Tauri)에서는 서비스 워커를 등록하지 않는다.
 if (!isDemo && !isDesktop() && typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
   let _refreshed = false;
+  let _updating  = false; // 사용자가 "새로고침"을 눌러 새 버전으로 교체 중일 때만 true
   navigator.serviceWorker.register('./sw.js').then((reg) => {
     // 새 버전(대기 중 워커)이 있으면 상단에 "새로고침하면 새 버전" 안내.
     function _offerUpdate(worker) {
@@ -202,8 +203,10 @@ if (!isDemo && !isDesktop() && typeof navigator !== 'undefined' && 'serviceWorke
     if (reg.waiting && navigator.serviceWorker.controller) _showUpdateBar(reg.waiting);
     reg.addEventListener('updatefound', () => _offerUpdate(reg.installing));
   }).catch(() => {});
+  // controllerchange 는 (1) 최초 설치 시 claim, (2) 새 버전 교체 두 경우에 모두 발생한다.
+  // 최초 설치(1)에서는 새로고침하면 안 된다. 사용자가 새 버전 적용을 요청(_updating)했을 때만 reload.
   navigator.serviceWorker.addEventListener('controllerchange', () => {
-    if (_refreshed || (typeof window !== 'undefined' && window.__noReload)) return;
+    if (_refreshed || !_updating || (typeof window !== 'undefined' && window.__noReload)) return;
     _refreshed = true; location.reload();
   });
   function _showUpdateBar(worker) {
@@ -212,7 +215,7 @@ if (!isDemo && !isDesktop() && typeof navigator !== 'undefined' && 'serviceWorke
     bar.className = 'pwa-update-bar';
     bar.innerHTML = '<span>새 버전이 있습니다.</span>';
     const btn = document.createElement('button'); btn.className = 'accent sm'; btn.textContent = '새로고침';
-    btn.addEventListener('click', () => { worker.postMessage({ type: 'skip-waiting' }); });
+    btn.addEventListener('click', () => { _updating = true; worker.postMessage({ type: 'skip-waiting' }); });
     bar.appendChild(btn);
     document.body.appendChild(bar);
   }

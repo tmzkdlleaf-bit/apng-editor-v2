@@ -45,8 +45,9 @@
 .help-empty { color: var(--dim); padding: var(--sp-3); }
 
 /* 처음 사용 안내(F5-4) */
-.onboard-overlay { position: fixed; inset: 0; z-index: 9700; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; }
-.onboard-bubble { width: 360px; background: var(--panel); border: 1px solid var(--acc); border-radius: var(--r-3); box-shadow: 0 12px 40px rgba(0,0,0,0.5); padding: var(--sp-4); display: flex; flex-direction: column; gap: var(--sp-2); }
+/* 백드롭은 클릭을 가로채지 않는다(안내 중에도 에디터를 쓸 수 있게). 버블만 상호작용. */
+.onboard-overlay { position: fixed; inset: 0; z-index: 9700; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; pointer-events: none; }
+.onboard-bubble { width: 360px; background: var(--panel); border: 1px solid var(--acc); border-radius: var(--r-3); box-shadow: 0 12px 40px rgba(0,0,0,0.5); padding: var(--sp-4); display: flex; flex-direction: column; gap: var(--sp-2); pointer-events: auto; }
 .onboard-step { font-size: var(--fs-1); color: var(--acctext); }
 .onboard-title { font-size: var(--fs-4); font-weight: 600; color: var(--text); }
 .onboard-body { font-size: var(--fs-2); color: var(--text2); line-height: 1.5; }
