@@ -33,6 +33,10 @@
 .tl-rec-btn.is-count .tl-rec-dot, .tl-rec-btn.is-rec .tl-rec-dot { animation: tl-rec-blink 0.6s steps(2) infinite; }
 .tl-rec-btn.is-rec { border-color: var(--danger); }
 .tl-rec-label { font-size: var(--fs-1); color: var(--danger); font-variant-numeric: tabular-nums; }
+
+/* 스냅 버튼: 켜지면 색뿐 아니라 아이콘의 점·막대가 채워져 모양으로도 구분된다. (item 6) */
+.tl-snap-btn.is-on .icon circle,
+.tl-snap-btn.is-on .icon rect { fill: currentColor; stroke: none; }
 @keyframes tl-rec-blink { 50% { opacity: 0.2; } }
 
 /* ── 레이어 목록 머리 칸(item 2): 트랙 눈금자(24px)와 높이 맞춤, sticky 고정 ── */
@@ -247,16 +251,21 @@
 }
 
 .tl-btn:hover { color: var(--text); background: var(--btn); }
-.tl-btn.tl-hidden { opacity: 0.4; }
+.tl-btn.tl-hidden { opacity: 0.55; color: var(--dim); }
 .tl-btn.tl-locked { color: var(--acc); }
+.tl-btn .icon { width: 15px; height: 15px; }
+
+/* U0-3: 표시·열림(기본) 상태 버튼은 행에 올렸을 때만 보인다. 숨김·잠김은 항상 보인다. */
+.tl-row .tl-btn.tl-hover-only { visibility: hidden; }
+.tl-row:hover .tl-btn.tl-hover-only { visibility: visible; }
 
 .tl-type {
-  font-size: var(--fs-1);
   color: var(--faint);
-  width: 16px;
-  text-align: center;
+  width: 18px; height: 18px;
+  display: inline-flex; align-items: center; justify-content: center;
   flex-shrink: 0;
 }
+.tl-type .icon { width: 15px; height: 15px; }
 
 /* 행 우클릭 메뉴(F2-8) */
 .row-menu {
@@ -284,6 +293,8 @@
   background: var(--input);
 }
 .tl-thumb-canvas { width: 20px; height: 20px; display: block; object-fit: contain; }
+.tl-thumb-icon { color: var(--faint); }
+.tl-thumb-icon .icon { width: 14px; height: 14px; }
 
 .tl-name {
   flex: 1;

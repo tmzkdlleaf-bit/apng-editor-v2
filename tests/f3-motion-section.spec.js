@@ -20,11 +20,11 @@ test('F3-2 — 모션 추가 갤러리 → 적용 시 클립 1개·기록 1건',
   const depth0 = await page.evaluate(() => window.__store.undoDepth?.() ?? -1);
 
   await motionSec(page).getByText('+ 모션 추가').click();
-  await expect(page.locator('.motion-gallery')).toBeVisible();
-  const cards = page.locator('.motion-gallery .mg-card');
+  await expect(page.locator('.gallery-panel')).toBeVisible();
+  const cards = page.locator('.gallery-grid .gallery-card');
   expect(await cards.count()).toBeGreaterThanOrEqual(3);
-  // '위아래 둥실' 카드 클릭
-  await page.locator('.mg-card[data-motion="test-float"]').click();
+  // '위아래 둥실' 카드 더블클릭 → 적용
+  await page.locator('.gallery-card[data-id="test-float"]').dblclick();
 
   const clips = await page.evaluate((i) => window.__store.get().layers[i].clips, id);
   expect(clips.length).toBe(1);
@@ -46,7 +46,7 @@ test('F3-2 — 덮어쓰기 확인: 키 있는 속성에 적용 → 확인창, �
   page.on('dialog', (d) => d.dismiss());
   const before = await page.evaluate((i) => (window.__store.get().layers[i].clips ?? []).length, id);
   await motionSec(page).getByText('+ 모션 추가').click();
-  await page.locator('.mg-card[data-motion="test-float"]').click(); // y 를 바꾸는 모션 → 확인창
+  await page.locator('.gallery-card[data-id="test-float"]').dblclick(); // y 를 바꾸는 모션 → 확인창
   await page.waitForTimeout(100);
   const after = await page.evaluate((i) => (window.__store.get().layers[i].clips ?? []).length, id);
   expect(after).toBe(before); // 취소 → 변화 없음

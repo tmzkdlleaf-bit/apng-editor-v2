@@ -178,6 +178,8 @@ test.describe('P6 — 재생 / 타임라인 / 레이어 추가 / 인스펙터', 
     });
     const was = await page.evaluate((id) => window.__store.get().layers[id]?.visible, firstId);
 
+    // U0-3: 표시 상태의 눈 버튼은 행에 올렸을 때만 보인다 → 먼저 호버.
+    await page.locator('.tl-row').first().hover();
     await page.locator('.tl-row').first().locator('.tl-eye').click();
 
     const now = await page.evaluate((id) => window.__store.get().layers[id]?.visible, firstId);
@@ -197,7 +199,13 @@ test.describe('P6 — 재생 / 타임라인 / 레이어 추가 / 인스펙터', 
     const box    = await canvas.boundingBox();
     if (!box) return;
 
-    await page.mouse.click(box.x + 5 * 20 + 10, box.y + 4);
+    // 트랙 폭 맞춤(fit)으로 칸 폭이 가변 → 실제 칸 폭으로 프레임 5 가운데를 찍는다.
+    const cell = await page.evaluate(() => {
+      const c = document.querySelector('.track-body-canvas');
+      const fc = window.__store.get().meta.frameCount ?? 1;
+      return c.getBoundingClientRect().width / fc;
+    });
+    await page.mouse.click(box.x + 5 * cell + cell / 2, box.y + 4);
     const f = await page.evaluate(() => window.__editorState.get().f);
     expect(f).toBe(5);
   });

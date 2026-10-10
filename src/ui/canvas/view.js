@@ -1,4 +1,5 @@
 import { iconMarkup } from '../icons.js';
+import { createDropdown } from '../controls/dropdown.js';
 
 const ZOOM_MIN = 0.1;
 const ZOOM_MAX = 16;
@@ -31,14 +32,65 @@ export function initView(containerEl, overlayCanvas, store, editorState) {
   zoomEl.className = 'stage-zoom';
   containerEl.appendChild(zoomEl);
 
+  // 보기 메뉴(item 7) — 확대 표시 옆. 그리드 켜기·간격·스냅은 화면 설정이라 여기로 모은다.
+  const viewBtn = document.createElement('button');
+  viewBtn.className = 'stage-view-btn';
+  viewBtn.textContent = '보기';
+  viewBtn.title = '보기 설정 — 그리드·스냅';
+  viewBtn.setAttribute('aria-label', '보기 설정');
+  containerEl.appendChild(viewBtn);
+
+  const viewMenu = document.createElement('div');
+  viewMenu.className = 'stage-view-menu';
+  viewMenu.hidden = true;
+
+  const gridCheck = document.createElement('label'); gridCheck.className = 'view-check';
+  const gridInput = document.createElement('input'); gridInput.type = 'checkbox';
+  gridCheck.append(gridInput, document.createTextNode('그리드 (G)'));
+
+  const stepRow = document.createElement('div'); stepRow.className = 'view-row';
+  const stepLabel = document.createElement('span'); stepLabel.className = 'view-row-label'; stepLabel.textContent = '간격';
+  const stepDd = createDropdown({
+    ariaLabel: '그리드 간격',
+    options: [8, 16, 32, 64, 128].map((v) => ({ value: String(v), label: `${v}px` })),
+    value: String(editorState.get().gridStep ?? 32),
+    onChange: (v) => editorState.set({ gridStep: parseInt(v, 10) }),
+  });
+  stepRow.append(stepLabel, stepDd.el);
+
+  const snapCheck = document.createElement('label'); snapCheck.className = 'view-check';
+  const snapInput = document.createElement('input'); snapInput.type = 'checkbox';
+  snapCheck.append(snapInput, document.createTextNode('스냅 (격자·가장자리·레이어)'));
+
+  viewMenu.append(gridCheck, stepRow, snapCheck);
+  containerEl.appendChild(viewMenu);
+
+  function _syncViewMenu() {
+    const es = editorState.get();
+    gridInput.checked = !!es.grid;
+    snapInput.checked = !!es.snap;
+  }
+  gridInput.addEventListener('change', () => editorState.set({ grid: gridInput.checked }));
+  snapInput.addEventListener('change', () => editorState.set({ snap: snapInput.checked }));
+
+  function _closeViewMenu() { viewMenu.hidden = true; document.removeEventListener('pointerdown', _onViewOutside, true); }
+  function _onViewOutside(e) { if (e.target !== viewBtn && !viewMenu.contains(e.target)) _closeViewMenu(); }
+  viewBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (!viewMenu.hidden) { _closeViewMenu(); return; }
+    _syncViewMenu();
+    viewMenu.hidden = false;
+    setTimeout(() => document.addEventListener('pointerdown', _onViewOutside, true), 0);
+  });
+
   // Tool buttons
   const toolWrap = document.createElement('div');
   toolWrap.className = 'stage-tools';
   toolWrap.innerHTML = `
     <button data-tool="select" title="옮기기 (V)" aria-label="옮기기" class="active">${iconMarkup('select-tool')}</button>
-    <button data-tool="edit"   title="편집 — 경로·기준점 (E)" aria-label="편집">${iconMarkup('tool-edit')}</button>
-    <button data-tool="motion" title="움직이기 — 모션 기록·배치 (P)" aria-label="움직이기">${iconMarkup('tool-motion')}</button>
-    <button data-tool="hand"   title="손 도구 (H)" aria-label="손">${iconMarkup('hand')}</button>
+    <button data-tool="edit"   title="편집 — 경로·기준점 고치기 (E)" aria-label="편집">${iconMarkup('tool-edit')}</button>
+    <button data-tool="motion" title="움직이기 — 레이어 옮기기·모션 기록 (P)" aria-label="움직이기">${iconMarkup('tool-motion')}</button>
+    <button data-tool="hand"   title="손 — 화면 이동 (H)" aria-label="손">${iconMarkup('hand')}</button>
   `;
   containerEl.appendChild(toolWrap);
 
@@ -179,6 +231,9 @@ export function initView(containerEl, overlayCanvas, store, editorState) {
 
   editorState.subscribe((patch) => {
     if ('zoom' in patch) _updateZoomEl();
+    if ('grid' in patch) gridInput.checked = !!editorState.get().grid;
+    if ('snap' in patch) snapInput.checked = !!editorState.get().snap;
+    if ('gridStep' in patch) stepDd.setValue?.(String(editorState.get().gridStep ?? 32));
     if ('tool' in patch) {
       toolWrap.querySelectorAll('[data-tool]').forEach(b => {
         b.classList.toggle('active', b.dataset.tool === patch.tool);
@@ -203,5 +258,7 @@ export function initView(containerEl, overlayCanvas, store, editorState) {
     overlayCanvas.removeEventListener('pointerup', _onPanUp);
     document.removeEventListener('keydown', _onKeyDownView);
     document.removeEventListener('keyup', _onKeyUpView);
+    document.removeEventListener('pointerdown', _onViewOutside, true);
+    stepDd.destroy?.();
   };
 }

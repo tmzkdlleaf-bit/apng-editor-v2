@@ -55,8 +55,10 @@ export function initTimeline(timelineEl, store, editorState, playback, deps = {}
 
   // ── 자동 키 · 스냅(캔버스/타임라인) ─────────────────────────────────
   const autoKeyBtn = iconButton('autokey', { label: '자동 키', title: '자동 키 (값 바꾸면 키 자동 생성)' });
-  const snapCanvasBtn = iconButton('magnet', { label: '캔버스 스냅', title: '캔버스 스냅 (격자·가장자리에 붙임)' });
-  const snapTlBtn     = iconButton('magnet', { label: '타임라인 스냅', title: '타임라인 스냅 (키·클립을 프레임·재생선에 붙임)' });
+  const snapCanvasBtn = iconButton('snap-canvas', { label: '캔버스 스냅', title: '캔버스 스냅 (격자·가장자리에 붙임)', className: 'tl-snap-btn' });
+  const snapTlBtn     = iconButton('snap-timeline', { label: '타임라인 스냅', title: '타임라인 스냅 (키·클립을 프레임·재생선에 붙임)', className: 'tl-snap-btn' });
+  // item 5: 트랙 폭 맞춤 — 전체 프레임을 트랙 폭에 맞게 되돌림.
+  const fitBtn = iconButton('zoom-fit', { label: '트랙 폭 맞춤', title: '트랙 폭 맞춤 — 전체 프레임을 트랙 폭에 맞게' });
 
   // ── 모션 기록(F3-5) ─────────────────────────────────────────────────
   const recBtn = document.createElement('button');
@@ -78,15 +80,16 @@ export function initTimeline(timelineEl, store, editorState, playback, deps = {}
   recorder.onStateChange((st) => {
     recBtn.classList.toggle('is-count', st === 'count');
     recBtn.classList.toggle('is-rec', st === 'recording');
-    _recLabel.textContent = st === 'count' ? String(recorder.countLabel()) : (st === 'recording' ? '●REC' : '');
+    _recLabel.textContent = st === 'count' ? String(recorder.countLabel()) : (st === 'recording' ? '기록 중' : '');
   });
 
   const sep = () => { const s = document.createElement('span'); s.className = 'tl-sep'; return s; };
-  head.append(transport, sep(), frameWrap, sep(), loopGroup, sep(), autoKeyBtn, snapCanvasBtn, snapTlBtn, sep(), recBtn);
+  head.append(transport, sep(), frameWrap, sep(), loopGroup, sep(), autoKeyBtn, snapCanvasBtn, snapTlBtn, fitBtn, sep(), recBtn);
 
   // 레이어 목록(머리 칸에 [+ 레이어] 포함) · 트랙 캔버스
   const layerList   = initLayerList(layersEl, store, editorState, deps);
   const trackCanvas = initTrackCanvas(tracksEl, layersEl, store, editorState, playback);
+  fitBtn.addEventListener('click', () => trackCanvas.fitWidth());
 
   // ── 동작 ────────────────────────────────────────────────────────────
   const _fc = () => Math.max(1, store.get().meta.frameCount ?? 1);

@@ -62,6 +62,7 @@
   cursor: pointer;
 }
 .project-menu button:hover { background: var(--selrow, rgba(127,127,127,0.15)); }
+.project-menu-note { padding: var(--sp-2) var(--sp-3); font-size: var(--fs-1); color: var(--dim); border-bottom: 1px solid var(--line2); margin-bottom: var(--sp-1); }
 
 [data-region="topbar"] {
   grid-area: topbar;
@@ -145,13 +146,51 @@
 .stage-zoom {
   position: absolute;
   bottom: var(--sp-2);
-  right: var(--sp-3);
+  right: calc(var(--sp-3) + 52px);  /* 보기 버튼 왼쪽 */
   font-size: var(--fs-1);
   color: var(--dim);
   pointer-events: none;
   user-select: none;
   font-variant-numeric: tabular-nums;
 }
+
+/* 보기 메뉴 버튼(item 7) — 확대 표시 옆 */
+.stage-view-btn {
+  position: absolute;
+  bottom: var(--sp-2);
+  right: var(--sp-3);
+  height: 22px;
+  padding: 0 var(--sp-2);
+  font-size: var(--fs-1);
+  color: var(--text2);
+  background: var(--btn);
+  border: 1px solid var(--btnline);
+  border-radius: var(--r-1);
+  cursor: pointer;
+  z-index: 11;
+}
+.stage-view-btn:hover { color: var(--text); border-color: var(--line); }
+.stage-view-menu[hidden] { display: none; } /* display:flex 가 [hidden]을 덮지 않도록 */
+.stage-view-menu {
+  position: absolute;
+  bottom: calc(var(--sp-2) + 28px);
+  right: var(--sp-3);
+  z-index: 12;
+  min-width: 200px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  padding: var(--sp-2);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--r-2);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+}
+.stage-view-menu .view-check { display: flex; align-items: center; gap: var(--sp-2); font-size: var(--fs-2); color: var(--text); cursor: pointer; }
+.stage-view-menu .view-check input { margin: 0; }
+.stage-view-menu .view-row { display: flex; align-items: center; gap: var(--sp-2); }
+.stage-view-menu .view-row-label { flex: 0 0 48px; font-size: var(--fs-2); color: var(--text2); }
+.stage-view-menu .view-row .dropdown { flex: 1; }
 
 /* 캔버스 글자 바로 편집 입력 칸 */
 .canvas-text-edit {

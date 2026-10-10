@@ -294,6 +294,34 @@ export function init(store, editorState, projectApi = null) {
       else if (act === 'export') projectApi.exportFile?.();
       else if (act === 'import') { if (isDesktop()) projectApi.openProject?.(); else projFile.click(); }
     });
+  } else {
+    // 데모 모드(projectApi 없음) — 저장되지 않음. 메뉴는 안내 한 줄 + "새 프로젝트로 시작"만. (item 9)
+    projBtn.textContent = '데모 ▾';
+    if (saveStatus) saveStatus.style.display = 'none';
+    const menu = document.createElement('div');
+    menu.className = 'project-menu';
+    menu.style.display = 'none';
+    menu.innerHTML = `
+      <div class="project-menu-note">데모 모드 — 저장되지 않음</div>
+      <button data-act="new">새 프로젝트로 시작</button>
+    `;
+    document.body.appendChild(menu);
+    function _closeDemoMenu() { menu.style.display = 'none'; }
+    projBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (menu.style.display === 'block') { _closeDemoMenu(); return; }
+      const r = projBtn.getBoundingClientRect();
+      menu.style.left = r.left + 'px';
+      menu.style.top  = (r.bottom + 4) + 'px';
+      menu.style.display = 'block';
+    });
+    document.addEventListener('click', _closeDemoMenu);
+    menu.addEventListener('click', (e) => {
+      if (e.target?.dataset?.act !== 'new') return;
+      _closeDemoMenu();
+      // demo 파라미터를 빼고 일반 모드로 — 새/마지막 프로젝트가 열린다.
+      location.href = location.pathname;
+    });
   }
 
   return { stage, playback, setSaveStatus, setProjectName };

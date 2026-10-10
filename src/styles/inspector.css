@@ -4,6 +4,24 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  /* 속성 패널 전체에서 라벨 열 너비를 하나로 고정(가장 긴 라벨 기준). (item 3) */
+  --insp-label-w: 84px;
+}
+
+/* 라벨은 한 줄 — 글자 단위 줄바꿈 금지. 넘치면 말줄임(…), 전체 이름은 title 툴팁. (item 3) */
+.num-label {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* prop-row 직속 라벨(드롭다운·색·선택 등)도 같은 라벨 폭으로 정렬. */
+.prop-row > label.num-label,
+.prop-row > label:not(.fx-check) {
+  flex: 0 0 var(--insp-label-w);
+  box-sizing: border-box;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .inspector-scroll {
@@ -172,6 +190,68 @@
 .mg-name { font-size: var(--fs-1); color: var(--text); text-align: center; line-height: 1.1; }
 .mg-kind { font-size: 9px; color: var(--faint); }
 
+/* 큰 갤러리 창(item 4) — 모션·이펙트 공용 */
+.gallery-modal {
+  position: fixed; inset: 0; z-index: 9500;
+  background: rgba(0,0,0,0.5);
+  display: flex; align-items: center; justify-content: center;
+}
+.gallery-panel {
+  width: min(70vw, 1100px); min-width: 880px;
+  height: min(78vh, 760px); min-height: 560px;
+  display: flex; flex-direction: column;
+  background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-3);
+  box-shadow: 0 16px 48px rgba(0,0,0,0.5); overflow: hidden;
+}
+.gallery-head {
+  display: flex; align-items: center; gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4); border-bottom: 1px solid var(--line2);
+}
+.gallery-title { font-size: var(--fs-4); font-weight: 600; color: var(--text); flex-shrink: 0; }
+.gallery-search {
+  flex: 1; height: 30px; background: var(--input); color: var(--text);
+  border: 1px solid var(--btnline); border-radius: var(--r-1); padding: 0 var(--sp-2); font-size: var(--fs-2);
+}
+.gallery-search:focus-visible { outline: 2px solid var(--acc); outline-offset: 1px; }
+.gallery-close {
+  width: 28px; height: 28px; padding: 0; flex-shrink: 0;
+  background: transparent; border: none; color: var(--dim); font-size: var(--fs-4); cursor: pointer; border-radius: var(--r-1);
+}
+.gallery-close:hover { color: var(--text); background: var(--btn); }
+
+.gallery-body { flex: 1; display: grid; grid-template-columns: 150px 1fr 300px; overflow: hidden; }
+.gallery-cats { display: flex; flex-direction: column; gap: 2px; padding: var(--sp-2); border-right: 1px solid var(--line2); overflow-y: auto; }
+.gallery-cat {
+  text-align: left; background: transparent; border: none; color: var(--text2);
+  font-size: var(--fs-2); padding: var(--sp-2) var(--sp-2); border-radius: var(--r-1); cursor: pointer;
+}
+.gallery-cat:hover { background: var(--btn); color: var(--text); }
+.gallery-cat.is-on { background: var(--toolon); color: var(--acctext); }
+
+.gallery-grid {
+  overflow-y: auto; padding: var(--sp-3);
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  grid-auto-rows: min-content; gap: var(--sp-3); align-content: start;
+}
+.gallery-card {
+  display: flex; flex-direction: column; gap: var(--sp-1); min-height: 128px;
+  padding: var(--sp-1) var(--sp-1) var(--sp-2); background: var(--input); border: 1px solid var(--line2);
+  border-radius: var(--r-2); cursor: pointer;
+}
+.gallery-card:hover { border-color: var(--accline); }
+.gallery-card.is-sel { border-color: var(--acc); box-shadow: 0 0 0 1px var(--acc) inset; }
+.gallery-card-preview { width: 100%; height: auto; aspect-ratio: 160 / 96; background: var(--stage); border-radius: var(--r-1); display: block; }
+.gallery-card-name { font-size: var(--fs-1); color: var(--text); text-align: center; line-height: 1.3; min-height: 17px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gallery-empty { color: var(--dim); font-size: var(--fs-2); padding: var(--sp-4); grid-column: 1 / -1; }
+
+.gallery-aside { border-left: 1px solid var(--line2); padding: var(--sp-3); display: flex; flex-direction: column; gap: var(--sp-2); overflow-y: auto; }
+.gallery-aside-hint { color: var(--faint); font-size: var(--fs-2); margin-top: var(--sp-4); text-align: center; }
+.gallery-big-preview { width: 100%; height: auto; aspect-ratio: 320 / 208; background: var(--stage); border-radius: var(--r-2); display: block; }
+.gallery-big-name { font-size: var(--fs-3); font-weight: 600; color: var(--text); }
+.gallery-big-desc { font-size: var(--fs-2); color: var(--text2); line-height: 1.5; flex: 1; }
+.gallery-aside .accent { align-self: stretch; }
+
 /* 루프 검사 도구(F4-7) */
 .loopcheck-modal { position: fixed; inset: 0; z-index: 9400; background: rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; }
 .loopcheck-panel { width: 420px; max-height: 70vh; display: flex; flex-direction: column; background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-2); box-shadow: 0 12px 40px rgba(0,0,0,0.5); }
@@ -235,11 +315,23 @@
 .prop-row .num-field {
   flex: 1;
   display: grid;
-  grid-template-columns: auto minmax(64px, 1fr) auto;  /* 라벨·값·단위 격자 정렬, 값 최소 64px */
+  /* 라벨 고정폭·값·단위·마름모. 마름모(키프레임 토글)가 다음 줄로 밀리지 않도록 열을 둔다. (item 3) */
+  grid-template-columns: var(--insp-label-w) minmax(0, 1fr) auto auto;
   gap: var(--sp-1);
   align-items: center;
 }
-.prop-row .num-field .num-input { width: 100%; box-sizing: border-box; }
+.prop-row .num-field .num-input { width: 100%; min-width: 0; box-sizing: border-box; }
+
+/* 슬라이더 칸: 라벨 왼쪽, 슬라이더+숫자 오른쪽 — 다른 섹션과 같은 정렬. (item 3) */
+.prop-row .slider-field { flex: 1; }
+.slider-field {
+  display: grid;
+  grid-template-columns: var(--insp-label-w) minmax(0, 1fr) auto auto;
+  gap: var(--sp-2);
+  align-items: center;
+}
+.slider-field .num-input { width: 52px; box-sizing: border-box; text-align: right; }
+.slider-field .slider-range { min-width: 0; }
 
 /* 좌우 나란히 두 칸 */
 .prop-row-2 {

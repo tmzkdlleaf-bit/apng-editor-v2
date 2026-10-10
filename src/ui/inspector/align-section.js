@@ -3,7 +3,6 @@
 import { makeSectionShell } from './section-shell.js';
 import { getDocWorldTr, getLayerBounds } from '../canvas/hit.js';
 import { buildPropCmd } from '../canvas/edit-prop.js';
-import { createDropdown } from '../controls/dropdown.js';
 
 // 회전 무시한 doc 공간 축 정렬 bbox 와 anchor 오프셋 정보
 function _layerBox(doc, id, f) {
@@ -50,18 +49,7 @@ export function createAlignSection(store, editorState) {
     distRow.appendChild(b);
   }
   body.appendChild(distRow);
-
-  // 그리드 간격(F2-9) — 8·16·32·64·128px
-  const gridRow = document.createElement('div'); gridRow.className = 'prop-row';
-  const gridLabel = document.createElement('label'); gridLabel.className = 'num-label'; gridLabel.textContent = '그리드 간격';
-  const gridDd = createDropdown({
-    ariaLabel: '그리드 간격',
-    options: [8, 16, 32, 64, 128].map((v) => ({ value: String(v), label: `${v}px` })),
-    value: String(editorState.get().gridStep ?? 32),
-    onChange: (v) => editorState.set({ gridStep: parseInt(v, 10) }),
-  });
-  gridRow.append(gridLabel, gridDd.el);
-  body.appendChild(gridRow);
+  // 그리드 간격은 레이어 속성이 아니라 화면 설정 → 캔버스 "보기" 메뉴로 옮김(item 7, view.js).
 
   function _align(key) {
     const es  = editorState.get();
@@ -136,5 +124,5 @@ export function createAlignSection(store, editorState) {
     if (cmds.length) store.apply(cmds.length === 1 ? cmds[0] : { type: 'batch', cmds });
   }
 
-  return { el: section, destroy() { gridDd.destroy(); } };
+  return { el: section, destroy() {} };
 }

@@ -61,8 +61,26 @@ async function measure(page) {
     return st.sceneRenderCount - before;
   });
 
+  // 4) 이펙트 갤러리를 연 상태의 스크럽 평균 (큰 갤러리 창이 떠 있어도 장면 그리기가 느려지지 않는지)
+  let galleryScrub = null;
+  try {
+    await page.click('.tl-layers-head .tl-add-btn');
+    await page.click('.layer-add-item[data-kind="effect"]');
+    await page.waitForSelector('.gallery-panel', { timeout: 3000 });
+    galleryScrub = await page.evaluate(async () => {
+      const st = window.__stage, es = window.__editorState;
+      const fc = window.__store.get().meta.frameCount ?? 24;
+      st.resetSceneStats();
+      for (let pass = 0; pass < 3; pass++) {
+        for (let f = 0; f < fc; f++) { es.set({ f }); await new Promise(r => requestAnimationFrame(r)); }
+      }
+      return st.getSceneStats();
+    });
+    await page.keyboard.press('Escape');
+  } catch {}
+
   const dpr = await page.evaluate(() => window.devicePixelRatio);
-  return { dpr, scrub, latency, sceneRerender };
+  return { dpr, scrub, latency, sceneRerender, galleryScrub };
 }
 
 function report(label, r) {
@@ -73,6 +91,7 @@ function report(label, r) {
   line('드래그 지연 평균(ms)',       r.latency ? r.latency.avg.toFixed(2) : 'n/a');
   line('드래그 지연 최대(ms)',       r.latency ? r.latency.max.toFixed(2) : 'n/a');
   line('선택만 변경 시 scene 재렌더(회)', r.sceneRerender);
+  line('갤러리 연 상태 스크럽 평균(ms)', r.galleryScrub ? r.galleryScrub.avg.toFixed(2) : 'n/a');
 }
 
 test.describe('성능 표 dpr1', () => {

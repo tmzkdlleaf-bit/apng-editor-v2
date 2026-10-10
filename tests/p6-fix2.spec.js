@@ -27,12 +27,15 @@ test.describe('P6 보완2 — 타임라인 키 / 그룹 / 정렬 / 혼합', () =
       const camKeys = !!(cam?.x?.keys?.length || cam?.y?.keys?.length || cam?.zoom?.keys?.length);
       let idx = rows.indexOf(id);
       if (camKeys) idx += 1;
-      return { idx, ROW_H: 28 };
+      const fc = doc.meta.frameCount ?? 1;
+      const cw = document.querySelector('.track-body-canvas').getBoundingClientRect().width;
+      return { idx, ROW_H: 28, cell: cw / fc };
     }, layerId);
+    // 다이아 x = f*cell + cell/2 (트랙 폭 맞춤으로 칸 폭 가변)
     return {
-      x: box.x + f * 20 + 10,
+      x: box.x + f * info.cell + info.cell / 2,
       y: box.y + info.idx * info.ROW_H + 14,
-      boxX: box.x, boxY: box.y, idx: info.idx,
+      boxX: box.x, boxY: box.y, idx: info.idx, cell: info.cell,
     };
   }
 
@@ -45,10 +48,10 @@ test.describe('P6 보완2 — 타임라인 키 / 그룹 / 정렬 / 혼합', () =
     }, rectId);
 
     const p = await bodyPoint(page, rectId, 0);
-    // 박스: 빈 곳(프레임0 다이아 왼쪽)에서 시작 → f=10 다이아 너머까지
+    // 박스: 빈 곳(프레임0 다이아 왼쪽)에서 시작 → f=10 다이아 너머까지(칸 폭 기준)
     await page.mouse.move(p.boxX + 2, p.y);
     await page.mouse.down();
-    await page.mouse.move(p.boxX + 220, p.y, { steps: 8 });
+    await page.mouse.move(p.boxX + 11 * p.cell, p.y, { steps: 8 });
     await page.mouse.up();
 
     const selCount = await page.evaluate(() => window.__editorState.get().kfSelection.length);

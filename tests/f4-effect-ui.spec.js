@@ -13,12 +13,12 @@ test('F4-1 — 갤러리: 분류·검색, 카드 선택 → 효과 레이어·�
   const depth0 = await page.evaluate(() => window.__store.undoDepth?.() ?? -1);
   await page.click('.tl-layers-head .tl-add-btn');
   await page.click('.layer-add-item[data-kind="effect"]');
-  await expect(page.locator('.fx-gallery')).toBeVisible();
+  await expect(page.locator('.gallery-panel')).toBeVisible();
 
   // 검색 "빛" → 빛줄기만
-  await page.fill('.fx-search', '빛');
-  await expect(page.locator('.fx-gallery .mg-card')).toHaveCount(1);
-  await page.click('.fx-gallery .mg-card[data-effect="test-light-rays"]');
+  await page.fill('.gallery-search', '빛');
+  await expect(page.locator('.gallery-grid .gallery-card')).toHaveCount(1);
+  await page.locator('.gallery-card[data-id="test-light-rays"]').dblclick();
 
   const r = await page.evaluate(() => {
     const id = window.__editorState.get().selection[0];

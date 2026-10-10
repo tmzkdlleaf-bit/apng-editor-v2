@@ -31,6 +31,25 @@ test('F2-4 — 스크럽 24프레임 동안 썸네일 렌더 0회', async ({ pag
   expect(after).toBe(0);
 });
 
+test('F2-4(보완) — 이미지 레이어 썸네일 중앙 픽셀이 투명하지 않다', async ({ page }) => {
+  await openApp(page);
+  const imgId = await page.evaluate(() => {
+    const doc = window.__store.get();
+    return Object.keys(doc.layers).find((x) => doc.layers[x]?.type === 'image') ?? null;
+  });
+  expect(imgId).not.toBeNull();
+  // 에셋 디코딩이 끝나면 onUpdate 로 썸네일이 갱신된다 → 중앙 알파가 채워질 때까지 대기.
+  const alpha = await page.waitForFunction((id) => {
+    const row = document.querySelector(`.tl-row[data-id="${id}"]`);
+    const cv = row && row.querySelector('canvas.tl-thumb-canvas');
+    if (!cv) return null;
+    const ctx = cv.getContext('2d');
+    const px = ctx.getImageData(Math.floor(cv.width / 2), Math.floor(cv.height / 2), 1, 1).data;
+    return px[3] > 0 ? px[3] : null;
+  }, imgId, { timeout: 8000 }).then((h) => h.jsonValue());
+  expect(alpha).toBeGreaterThan(0);
+});
+
 test('F2-4 — 레이어 내용 바뀌면 썸네일 다시 그림(캐시 무효)', async ({ page }) => {
   await openApp(page);
   await page.waitForFunction(() => !!window.__thumbnailer);

@@ -54,7 +54,16 @@ export function initTrackCanvas(tracksEl, layersEl, store, editorState, playback
   tracksEl.appendChild(bodyWrap);
 
   let _pxPerF = PX_PER_F_DEFAULT;  // C13
+  // item 5: 기본은 "전체 프레임이 트랙 폭에 꼭 맞게"(fit). Ctrl+휠로 배율을 바꾸면 그 배율 유지(fit 해제),
+  //   "맞춤" 버튼으로 다시 fit. fit 모드에서는 매 그리기마다 트랙 폭÷프레임수로 _pxPerF 를 다시 계산한다.
+  let _fitMode = true;
   let _syncingScroll = false;
+
+  function _computePxPerF(fc, wrapW) {
+    if (!_fitMode) return _pxPerF;
+    const base = Math.max(wrapW, 400);
+    return Math.max(2, base / Math.max(1, fc));
+  }
 
   layersEl.addEventListener('scroll', () => {
     if (_syncingScroll) return;
@@ -95,9 +104,13 @@ export function initTrackCanvas(tracksEl, layersEl, store, editorState, playback
   tracksEl.addEventListener('wheel', (e) => {
     if (!e.ctrlKey) return;
     e.preventDefault();
+    _fitMode = false; // 수동 배율 → fit 해제(그 배율 유지)
     _pxPerF = Math.max(4, Math.min(80, _pxPerF + (e.deltaY > 0 ? -2 : 2)));
     requestDraw();
   }, { passive: false });
+
+  // "맞춤" — 전체 프레임이 트랙 폭에 꼭 맞게 되돌림.
+  function fitWidth() { _fitMode = true; requestDraw(); }
 
   // ── 좌표 변환 ─────────────────────────────────────────────────────────
   function _bodyXY(e) {
@@ -657,9 +670,10 @@ export function initTrackCanvas(tracksEl, layersEl, store, editorState, playback
     const rows = computeRows(doc, es.expanded);
     const dpr  = window.devicePixelRatio || 1;
 
+    const wrapW  = tracksEl.clientWidth || 400;
+    _pxPerF = _computePxPerF(fc, wrapW); // fit 모드면 트랙 폭에 맞춰 재계산
     const totalW = Math.max(400, fc * _pxPerF);
     const bodyH  = Math.max(ROW_H, rows.length * ROW_H);
-    const wrapW  = tracksEl.clientWidth || 400;
 
     headCanvas.width   = Math.round(Math.max(wrapW, totalW) * dpr);
     headCanvas.height  = Math.round(HEAD_H * dpr);
@@ -692,7 +706,9 @@ export function initTrackCanvas(tracksEl, layersEl, store, editorState, playback
     ctx.font = '10px monospace';
     ctx.textAlign = 'center';
 
-    const step = _pxPerF >= 20 ? 5 : (fc > 60 ? 10 : 5);
+    // 눈금 간격 — 칸 폭(_pxPerF)에 맞춰 라벨이 겹치지 않는 가장 촘촘한 단계. (item 5)
+    let step = 1;
+    for (const s of [1, 2, 5, 10, 20, 50, 100]) { if (s * _pxPerF >= 32) { step = s; break; } step = s; }
     for (let f = 0; f < fc; f += step) {
       const x = _frameToX(f);
       ctx.fillStyle = lineColor;
@@ -865,6 +881,6 @@ export function initTrackCanvas(tracksEl, layersEl, store, editorState, playback
     return true;
   }
 
-  return { destroy, deleteSelectedKeys,
-    get PX_PER_F() { return _pxPerF; }, HEAD_H };
+  return { destroy, deleteSelectedKeys, fitWidth,
+    get PX_PER_F() { return _pxPerF; }, get fitMode() { return _fitMode; }, HEAD_H };
 }

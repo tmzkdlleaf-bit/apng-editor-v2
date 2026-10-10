@@ -4,13 +4,15 @@ import { createLayerAddMenu } from '../layer-add.js';
 import { createThumbnailer } from './thumbnail.js';
 import { groupSelection, ungroupSelection } from '../group-ops.js';
 import { makeComponent, addInstance, hasInstancesOf } from '../component-ops.js';
+import { iconMarkup } from '../icons.js';
 
 const ROW_H  = 28; // C3: 28px
 const INDENT = 12; // G1: 단계당 들여쓰기 px
 
-const _TYPE_CHAR = {
-  shape: '▣', image: '▤', text: 'T', effect: '★',
-  group: '▦', anim: '▶', adjust: '◎', instance: '⬡',
+// 레이어 종류 아이콘(글자 대신). icons.js 의 type-* 세트.
+const _TYPE_ICON = {
+  shape: 'type-shape', image: 'type-image', text: 'type-text', effect: 'type-effect',
+  group: 'type-group', anim: 'type-anim', adjust: 'type-adjust', instance: 'type-instance',
 };
 
 export function initLayerList(containerEl, store, editorState, deps = {}) {
@@ -20,7 +22,7 @@ export function initLayerList(containerEl, store, editorState, deps = {}) {
   let _dropInfo   = null;
 
   // 썸네일(F2-4) — 에셋 어댑터가 있을 때만(데모/실앱). 없으면 썸네일 생략.
-  const _thumbs = deps.assets ? createThumbnailer(deps.assets, 20) : null;
+  const _thumbs = deps.assets ? createThumbnailer(deps.assets, 20, () => _rebuild()) : null;
   if (typeof window !== 'undefined') window.__thumbnailer = _thumbs; // 테스트용(렌더 횟수)
 
   // item 2: 트랙 눈금자(24px)와 높이를 맞춘 머리 칸 — sticky 로 맨 위에 고정.
@@ -122,20 +124,24 @@ export function initLayerList(containerEl, store, editorState, deps = {}) {
       expandBtn.style.visibility = 'hidden';
     }
 
+    // 표시/숨김 — 숨김 상태는 항상 보이고(tl-hidden), 표시 상태는 행에 올렸을 때만(tl-hover-only). (U0-3)
+    const hidden = layer.visible === false;
     const eyeBtn = document.createElement('button');
-    eyeBtn.className = 'tl-btn tl-eye' + (layer.visible === false ? ' tl-hidden' : '');
-    eyeBtn.textContent = layer.visible === false ? '○' : '●';
-    eyeBtn.title = layer.visible === false ? '표시' : '숨김';
+    eyeBtn.className = 'tl-btn tl-eye' + (hidden ? ' tl-hidden' : ' tl-hover-only');
+    eyeBtn.innerHTML = iconMarkup(hidden ? 'eye-off' : 'eye', { size: 15 });
+    eyeBtn.title = hidden ? '표시' : '숨김';
+    eyeBtn.setAttribute('aria-label', eyeBtn.title);
     eyeBtn.addEventListener('click', (e) => {
       e.stopPropagation();
-      store.apply({ type: 'setLayer', id: layer.id, patch: { visible: layer.visible === false ? true : false } });
+      store.apply({ type: 'setLayer', id: layer.id, patch: { visible: hidden ? true : false } });
     });
 
+    // 잠금 — 잠긴 상태는 항상 보이고, 열린 상태는 행 호버 때만. (U0-3)
     const lockBtn = document.createElement('button');
-    lockBtn.className = 'tl-btn tl-lock' + (layer.locked ? ' tl-locked' : '');
-    lockBtn.textContent = layer.locked ? '잠' : '열';
-    lockBtn.style.fontSize = '9px';
+    lockBtn.className = 'tl-btn tl-lock' + (layer.locked ? ' tl-locked' : ' tl-hover-only');
+    lockBtn.innerHTML = iconMarkup(layer.locked ? 'lock' : 'unlock', { size: 15 });
     lockBtn.title = layer.locked ? '잠금 해제' : '잠금';
+    lockBtn.setAttribute('aria-label', lockBtn.title);
     lockBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       store.apply({ type: 'setLayer', id: layer.id, patch: { locked: !layer.locked } });
@@ -143,7 +149,8 @@ export function initLayerList(containerEl, store, editorState, deps = {}) {
 
     const typeEl = document.createElement('span');
     typeEl.className = 'tl-type';
-    typeEl.textContent = _TYPE_CHAR[layer.type] ?? '?';
+    typeEl.innerHTML = iconMarkup(_TYPE_ICON[layer.type] ?? 'type-shape', { size: 15 });
+    typeEl.title = layer.type;
 
     // 썸네일(20×20, frame 0 기준, 내용 바뀔 때만 다시 그림)
     let thumbEl = null;
@@ -153,6 +160,7 @@ export function initLayerList(containerEl, store, editorState, deps = {}) {
       try {
         const c = _thumbs.getThumb(store.get(), layer);
         if (c) { c.classList.add('tl-thumb-canvas'); thumbEl.appendChild(c); }
+        else { thumbEl.classList.add('tl-thumb-icon'); thumbEl.innerHTML = iconMarkup(_TYPE_ICON[layer.type] ?? 'type-shape', { size: 14 }); }
       } catch {}
     }
 
@@ -204,7 +212,7 @@ export function initLayerList(containerEl, store, editorState, deps = {}) {
     // 드래그 시작
     row.addEventListener('pointerdown', (e) => {
       if (e.button !== 0) return;
-      if (e.target.tagName === 'BUTTON' || e.target.tagName === 'INPUT') return;
+      if (e.target.closest('button, input')) return; // 아이콘(SVG) 안쪽을 눌러도 버튼으로 간주
       _dragId     = layer.id;
       _dragStartY = e.clientY;
       _dragging   = false;
@@ -415,6 +423,7 @@ export function initLayerList(containerEl, store, editorState, deps = {}) {
     document.removeEventListener('pointermove', _onPointerMove);
     document.removeEventListener('pointerup',   _onPointerUp);
     _closeRowMenu();
+    _thumbs?.destroy?.();
     layerAdd.destroy();
     _unsubCam();
     unsubStore();

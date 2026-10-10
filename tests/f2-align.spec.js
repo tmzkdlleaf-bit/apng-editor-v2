@@ -56,15 +56,11 @@ test('F2-9 — 가로 분배: 3개 선택 → 중심 간격 같음, 기록 1건'
   if (depth1 >= 0 && depth0 >= 0) expect(depth1 - depth0).toBe(1); // 기록 1건
 });
 
-test('F2-9 — 그리드 간격 드롭다운 → editorState.gridStep 변경', async ({ page }) => {
+test('F2-9(item 7) — 보기 메뉴의 그리드 간격 드롭다운 → editorState.gridStep 변경', async ({ page }) => {
   await openApp(page);
-  await page.evaluate(() => {
-    const id = window.__store.get().order[0];
-    window.__editorState.set({ selection: [id] });
-  });
-  await page.waitForTimeout(80);
-  const dd = page.locator('.inspector-section .dropdown[aria-label="그리드 간격"]');
-  await dd.scrollIntoViewIfNeeded();
+  // 그리드 간격은 캔버스 "보기" 메뉴로 옮겼다(화면 설정).
+  await page.locator('.stage-view-btn').click();
+  const dd = page.locator('.stage-view-menu .dropdown[aria-label="그리드 간격"]');
   await dd.click();
   await page.locator('.dropdown-list [data-value="64"]').click();
   const gs = await page.evaluate(() => window.__editorState.get().gridStep);

@@ -62,8 +62,12 @@ export function createSliderField({
 
   function getValue() { return _current; }
 
-  el.appendChild(sliderEl);
-  el.appendChild(numField.el);
+  // 레이아웃: [라벨][슬라이더][숫자][단위] — 다른 섹션(숫자 칸)과 같은 "라벨 왼쪽" 정렬.
+  //   number-field 의 라벨/입력/단위를 꺼내 격자에 다시 배치(드래그·키 리스너는 각 요소에 붙어 있어 그대로 동작).
+  const labelEl = numField.el.querySelector('.num-label');
+  const inputEl = numField.el.querySelector('.num-input');
+  const unitEl  = numField.el.querySelector('.num-unit');
+  el.append(labelEl, sliderEl, inputEl, unitEl);
 
   return { el, setValue, setMixed, getValue };
 }

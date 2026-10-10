@@ -20,7 +20,8 @@ export function createNumberField({
   const labelEl = document.createElement('span');
   labelEl.className = 'num-label';
   labelEl.textContent = label;
-  labelEl.title = '드래그하여 값 변경';
+  // 말줄임될 수 있으므로 전체 이름을 툴팁으로(+드래그 안내). (item 3)
+  labelEl.title = (label ? label + ' — ' : '') + '드래그하여 값 변경';
 
   const inputEl = document.createElement('input');
   inputEl.type = 'text';
