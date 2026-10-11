@@ -86,6 +86,7 @@ export function renderEffectLayer(outputCtx, layer, worldTr, totalAlpha, rctx) {
     rng,
     sources: sourcesForRender,
     scale: renderScale,
+    pad: PAD_PX, // 소스 캔버스 정렬용(물리 px, scope=full): 소스 doc(0,0)=effect 물리(pad,pad)
   }, layer.params ?? {});
   for (const c of _sourceCanvases) pool.release(c);
 

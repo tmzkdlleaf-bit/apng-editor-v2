@@ -29,7 +29,15 @@ test('효과 견본 시트', async ({ page }) => {
       const sheet = mk(CELL * 4, CELL * 2 + LABEL);
       const sctx = sheet.getContext('2d');
       const doc = createDoc({ width: CELL, height: CELL, fps: 12, frameCount: 24 });
+      let srcId = null;
+      if ((eff.sources ?? []).length) {
+        const shp = createLayer('shape', { name: 'src' });
+        shp.shape = { kind: 'ellipse', w: CELL * 0.55, h: CELL * 0.55, fill: '#88bbff', stroke: null };
+        shp.transform.x.value = CELL / 2; shp.transform.y.value = CELL / 2;
+        doc.layers[shp.id] = shp; doc.order.push(shp.id); srcId = shp.id;
+      }
       const fx = createLayer('effect', { name: 'p', effectId: eff.id });
+      if (srcId) fx.sources = eff.sources.map((s) => ({ key: s.key, sourceId: srcId }));
       doc.layers[fx.id] = fx; doc.order.push(fx.id);
       const eng = createRenderEngine({ createCanvas: mk, effects });
       const frames = [0, 6, 12, 18];
@@ -46,7 +54,7 @@ test('효과 견본 시트', async ({ page }) => {
       });
       sctx.fillStyle = '#111'; sctx.fillRect(0, CELL * 2, CELL * 4, LABEL);
       sctx.fillStyle = '#eee'; sctx.font = '14px sans-serif'; sctx.textBaseline = 'middle';
-      const pv = (eff.params ?? []).map((p) => `${p.label ?? p.key}=${p.default}`).join('  ');
+      const pv = (eff.params ?? []).map((p) => `${p.label ?? p.key}=${typeof p.default === 'object' ? JSON.stringify(p.default) : p.default}`).join('  ');
       sctx.fillText(`${eff.name}  [${eff.category ?? ''}]   ${(ms / n).toFixed(2)}ms/frame`, 8, CELL * 2 + 16);
       sctx.fillStyle = '#9aa'; sctx.font = '11px sans-serif';
       sctx.fillText(pv.slice(0, 160), 8, CELL * 2 + 34);
@@ -105,7 +113,7 @@ test('모션 견본 시트', async ({ page }) => {
       sctx.fillStyle = '#eee'; sctx.font = '14px sans-serif'; sctx.textBaseline = 'middle';
       sctx.fillText(`${m.name}  [${m.category ?? m.kind}]  길이 ${m.defaultLength ?? 24}f`, 8, CELL + 16);
       sctx.fillStyle = '#9aa'; sctx.font = '11px sans-serif';
-      const pv = (m.params ?? []).map((p) => `${p.label ?? p.key}=${p.default}`).join('  ');
+      const pv = (m.params ?? []).map((p) => `${p.label ?? p.key}=${typeof p.default === 'object' ? JSON.stringify(p.default) : p.default}`).join('  ');
       sctx.fillText(pv.slice(0, 200), 8, CELL + 34);
       out.push({ id: 'motion-' + m.id, url: sheet.toDataURL('image/png') });
     }

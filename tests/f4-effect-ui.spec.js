@@ -15,8 +15,8 @@ test('F4-1 — 갤러리: 분류·검색, 카드 선택 → 효과 레이어·�
   await page.click('.layer-add-item[data-kind="effect"]');
   await expect(page.locator('.gallery-panel')).toBeVisible();
 
-  // 검색 "빛" → 빛줄기만
-  await page.fill('.gallery-search', '빛');
+  // 검색 "[시험] 빛" → 시험 빛줄기만(이름 고유)
+  await page.fill('.gallery-search', '[시험] 빛');
   await expect(page.locator('.gallery-grid .gallery-card')).toHaveCount(1);
   await page.locator('.gallery-card[data-id="test-light-rays"]').dblclick();
 
