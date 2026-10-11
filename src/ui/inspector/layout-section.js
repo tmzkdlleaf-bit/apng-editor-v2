@@ -1,16 +1,19 @@
-// 인스펙터 배치 섹션 — X, Y, 크기, 회전, 불투명도
+// 인스펙터 배치 섹션 — X, Y, 크기(배율 + 가로·세로 보정), 회전, 불투명도
 // item 10: 키프레임 마름모(현재 f 키 토글)  item 12: 혼합 값 표시·상대 적용
+// S5-0: 크기 옆 사슬(비율 고정). 끄면 가로(scaleX)·세로(scaleY) 칸이 따로 뜬다.
 import { createNumberField } from '../controls/number-field.js';
 import { buildPropCmd, getStartValue } from '../canvas/edit-prop.js';
 import { evalProp } from '../../core/anim/prop.js';
 import { makeSectionShell } from './section-shell.js';
+import { iconMarkup } from '../icons.js';
 
 // mul = 표시 배수(저장은 raw). 배율·투명도는 0–100%로 보이되 저장은 0–1(마이그레이션 없음).
-// 배치의 투명도는 키프레임 대상이라 "투명도(움직임)"로 모습의 "불투명도"와 구분한다.
 const _PROPS = [
   { path: 'transform.x',        label: 'X',           step: 1, min: -9999, max: 9999, unit: '',  def: 0,   mul: 1 },
   { path: 'transform.y',        label: 'Y',           step: 1, min: -9999, max: 9999, unit: '',  def: 0,   mul: 1 },
-  { path: 'transform.scale',    label: '배율',        step: 1, min: 1,      max: 9900, unit: '%', def: 100, mul: 100 },
+  { path: 'transform.scale',    label: '크기',        step: 1, min: 1,      max: 9900, unit: '%', def: 100, mul: 100 },
+  { path: 'transform.scaleX',   label: '가로',        step: 1, min: 1,      max: 9900, unit: '%', def: 100, mul: 100, ratioOnly: true },
+  { path: 'transform.scaleY',   label: '세로',        step: 1, min: 1,      max: 9900, unit: '%', def: 100, mul: 100, ratioOnly: true },
   { path: 'transform.rotation', label: '회전',        step: 1, min: -360,   max: 360,  unit: '°', def: 0,   mul: 1 },
   { path: 'transform.alpha',    label: '투명도(움직임)', step: 1, min: 0,   max: 100,  unit: '%', def: 100, mul: 100 },
 ];
@@ -25,9 +28,13 @@ function _getProp(layer, path) {
 export function createLayoutSection(store, editorState) {
   const { section, body } = makeSectionShell('배치', false);
 
+  let _ratioLock = true; // 비율 고정(기본). 끄면 가로·세로 보정 칸이 보인다.
+
   const row1 = document.createElement('div'); row1.className = 'prop-row-2';
-  const row2 = document.createElement('div'); row2.className = 'prop-row-2';
-  const row3 = document.createElement('div'); row3.className = 'prop-row';
+  const rowScale = document.createElement('div'); rowScale.className = 'prop-row';     // 크기 + 사슬
+  const rowWH = document.createElement('div'); rowWH.className = 'prop-row-2';          // 가로·세로
+  const row2 = document.createElement('div'); row2.className = 'prop-row';             // 회전
+  const row3 = document.createElement('div'); row3.className = 'prop-row';             // 투명도
 
   const fields   = {};
   const diamonds = {};
@@ -74,10 +81,25 @@ export function createLayoutSection(store, editorState) {
     diamonds[pd.path] = dia;
   }
 
+  // 크기 행: 배율 + 사슬 토글
+  const chainBtn = document.createElement('button');
+  chainBtn.className = 'size-chain-btn';
+  chainBtn.title = '비율 고정 (끄면 가로·세로 따로)';
+  chainBtn.setAttribute('aria-label', '비율 고정');
+  function _syncChain() {
+    chainBtn.classList.toggle('is-on', _ratioLock);
+    chainBtn.innerHTML = iconMarkup(_ratioLock ? 'chain' : 'chain-off', { size: 14 });
+    rowWH.style.display = _ratioLock ? 'none' : '';
+  }
+  chainBtn.addEventListener('click', () => { _ratioLock = !_ratioLock; _syncChain(); });
+  rowScale.append(fields['transform.scale'].el, chainBtn);
+
   row1.append(fields['transform.x'].el, fields['transform.y'].el);
-  row2.append(fields['transform.scale'].el, fields['transform.rotation'].el);
+  rowWH.append(fields['transform.scaleX'].el, fields['transform.scaleY'].el);
+  row2.append(fields['transform.rotation'].el);
   row3.append(fields['transform.alpha'].el);
-  body.append(row1, row2, row3);
+  body.append(row1, rowScale, rowWH, row2, row3);
+  _syncChain();
 
   function _captureVals(path) {
     const es  = editorState.get();
@@ -85,7 +107,7 @@ export function createLayoutSection(store, editorState) {
     const m = {};
     for (const id of es.selection) {
       const prop = _getProp(doc.layers[id], path);
-      m[id] = prop ? evalProp(prop, es.f) : 0;
+      m[id] = prop ? evalProp(prop, es.f) : (path.includes('scale') ? 1 : 0);
     }
     return m;
   }
@@ -124,7 +146,7 @@ export function createLayoutSection(store, editorState) {
     for (const pd of _PROPS) {
       const vals = ids.map(id => {
         const prop = _getProp(doc.layers[id], pd.path);
-        return prop ? evalProp(prop, f) : pd.def;
+        return prop ? evalProp(prop, f) : (pd.def / (pd.mul ?? 1));
       });
       const mul = pd.mul ?? 1;
       const allEqual = vals.every(v => Math.abs(v - vals[0]) < 1e-6);
@@ -139,6 +161,13 @@ export function createLayoutSection(store, editorState) {
       if (atF.every(Boolean)) dia.classList.add('on');
       else if (any) dia.classList.add('other');
     }
+    // 가로·세로가 1이 아니면 자동으로 사슬을 풀어 칸을 보인다.
+    const stretched = ids.some(id => {
+      const l = doc.layers[id];
+      return Math.abs(evalProp(_getProp(l, 'transform.scaleX') ?? { value: 1 }, f) - 1) > 1e-6
+          || Math.abs(evalProp(_getProp(l, 'transform.scaleY') ?? { value: 1 }, f) - 1) > 1e-6;
+    });
+    if (stretched && _ratioLock) { _ratioLock = false; _syncChain(); }
   }
 
   const unsubStore = store.subscribe({ layers: true }, () => { if (!_batchActive) _refresh(); });

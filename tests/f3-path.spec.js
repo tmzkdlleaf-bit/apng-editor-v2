@@ -47,7 +47,10 @@ test('F3-4 — 경로 키 점이 motionPathKeyFrames 로 나온다 + 직선화',
 test('F3-4 — 경로 표시가 장면 재렌더를 일으키지 않는다', async ({ page }) => {
   await openApp(page);
   await makePathLayer(page);
-  await page.waitForTimeout(100);
+  // 엔진 유휴 대기(이미지 디코드·폰트) — 준비 완료 후 다시 그리기가 측정에 섞이지 않게.
+  await page.waitForFunction(() => window.__stage && window.__stage.assetsPending === 0, null, { timeout: 10000 });
+  await page.evaluate(() => document.fonts && document.fonts.ready);
+  await page.waitForTimeout(150);
   const before = await page.evaluate(() => window.__stage.sceneRenderCount);
   // 선택 유지한 채 오버레이만 다시 그리게 — f 변경 없이 overlay 요청
   await page.evaluate(() => { window.__stage.requestOverlay?.(); });

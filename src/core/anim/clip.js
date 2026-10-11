@@ -11,6 +11,8 @@ import { ease } from './easing.js';
 export function evalClips(layer, f, ctx, opts = {}) {
   const { seamProbe = false } = opts;
   let dx = 0, dy = 0, dRotation = 0, mScale = 1, mAlpha = 1;
+  let mScaleX = 1, mScaleY = 1, dBright = 0, dWrapX = 0, dWrapY = 0;
+  let slices = null;
 
   for (const clip of (layer.clips ?? [])) {
     const {
@@ -62,14 +64,27 @@ export function evalClips(layer, f, ctx, opts = {}) {
       }
     }
 
-    const result = motion.evaluate(t, params, { width: ctx.width, height: ctx.height });
+    const env = ctx.env ?? { w: ctx.width, h: ctx.height, frameCount: ctx.frameCount };
+    const result = motion.evaluate(t, params, env);
 
     dx        += (result.x        ?? 0) * gain;
     dy        += (result.y        ?? 0) * gain;
     dRotation += (result.rotation ?? 0) * gain;
-    mScale    *= result.scale !== undefined ? 1 + (result.scale - 1) * gain : 1;
-    mAlpha    *= result.alpha !== undefined ? 1 + (result.alpha - 1) * gain : 1;
+    mScale    *= result.scale  !== undefined ? 1 + (result.scale  - 1) * gain : 1;
+    mScaleX   *= result.scaleX !== undefined ? 1 + (result.scaleX - 1) * gain : 1;
+    mScaleY   *= result.scaleY !== undefined ? 1 + (result.scaleY - 1) * gain : 1;
+    mAlpha    *= result.alpha  !== undefined ? 1 + (result.alpha  - 1) * gain : 1;
+    dBright   += (result.brightness ?? 0) * gain;
+    dWrapX    += (result.wrapX ?? 0) * gain;
+    dWrapY    += (result.wrapY ?? 0) * gain;
+    if (result.slices && result.slices.length) {
+      if (!slices) slices = [];
+      for (const s of result.slices) slices.push(s);
+    }
   }
 
-  return { x: dx, y: dy, rotation: dRotation, scale: mScale, alpha: mAlpha };
+  return {
+    x: dx, y: dy, rotation: dRotation, scale: mScale, alpha: mAlpha,
+    scaleX: mScaleX, scaleY: mScaleY, brightness: dBright, wrapX: dWrapX, wrapY: dWrapY, slices,
+  };
 }

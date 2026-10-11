@@ -2,7 +2,7 @@ import { defineConfig } from '@playwright/test';
 
 export default defineConfig({
   testDir: './tests',
-  testIgnore: ['**/perf/**'],
+  testIgnore: ['**/perf/**', '**/sheets/**'],
   // 인코딩(APNG/WebP/GIF 굽기) 테스트는 정상적으로도 10~15초 걸린다. 여유를 둔다.
   timeout: 60000,
   // 과다 구독 방지: 인코딩 테스트는 페이지당 렌더 스레드 + 인코드 워커 스레드를 쓴다.

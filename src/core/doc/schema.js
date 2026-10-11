@@ -40,7 +40,9 @@ function _commonFields(type) {
     transform: {
       x:        createProp(0),
       y:        createProp(0),
-      scale:    createProp(1),
+      scale:    createProp(1),   // 전체(비율 고정) 크기
+      scaleX:   createProp(1),   // 가로 보정(전체 scale에 곱)
+      scaleY:   createProp(1),   // 세로 보정(전체 scale에 곱)
       rotation: createProp(0),
       alpha:    createProp(1),
     },
@@ -89,7 +91,7 @@ export function createDoc({
 } = {}) {
   return {
     format:  'apng-editor',
-    version: 1,
+    version: 2,
     meta: {
       width, height, fps, frameCount,
       background: { type: 'transparent' },

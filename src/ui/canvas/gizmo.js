@@ -147,6 +147,15 @@ export function drawOverlay(ctx, doc, es, snapLines = [], W, H) {
             ctx.stroke();
           }
 
+          // 변 가운데 핸들 (한 방향만) — 작은 마름모로 코너와 구분
+          for (const [ex, ey] of [[0, -hh], [hw, 0], [0, hh], [-hw, 0]]) {
+            const p = localToScreen(ox + ex, oy + ey, worldTr, zoom, panX, panY, W, H, docW, docH);
+            ctx.beginPath();
+            ctx.moveTo(p.x, p.y - 4); ctx.lineTo(p.x + 4, p.y);
+            ctx.lineTo(p.x, p.y + 4); ctx.lineTo(p.x - 4, p.y);
+            ctx.closePath(); ctx.fill(); ctx.stroke();
+          }
+
           // 회전 핸들 (위쪽 중앙에서 20px 위)
           const rotHandle = localToScreen(ox, oy - hh - 20, worldTr, zoom, panX, panY, W, H, docW, docH);
           const topMid    = localToScreen(ox, oy - hh,      worldTr, zoom, panX, panY, W, H, docW, docH);

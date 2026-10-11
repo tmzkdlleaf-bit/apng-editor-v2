@@ -21,12 +21,14 @@ export function applyToCtx(ctx, m) {
   ctx.transform(m[0], m[1], m[2], m[3], m[4], m[5]);
 }
 
-// ctx에 worldTr 변환 적용 (translate → rotate → scale 순)
+// ctx에 worldTr 변환 적용 (translate → rotate → scale(전체) → scaleX/scaleY(가로·세로 보정) 순)
 // x, y = 앵커 캔버스 좌표 (왼쪽 위 원점, px)
+// scaleX/scaleY 는 레이어 로컬 공간의 비균등 스트레치(회전 뒤 적용). 기본 1.
 export function applyTransform(ctx, worldTr) {
+  const s = worldTr.scale ?? 1;
   ctx.translate(worldTr.x ?? 0, worldTr.y ?? 0);
   ctx.rotate((worldTr.rotation ?? 0) * Math.PI / 180);
-  ctx.scale(worldTr.scale ?? 1, worldTr.scale ?? 1);
+  ctx.scale(s * (worldTr.scaleX ?? 1), s * (worldTr.scaleY ?? 1));
 }
 
 // 레이어 행렬: x, y = 캔버스 앵커 좌표 (왼쪽 위 원점)
@@ -63,7 +65,15 @@ export function composeTransforms(parent, child) {
     x:        (parent.x        ?? 0) + s * (rx * cos - ry * sin),
     y:        (parent.y        ?? 0) + s * (rx * sin + ry * cos),
     scale:    s * (child.scale    ?? 1),
+    // 가로·세로 보정은 곱으로 전파(축 정렬 기준 정확, 회전된 비균등 부모에선 근사).
+    scaleX:   (parent.scaleX   ?? 1) * (child.scaleX   ?? 1),
+    scaleY:   (parent.scaleY   ?? 1) * (child.scaleY   ?? 1),
     rotation: (parent.rotation ?? 0) + (child.rotation ?? 0),
     alpha:    (parent.alpha    ?? 1) * (child.alpha    ?? 1),
+    // 렌더 전용 채널은 레이어 로컬 — 자식 값을 그대로 전달.
+    brightness: child.brightness,
+    slices:     child.slices,
+    wrapX:      child.wrapX,
+    wrapY:      child.wrapY,
   };
 }

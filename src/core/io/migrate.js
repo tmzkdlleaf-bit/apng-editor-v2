@@ -1,11 +1,26 @@
 // 문서 버전 마이그레이션 — version을 보고 최신으로 올린다.
 // 지금은 v1뿐. 뒤 버전이 생기면 MIGRATIONS[n] = (doc) => doc(n+1) 을 추가한다.
 
-export const CURRENT_VERSION = 1;
+export const CURRENT_VERSION = 2;
 
 // version n → n+1 변환 함수 목록
 const MIGRATIONS = {
-  // 1: (doc) => ({ ...doc, version: 2, ... }),
+  // v1 → v2: 변환에 가로·세로 보정(scaleX·scaleY) 추가. 기본 1이라 렌더는 그대로(픽셀 동일).
+  1: (doc) => {
+    const layers = {};
+    for (const [id, layer] of Object.entries(doc.layers ?? {})) {
+      const tr = layer.transform ?? {};
+      layers[id] = {
+        ...layer,
+        transform: {
+          ...tr,
+          scaleX: tr.scaleX ?? { value: 1 },
+          scaleY: tr.scaleY ?? { value: 1 },
+        },
+      };
+    }
+    return { ...doc, version: 2, layers };
+  },
 };
 
 export function migrate(doc) {

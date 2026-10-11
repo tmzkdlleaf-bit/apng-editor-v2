@@ -11,11 +11,14 @@ function _layerBox(doc, id, f) {
   const tr = getDocWorldTr(doc, id, f);
   const b  = getLayerBounds(layer);
   if (!tr || !b) return null;
-  const s = tr.scale ?? 1;
-  const cx = tr.x + (b.ox ?? 0) * s;   // bbox 중심 (doc)
-  const cy = tr.y + (b.oy ?? 0) * s;
-  const hw = b.hw * s, hh = b.hh * s;
-  return { tr, s, cx, cy, hw, hh, ox: b.ox ?? 0, oy: b.oy ?? 0 };
+  // 가로·세로 보정 반영(축 정렬 기준). sx = 전체 scale × scaleX.
+  const sx = (tr.scale ?? 1) * (tr.scaleX ?? 1);
+  const sy = (tr.scale ?? 1) * (tr.scaleY ?? 1);
+  const s  = tr.scale ?? 1;
+  const cx = tr.x + (b.ox ?? 0) * sx;   // bbox 중심 (doc)
+  const cy = tr.y + (b.oy ?? 0) * sy;
+  const hw = b.hw * sx, hh = b.hh * sy;
+  return { tr, s, sx, sy, cx, cy, hw, hh, ox: b.ox ?? 0, oy: b.oy ?? 0 };
 }
 
 export function createAlignSection(store, editorState) {
@@ -86,9 +89,9 @@ export function createAlignSection(store, editorState) {
         case 'vcenter': targetCy = (refT + refB) / 2; break;
         case 'bottom':  targetCy = refB - box.hh; break;
       }
-      // 중심 → anchor 좌표 역산 (회전 무시): anchorX = cx - ox*s
-      const newX = targetCx - box.ox * box.s;
-      const newY = targetCy - box.oy * box.s;
+      // 중심 → anchor 좌표 역산 (회전 무시): anchorX = cx - ox*sx
+      const newX = targetCx - box.ox * box.sx;
+      const newY = targetCy - box.oy * box.sy;
       if (key === 'left' || key === 'hcenter' || key === 'right') {
         cmds.push(buildPropCmd(doc, id, 'transform.x', newX, f, es.autoKey));
       } else {
@@ -118,7 +121,7 @@ export function createAlignSection(store, editorState) {
     for (let i = 1; i < items.length - 1; i++) {
       const it = items[i];
       const targetC = min + step * i;
-      const newVal = targetC - it.box[ofs] * it.box.s; // 중심 → anchor 역산
+      const newVal = targetC - it.box[ofs] * (axis === 'x' ? it.box.sx : it.box.sy); // 중심 → anchor 역산
       cmds.push(buildPropCmd(doc, it.id, path, newVal, f, es.autoKey));
     }
     if (cmds.length) store.apply(cmds.length === 1 ? cmds[0] : { type: 'batch', cmds });

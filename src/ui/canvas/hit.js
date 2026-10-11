@@ -14,7 +14,7 @@ export function getDocWorldTr(doc, layerId, f) {
     cur = doc.layers[cur.parentId];
   }
 
-  let tr = { x: 0, y: 0, scale: 1, rotation: 0, alpha: 1 };
+  let tr = { x: 0, y: 0, scale: 1, scaleX: 1, scaleY: 1, rotation: 0, alpha: 1 };
   for (const id of chain) {
     const localTr = evalTransform(doc, id, f, null);
     tr = composeTransforms(tr, localTr);
@@ -79,9 +79,12 @@ function _worldToLocal(worldX, worldY, worldTr) {
   const rad = -(worldTr.rotation ?? 0) * Math.PI / 180;
   const cos = Math.cos(rad), sin = Math.sin(rad);
   const s = worldTr.scale ?? 1;
+  // 가로·세로 보정까지 되돌려 레이어 콘텐츠 좌표(±hw, ±hh)로 판정.
+  const sx = s * (worldTr.scaleX ?? 1);
+  const sy = s * (worldTr.scaleY ?? 1);
   return {
-    x: (dx * cos - dy * sin) / s,
-    y: (dx * sin + dy * cos) / s,
+    x: (dx * cos - dy * sin) / sx,
+    y: (dx * sin + dy * cos) / sy,
   };
 }
 

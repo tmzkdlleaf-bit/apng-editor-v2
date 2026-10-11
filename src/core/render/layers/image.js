@@ -2,6 +2,7 @@ import { applyAdjust, hasAdjust, applyBlur } from '../adjust.js';
 import { applyTransform } from '../matrix.js';
 import { blendToComposite } from '../blend.js';
 import { renderExit } from '../exit.js';
+import { hasChannels, drawWithChannels } from '../channels.js';
 
 function _drawOutline(ctx, sil, steps, ow) {
   for (let i = 0; i < steps; i++) {
@@ -86,7 +87,19 @@ export function renderImageLayer(outputCtx, layer, worldTr, totalAlpha, rctx) {
     applyTransform(outputCtx, worldTr);
     outputCtx.globalAlpha = totalAlpha;
     outputCtx.globalCompositeOperation = blendToComposite(layer.blend);
-    outputCtx.drawImage(contentCanvas, -bW * ax, -bH * ay);
+    if (hasChannels(worldTr)) {
+      drawWithChannels(outputCtx, contentCanvas, bW, bH, ax, ay, worldTr);
+    } else {
+      outputCtx.drawImage(contentCanvas, -bW * ax, -bH * ay);
+    }
+    // 밝기 채널(모션) — 콘텐츠 알파 안에서만 밝게/어둡게. ctx.filter 금지라 덮어 칠하기로.
+    const b = worldTr.brightness;
+    if (b) {
+      outputCtx.globalCompositeOperation = 'source-atop';
+      outputCtx.globalAlpha = totalAlpha * Math.min(1, Math.abs(b));
+      outputCtx.fillStyle = b > 0 ? '#ffffff' : '#000000';
+      outputCtx.fillRect(-bW * ax, -bH * ay, bW, bH);
+    }
     outputCtx.restore();
     return;
   }

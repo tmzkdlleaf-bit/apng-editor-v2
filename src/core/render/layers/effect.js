@@ -33,8 +33,10 @@ export function renderEffectLayer(outputCtx, layer, worldTr, totalAlpha, rctx) {
   const rng  = createRng(seed);
 
   // contentCanvas 크기: 항상 렌더 픽셀(canvas pixels)
-  // scope=full: view 크기 + PAD(canvas px) 여유; scope=box: ew * renderScale
-  const PAD_PX = 20; // canvas pixel 단위 블리드 여유
+  // scope=full: view 크기 + 블리드 여유; scope=box: ew * renderScale
+  // 블리드(bleed): 효과가 보이는 영역 밖으로 그리는 여유를 doc px 로 스스로 선언(기본 20 canvas px 상당).
+  const bleedDoc = effect.bleed ?? (20 / renderScale);
+  const PAD_PX = Math.max(0, Math.round(bleedDoc * renderScale));
   const contentW = (scope === 'full')
     ? width  + PAD_PX * 2
     : Math.max(1, Math.round(ew * renderScale));

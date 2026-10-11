@@ -333,6 +333,17 @@
 .slider-field .num-input { width: 52px; box-sizing: border-box; text-align: right; }
 .slider-field .slider-range { min-width: 0; }
 
+/* 크기 비율 고정(사슬) 버튼 */
+.size-chain-btn {
+  width: 24px; height: 24px; flex-shrink: 0; padding: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: transparent; border: 1px solid transparent; border-radius: var(--r-1);
+  color: var(--dim); cursor: pointer;
+}
+.size-chain-btn:hover { color: var(--text); background: var(--btn); }
+.size-chain-btn.is-on { color: var(--acc); }
+.size-chain-btn .icon { width: 14px; height: 14px; }
+
 /* 좌우 나란히 두 칸 */
 .prop-row-2 {
   display: grid;

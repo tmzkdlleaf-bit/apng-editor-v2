@@ -94,7 +94,10 @@ test.describe('P5 캔버스 조작', () => {
 
   // ── 3. hover/선택/그리드 → scene 렌더 횟수 불변 ──────────────────────
   test('[렌더] hover/선택변경/그리드 토글 → scene 렌더 횟수 증가 없음', async ({ page }) => {
-    await page.waitForTimeout(200);
+    // 엔진 유휴 대기: 이미지 디코드·폰트 로딩이 끝나면 "준비 완료 후 다시 그리기"가 더는 없다.
+    await page.waitForFunction(() => window.__stage && window.__stage.assetsPending === 0, null, { timeout: 10000 });
+    await page.evaluate(() => document.fonts && document.fonts.ready);
+    await page.waitForTimeout(200); // 마지막 준비 완료 requestScene 정착
     const countBefore = await page.evaluate(() => window.__stage.sceneRenderCount);
 
     const canvas = page.locator('.stage-overlay');

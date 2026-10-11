@@ -11,9 +11,11 @@
 - 갤러리 분류(칩): 날씨 · 빛 · 사이버 · 연출 · 오버레이 · 파티클 · 판타지 (`src/ui/effect-gallery.js` CATEGORIES). 효과의 `category` 가 이 중 하나면 그 칩에 묶인다.
 
 **추가 방법 (파일 하나 + 등록 한 줄)**
-1. `src/effects/<이름>.js` 를 만들고 `export default { id, name, category, params, scopes?, sources?, render }` 를 둔다.
+1. `src/effects/<이름>.js` 를 만들고 `export default { id, name, category, params, scopes?, sources?, bleed?, presets?, description?, render }` 를 둔다.
 2. `registry.js` 에 `import x from './<이름>.js';` 한 줄 + Map 에 `[x.id, x]` 한 줄.
 3. 결정론·루프 규칙(`docs/effects.md`)을 지키면 갤러리·파라미터 UI·시드·범위·마스크·소스가 자동으로 붙는다.
+
+**분류 결정(S5-0 item 7)**: "불꽃", "불꽃놀이"는 만들 때 분류를 **연출**로 둔다(빛 아님). 갤러리 분류 목록은 7개 그대로(날씨·빛·사이버·연출·오버레이·파티클·판타지).
 
 **지금 들어 있는 시험 효과 3종**
 | id | 이름 | 쓰임 |

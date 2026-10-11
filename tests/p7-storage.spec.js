@@ -216,14 +216,14 @@ test.describe('P7 — 저장', () => {
     await page.goto('/');
     const r = await page.evaluate(async () => {
       const { migrate, CURRENT_VERSION } = await import('/src/core/io/migrate.js');
-      const ok = migrate({ version: 1, order: [], layers: {} });
+      const ok = migrate({ version: 1, order: [], layers: {} }); // v1 → 최신으로 올라감
       let threwFuture = false, threwNoVer = false;
       try { migrate({ version: 999 }); } catch { threwFuture = true; }
       try { migrate({ nope: true }); } catch { threwNoVer = true; }
       return { okVersion: ok.version, CURRENT_VERSION, threwFuture, threwNoVer };
     });
-    expect(r.okVersion).toBe(1);
-    expect(r.CURRENT_VERSION).toBe(1);
+    expect(r.okVersion).toBe(r.CURRENT_VERSION);
+    expect(r.CURRENT_VERSION).toBe(2);
     expect(r.threwFuture).toBe(true);
     expect(r.threwNoVer).toBe(true);
   });

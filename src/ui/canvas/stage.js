@@ -324,6 +324,8 @@ export function initStage(containerEl, store, editorState) {
       return { avg, max, count: _latencies.length };
     },
     get sceneRenderCount() { return _sceneRenderCount; },
+    // 에셋 디코드가 모두 끝났는지(테스트가 "엔진 유휴"를 기다릴 수 있게). 0 = 유휴.
+    get assetsPending() { return assets.pendingCount?.() ?? 0; },
     get offscreenCanvas() { return _offscreen; },
     resetSceneStats() { _sceneMsSamples = []; },
     getSceneStats() {

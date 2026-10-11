@@ -17,10 +17,11 @@ export function openMotionGallery(anchorEl, { onPick = () => {} } = {}) {
     const p = defaultParams(motion);
     const acc = getComputedStyle(document.documentElement).getPropertyValue('--acc').trim() || '#f0a35e';
     const r = Math.min(W, H) * 0.14;
+    const env = { w: W, h: H, frameCount: motion.defaultLength ?? 24, fps: 12 };
     let raf = null, t0 = 0;
     function frame(t) {
       ctx.clearRect(0, 0, W, H);
-      const d = motion.evaluate(t, p) ?? {};
+      const d = motion.evaluate(t, p, env) ?? {};
       const sc = d.scale ?? 1, al = d.alpha ?? 1;
       const x = cx + (d.x ?? 0) * 0.6, y = cy + (d.y ?? 0) * 0.6;
       ctx.save();

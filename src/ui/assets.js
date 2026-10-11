@@ -15,8 +15,12 @@ export function createAssets(store, onReady) {
     for (const fn of _readyListeners) { try { fn(assetId); } catch {} }
   }
 
+  // 진행 중인 디코드 수 — 0 이면 에셋 로딩이 유휴(테스트·측정이 "준비 완료"를 기다릴 수 있게).
+  let _pending = 0;
+
   function _load(assetId) {
     _cache.set(assetId, 'pending');
+    _pending++;
     getAsset(assetId)
       .then((blob) => {
         if (!blob) { _cache.set(assetId, null); return null; }
@@ -25,7 +29,8 @@ export function createAssets(store, onReady) {
           _notifyReady(assetId);
         });
       })
-      .catch(() => { _cache.set(assetId, null); });
+      .catch(() => { _cache.set(assetId, null); })
+      .finally(() => { _pending--; });
   }
 
   function getBitmap(assetId) {
@@ -40,6 +45,7 @@ export function createAssets(store, onReady) {
 
   function _loadAnim(assetId) {
     _animCache.set(assetId, 'pending');
+    _pending++;
     getAsset(assetId)
       .then((blob) => {
         if (!blob) { _animCache.set(assetId, null); return null; }
@@ -48,7 +54,8 @@ export function createAssets(store, onReady) {
           _notifyReady(assetId);
         });
       })
-      .catch(() => { _animCache.set(assetId, null); });
+      .catch(() => { _animCache.set(assetId, null); })
+      .finally(() => { _pending--; });
   }
 
   // 움직이는 이미지 프레임 — { frames: ImageBitmap[], delays: number[](ms) } 또는 null(아직/실패).
@@ -69,6 +76,8 @@ export function createAssets(store, onReady) {
 
   // 에셋 준비 완료 구독(썸네일 무효화용). unsub 반환.
   function subscribeReady(fn) { _readyListeners.add(fn); return () => _readyListeners.delete(fn); }
+  // 진행 중인 디코드 수(0 = 유휴).
+  function pendingCount() { return _pending; }
 
-  return { getBitmap, getAnimFrames, invalidate, subscribeReady };
+  return { getBitmap, getAnimFrames, invalidate, subscribeReady, pendingCount };
 }

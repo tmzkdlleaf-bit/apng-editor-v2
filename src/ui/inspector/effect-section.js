@@ -57,6 +57,26 @@ export function createEffectSection(store, editorState) {
     nameRow.innerHTML = `<span class="info-label">효과</span><span class="info-value">${effect.name}</span>`;
     body.appendChild(nameRow);
 
+    // 프리셋(모양 묶음) — 맨 위 드롭다운. 고르면 파라미터 값이 채워지고, 바꾸면 "(수정됨)".
+    if ((effect.presets ?? []).length) {
+      const _modified = (pr) => pr && Object.entries(pr.values ?? {}).some(([k, v]) => (layer.params ?? {})[k] !== v);
+      const curPr = effect.presets.find((p) => p.id === layer.preset);
+      const presetDd = createDropdown({
+        ariaLabel: '프리셋', value: layer.preset ?? '',
+        options: [{ value: '', label: '(기본)' }, ...effect.presets.map((p) => ({
+          value: p.id, label: p.label + (p.id === layer.preset && _modified(curPr) ? ' (수정됨)' : ''),
+        }))],
+        onChange: (v) => {
+          const pr = effect.presets.find((p) => p.id === v);
+          if (pr) _setLayer({ preset: v, params: { ...(layer.params ?? {}), ...pr.values } });
+          else _setLayer({ preset: '' });
+          _rebuild(true);
+        },
+      });
+      body.appendChild(_row('프리셋', presetDd.el));
+      _controls.push(presetDd);
+    }
+
     // ── 파라미터(자동 생성) — advanced 는 고급 접힘 안에 ──────────────
     const basicWrap = document.createElement('div');
     const advBody = document.createElement('div'); advBody.className = 'adj-adv-body'; advBody.hidden = true;

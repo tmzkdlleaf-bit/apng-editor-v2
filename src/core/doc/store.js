@@ -176,6 +176,7 @@ export function createStore(initDoc) {
 
   function canUndo() { return _undo.length > 0; }
   function canRedo() { return _redo.length > 0; }
+  function undoDepth() { return _undo.length; } // 되돌리기 스택 깊이(테스트의 "기록 N건" 검증용)
 
   // 열린 드래그(begin~commit) 진행 중인지. 자동 저장이 preview 중간값을 저장하지 않도록.
   function isBatching() { return _batch !== null; }
@@ -189,5 +190,5 @@ export function createStore(initDoc) {
     };
   }
 
-  return { get, apply, begin, preview, commit, cancel, undo, redo, canUndo, canRedo, isBatching, subscribe };
+  return { get, apply, begin, preview, commit, cancel, undo, redo, canUndo, canRedo, undoDepth, isBatching, subscribe };
 }

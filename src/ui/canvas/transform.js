@@ -22,8 +22,11 @@ export function localToScreen(lx, ly, worldTr, zoom, panX, panY, W, H, docW, doc
   const rad = (worldTr.rotation ?? 0) * Math.PI / 180;
   const cos = Math.cos(rad), sin = Math.sin(rad);
   const s = worldTr.scale ?? 1;
-  const dx = s * (lx * cos - ly * sin);
-  const dy = s * (lx * sin + ly * cos);
+  // 렌더와 같은 순서: 콘텐츠에 가로·세로 보정(s*scaleX, s*scaleY) 적용 후 회전.
+  const px = lx * s * (worldTr.scaleX ?? 1);
+  const py = ly * s * (worldTr.scaleY ?? 1);
+  const dx = px * cos - py * sin;
+  const dy = px * sin + py * cos;
   return docToScreen(
     (worldTr.x ?? 0) + dx,
     (worldTr.y ?? 0) + dy,

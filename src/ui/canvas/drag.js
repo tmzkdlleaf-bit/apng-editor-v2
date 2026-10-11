@@ -5,6 +5,8 @@ import { buildPropCmd, getStartValue } from './edit-prop.js';
 
 const HANDLE_RADIUS = 10;
 const CORNERS = [[-1, -1], [1, -1], [1, 1], [-1, 1]];
+// 변 가운데 핸들: [ex, ey, axis] — 위(세로)·오른(가로)·아래(세로)·왼(가로)
+const EDGE_HANDLES = [[0, -1, 'y'], [1, 0, 'x'], [0, 1, 'y'], [-1, 0, 'x']];
 
 function _dist(x1, y1, x2, y2) {
   return Math.sqrt((x1 - x2) ** 2 + (y1 - y2) ** 2);
@@ -84,6 +86,13 @@ export function initDrag(overlayCanvas, store, editorState, onSnapLines, onDraft
         const sp = localToScreen(ox + sx * hw, oy + sy * hh, worldTr, zoom, panX, panY, W, H, docW, docH);
         if (_dist(cx, cy, sp.x, sp.y) <= HANDLE_RADIUS) {
           return { type: 'corner', cornerIdx: i, id };
+        }
+      }
+      // 변 가운데 핸들(한 방향만): 위·아래 = 세로(scaleY), 좌·우 = 가로(scaleX).
+      for (const [ex, ey, axis] of EDGE_HANDLES) {
+        const sp = localToScreen(ox + ex * hw, oy + ey * hh, worldTr, zoom, panX, panY, W, H, docW, docH);
+        if (_dist(cx, cy, sp.x, sp.y) <= HANDLE_RADIUS) {
+          return { type: 'edge', axis, id };
         }
       }
       return null;
@@ -247,6 +256,18 @@ export function initDrag(overlayCanvas, store, editorState, onSnapLines, onDraft
     const bounds  = getLayerBounds(layer, assets);
     if (!worldTr || !bounds) return;
 
+    // 변 핸들: 한 방향만(scaleX 또는 scaleY). 중심 고정 스트레치. (item 1)
+    if (handleHit.type === 'edge') {
+      _drag = {
+        type: 'stretch', id, axis: handleHit.axis,
+        worldTr, hw: bounds.hw, hh: bounds.hh,
+      };
+      store.begin('가로·세로 크기');
+      overlayCanvas.setPointerCapture(e.pointerId);
+      e.preventDefault();
+      return;
+    }
+
     if (handleHit.type === 'rotate') {
       const startAngle = Math.atan2(docPos.y - worldTr.y, docPos.x - worldTr.x);
       _drag = {
@@ -340,7 +361,27 @@ export function initDrag(overlayCanvas, store, editorState, onSnapLines, onDraft
       _onRotateMove(docPos, f, autoKey, e.shiftKey);
     } else if (_drag.type === 'aabb-scale') {
       _onAabbScaleMove(e, f, autoKey);
+    } else if (_drag.type === 'stretch') {
+      _onStretchMove(docPos, f, autoKey);
     }
+  }
+
+  // 변 핸들 드래그 → scaleX 또는 scaleY 만 변경(중심 고정). 커서의 로컬 좌표 ÷ 반폭.
+  function _onStretchMove(docPos, f, autoKey) {
+    const { id, axis, worldTr, hw, hh } = _drag;
+    const rad = -(worldTr.rotation ?? 0) * Math.PI / 180;
+    const cos = Math.cos(rad), sin = Math.sin(rad);
+    const s = worldTr.scale ?? 1;
+    const dx = docPos.x - (worldTr.x ?? 0);
+    const dy = docPos.y - (worldTr.y ?? 0);
+    // 회전·전체 scale 되돌림 → 이 공간에서 변은 (반폭 × scaleX) 위치에 있다.
+    const lx = (dx * cos - dy * sin) / s;
+    const ly = (dx * sin + dy * cos) / s;
+    const currentDoc = store.get();
+    let cmd;
+    if (axis === 'x') cmd = buildPropCmd(currentDoc, id, 'transform.scaleX', Math.max(0.01, Math.abs(lx) / (hw || 1)), f, autoKey);
+    else              cmd = buildPropCmd(currentDoc, id, 'transform.scaleY', Math.max(0.01, Math.abs(ly) / (hh || 1)), f, autoKey);
+    store.preview(cmd);
   }
 
   function _onMoveMove(docPos, es, f, autoKey, e) {
