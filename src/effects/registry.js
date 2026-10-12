@@ -54,6 +54,31 @@ import neonGrid from './neon-grid.js';
 import hudRing from './hud-ring.js';
 import scanLaser from './scan-laser.js';
 
+// 판타지 (S5-3)
+import magicCircle from './magic-circle.js';
+import runes from './runes.js';
+import aura from './aura.js';
+import spiritFlame from './spirit-flame.js';
+import fairyDust from './fairy-dust.js';
+import energyOrb from './energy-orb.js';
+import magicShield from './magic-shield.js';
+
+// 연출 (S5-3)
+import flame from './flame.js';
+import fireworks from './fireworks.js';
+import confetti from './confetti.js';
+import speedLines from './speed-lines.js';
+import comicFlash from './comic-flash.js';
+import impactFlash from './impact-flash.js';
+import ripple from './ripple.js';
+import shockwave from './shockwave.js';
+import countdown from './countdown.js';
+import iris from './iris.js';
+import letterbox from './letterbox.js';
+import curtain from './curtain.js';
+import spotlight from './spotlight.js';
+import focusSun from './focus-sun.js';
+
 const _all = [
   // 시험용(S5-5에서 제거)
   testDots, testLightRays, testSourceMirror,
@@ -67,6 +92,10 @@ const _all = [
   vignette, grain, scanlines, glitch, wave, chromatic, tvNoise, vhs, halftone,
   // 사이버
   hologram, datarain, circuit, neonGrid, hudRing, scanLaser,
+  // 판타지
+  magicCircle, runes, aura, spiritFlame, fairyDust, energyOrb, magicShield,
+  // 연출
+  flame, fireworks, confetti, speedLines, comicFlash, impactFlash, ripple, shockwave, countdown, iris, letterbox, curtain, spotlight, focusSun,
 ];
 
 export const effects = new Map(_all.map((e) => [e.id, e]));
