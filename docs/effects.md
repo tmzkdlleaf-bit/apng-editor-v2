@@ -38,11 +38,22 @@ export default {
 
 `render(ctx, env, params)`:
 - `ctx` : 2D 컨텍스트. 좌표는 **문서 단위(doc px)** — 엔진이 renderScale 을 이미 적용해 둔다.
-- `env` : `{ f, frameCount, w, h, rng, sources, scale }`
+- `env` : `{ f, frameCount, w, h, rng, sources, scale, pad, borrow, release }`
   - `f` 현재 프레임, `frameCount` 전체 프레임 수, `w`/`h` 그릴 영역(doc px, scope=box 면 박스 크기).
   - `rng` **시드 난수기**(createRng(seed)). 난수는 반드시 이것만 — `Math.random()`/`Date.now()`/`performance.now()` 금지.
   - `sources` : `[{ key, canvas }]` — 소스 슬롯에 연결된 레이어를 렌더한 캔버스(없으면 canvas=null).
+    소스 캔버스는 **물리 픽셀**이고 소스 doc(0,0)이 effect 물리 `(pad, pad)`에 온다(scope=full).
+  - `scale` : renderScale(doc→물리 배율). `pad` : 소스 정렬 오프셋(물리 px).
+  - `borrow(w,h)` / `release(canvas)` : **풀에서 빌리는 임시 캔버스**(채널 분리·휨 등). 렌더 중 새 캔버스를
+    만들지 말고 이것을 쓰고 반드시 release. 안 돌려줘도 엔진이 정리하지만 쌓이지 않게 돌려준다.
 - `params` : 사용자가 정한 파라미터 값 객체.
+
+### "아래 화면을 휘게" 하는 효과(물결·글리치·색수차)
+
+지금 렌더는 레이어를 차례로 그린다. 효과가 "아래 합성 결과"를 바로 읽는 경로는 없다 →
+**소스 슬롯**으로 처리한다(엔진 변경 없음·결정론·보기 영역 규칙 유지). 왜곡할 레이어(또는 아래
+전체를 묶은 그룹)를 소스로 연결하면 그 캔버스를 받아 휘게/분리해 그린다. 소스가 없으면 자체
+오버레이로 은은히 동작(또는 무동작)한다.
 
 ## 파라미터 타입 (속성 패널이 자동 생성)
 
@@ -53,6 +64,7 @@ export default {
 | `color` | 색 칸(견본·16진수·스포이트) | `default:'#rrggbb'` |
 | `select` | 드롭다운 | `options:[{value,label}]` |
 | `bool` | 켜기/끄기 체크박스 | — |
+| `text` | 한 줄 글자 입력(직접 입력) | `default:'문자열'` (이모지·폰트 자유입력은 피하고 기본 고정폭으로 그린다) |
 
 - `advanced: true` 면 "고급" 접힘 안에 넣는다.
 - `animatable: true` 면 그 파라미터는 키프레임 가능(지금은 정의 표시만; 키 UI 는 뒤 단계).

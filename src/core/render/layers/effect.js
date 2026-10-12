@@ -78,6 +78,11 @@ export function renderEffectLayer(outputCtx, layer, worldTr, totalAlpha, rctx) {
     }
   }
 
+  // 스크래치 캔버스(채널 분리·휨 등): 풀에서 빌려 쓰고 반드시 돌려준다(렌더 중 새 캔버스 생성 금지).
+  const _borrowed = [];
+  const _borrow = (bw, bh) => { const c = pool.borrow(Math.max(1, bw | 0), Math.max(1, bh | 0)); _borrowed.push(c); return c; };
+  const _release = (c) => { const i = _borrowed.indexOf(c); if (i >= 0) { _borrowed.splice(i, 1); pool.release(c); } };
+
   effect.render(contentCtx, {
     f,
     frameCount,
@@ -87,7 +92,10 @@ export function renderEffectLayer(outputCtx, layer, worldTr, totalAlpha, rctx) {
     sources: sourcesForRender,
     scale: renderScale,
     pad: PAD_PX, // 소스 캔버스 정렬용(물리 px, scope=full): 소스 doc(0,0)=effect 물리(pad,pad)
+    borrow: _borrow,   // (w,h)->canvas  풀 임시 캔버스
+    release: _release, // (canvas)->void
   }, layer.params ?? {});
+  for (const c of _borrowed) pool.release(c); // 효과가 안 돌려준 것 정리
   for (const c of _sourceCanvases) pool.release(c);
 
   const hasMask = !!(layer.mask && rctx.renderMask);

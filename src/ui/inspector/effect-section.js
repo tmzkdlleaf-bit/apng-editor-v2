@@ -173,6 +173,13 @@ export function createEffectSection(store, editorState) {
       _controls.push(dd);
       return _row(pd.label, dd.el);
     }
+    if (pd.type === 'text') {
+      const inp = document.createElement('input');
+      inp.type = 'text'; inp.className = 'num-input'; inp.value = String(val ?? '');
+      inp.setAttribute('aria-label', pd.label);
+      inp.addEventListener('change', () => _setParam(pd.key, inp.value));
+      return _row(pd.label, inp);
+    }
     if (pd.type === 'coord') {
       const cv = (typeof val === 'object' && val) ? val : { x: 0.5, y: 0.5 };
       const fx = createNumberField({ label: 'X', min: 0, max: 1, step: 0.01, defaultValue: 0.5,

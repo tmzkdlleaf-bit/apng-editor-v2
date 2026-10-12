@@ -47,3 +47,27 @@ export function fbm(x, y, seed = 0, oct = 3) {
   for (let i = 0; i < oct; i++) { sum += amp * valueNoise(x * freq, y * freq, seed + i * 101); amp *= 0.5; freq *= 2; }
   return sum;
 }
+
+// RGB 채널 분리(색수차·글리치 색 어긋남). src=소스 캔버스(물리px), pad=정렬 오프셋.
+// R 채널을 (dxR,dyR), B 채널을 (dxB,dyB) 만큼 밀어 'lighter' 로 합친다. 풀 임시 캔버스 사용.
+export function rgbSplit(ctx, src, pad, dxR, dyR, dxB, dyB, borrow, release) {
+  const w = src.width, h = src.height;
+  const tmp = borrow(w, h);
+  const tc = tmp.getContext('2d');
+  const chan = (mult, dx, dy) => {
+    tc.setTransform(1, 0, 0, 1, 0, 0);
+    tc.globalCompositeOperation = 'source-over'; tc.globalAlpha = 1; tc.clearRect(0, 0, w, h);
+    tc.drawImage(src, 0, 0);
+    tc.globalCompositeOperation = 'multiply'; tc.fillStyle = mult; tc.fillRect(0, 0, w, h);
+    tc.globalCompositeOperation = 'destination-in'; tc.drawImage(src, 0, 0); // 소스 알파만 유지
+    ctx.drawImage(tmp, pad + dx, pad + dy);
+  };
+  ctx.save();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.globalCompositeOperation = 'lighter';
+  chan('#ff0000', dxR, dyR);
+  chan('#00ff00', 0, 0);
+  chan('#0000ff', dxB, dyB);
+  ctx.restore();
+  release(tmp);
+}
