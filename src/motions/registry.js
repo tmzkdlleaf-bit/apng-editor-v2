@@ -1,6 +1,10 @@
 // 모션 프리셋 레지스트리(F3) — 계약은 contract.js 참고.
-// 지금은 "틀을 시험할" 프리셋 3개만(시험용). 37종 내용은 5단계에서.
+// 시험용 3개 + S5-4 내용 43종(등장 12·퇴장 11·반복 12·강조 8). 시험 3개는 S5-5 에서 제거.
 // 렌더(core/anim/clip.js)는 이 Map 을 ctx.motions 로 받아 motion.evaluate(t, params) 를 부른다.
+import enterMotions from './enter.js';
+import exitMotions from './exit.js';
+import loopMotions from './loop.js';
+import emphasisMotions from './emphasis.js';
 
 // [시험] 흔들기 — 좌우로 흔드는 강조. 루프 안전(t0=t1=0).
 const _testShake = {
@@ -48,11 +52,14 @@ const _testFloat = {
   },
 };
 
-const _REGISTRY = new Map([
-  [_testShake.id,  _testShake],
-  [_testFadeIn.id, _testFadeIn],
-  [_testFloat.id,  _testFloat],
-]);
+const _ALL = [
+  // 시험용(S5-5 에서 제거)
+  _testShake, _testFadeIn, _testFloat,
+  // S5-4 내용
+  ...enterMotions, ...exitMotions, ...loopMotions, ...emphasisMotions,
+];
+
+const _REGISTRY = new Map(_ALL.map((m) => [m.id, m]));
 
 // 계약 하위호환: 일부 코드가 motion.group 을 읽을 수 있어 kind 를 group 으로도 노출.
 for (const m of _REGISTRY.values()) { if (m.group === undefined) m.group = m.kind; }
