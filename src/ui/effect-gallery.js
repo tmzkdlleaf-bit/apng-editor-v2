@@ -9,7 +9,8 @@ import { createGalleryModal } from './gallery-modal.js';
 const CATEGORIES = ['전체', '날씨', '빛', '사이버', '연출', '오버레이', '파티클', '판타지'];
 
 export function openEffectGallery(anchorEl, { onPick = () => {} } = {}) {
-  const all = getAllEffects();
+  // 시험용 효과(id 'test-' 접두)는 사용자 갤러리에서 숨긴다(레지스트리엔 테스트 재료로 남김).
+  const all = getAllEffects().filter((e) => !e.id.startsWith('test-'));
 
   // 효과 하나만 그리는 미리보기 엔진(프레임 순환).
   function _makePreview(cv, effect) {

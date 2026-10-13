@@ -7,7 +7,8 @@ import { createGalleryModal } from './gallery-modal.js';
 const KIND_LABEL = { enter: '등장', exit: '퇴장', loop: '반복', emphasis: '강조' };
 
 export function openMotionGallery(anchorEl, { onPick = () => {} } = {}) {
-  const motions = getAllMotions();
+  // 시험용 모션(id 'test-' 접두)은 사용자 갤러리에서 숨긴다(레지스트리엔 테스트 재료로 남김).
+  const motions = getAllMotions().filter((m) => !m.id.startsWith('test-'));
   const categoryOf = (m) => m.category || KIND_LABEL[m.kind] || '기타';
 
   // 점 하나에 모션 변화량을 적용해 그리는 미리보기(0..1 순환).

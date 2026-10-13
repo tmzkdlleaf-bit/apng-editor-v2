@@ -1,5 +1,5 @@
 // 시작 템플릿 + 캔버스 프리셋(F5-3) — 데이터 한 파일.
-// 템플릿 내용은 5단계 효과·모션이 나오면 여기서 교체한다(지금은 시험 효과/모션으로 틀만).
+// S5-5: 시험 효과/모션 틀을 실제 효과(sparkle·bokeh)·모션(bob)으로 교체.
 import { createDoc, createLayer, createClip } from '../core/doc/schema.js';
 import { getMotion } from '../motions/registry.js';
 
@@ -26,8 +26,8 @@ export const TEMPLATES = [
       circle.shape = { kind: 'ellipse', w: Math.min(doc.meta.width, doc.meta.height) * 0.5, h: Math.min(doc.meta.width, doc.meta.height) * 0.5, fill: '#5eb8f0', stroke: null };
       circle.transform.x.value = cx; circle.transform.y.value = cy;
       _add(doc, circle);
-      const fx = createLayer('effect', { name: '반짝임', effectId: 'test-dots' });
-      fx.params = { count: 300, radius: 3, color: '#ffffff', phase: true };
+      const fx = createLayer('effect', { name: '반짝임', effectId: 'sparkle' });
+      fx.params = { count: 60, size: 10, speed: 2, color: '#ffe9a8', shape: 'four', opacity: 1 };
       fx.seed = 42;
       _add(doc, fx);
     },
@@ -50,13 +50,13 @@ export const TEMPLATES = [
       bg.shape = { kind: 'rect', w: doc.meta.width, h: doc.meta.height, fill: '#1a1f2c', stroke: null };
       bg.transform.x.value = doc.meta.width / 2; bg.transform.y.value = doc.meta.height / 2;
       _add(doc, bg);
-      const fx = createLayer('effect', { name: '점 흐름', effectId: 'test-dots' });
-      fx.params = { count: 500, radius: 2, color: '#6ea8e0', phase: true };
+      const fx = createLayer('effect', { name: '빛망울', effectId: 'bokeh' });
+      fx.params = { count: 24, size: 36, variance: 0.6, speed: 1, color: '#6ea8e0', color2: '#a0c8ff', opacity: 0.6 };
       fx.seed = 7;
       _add(doc, fx);
-      // 둥실 모션으로 배경이 약하게 움직임(루프)
-      const float = getMotion('test-float');
-      if (float) { bg.clips = [createClip(float, { start: 0, length: doc.meta.frameCount, params: { amplitude: 6 } })]; }
+      // 둥실 모션으로 빛망울 레이어가 약하게 움직임(루프)
+      const bob = getMotion('bob');
+      if (bob) { fx.clips = [createClip(bob, { start: 0, length: doc.meta.frameCount, params: { amplitude: 6, cycles: 1 } })]; }
     },
   },
 ];

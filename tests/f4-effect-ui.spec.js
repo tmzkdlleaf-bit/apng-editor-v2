@@ -15,10 +15,10 @@ test('F4-1 — 갤러리: 분류·검색, 카드 선택 → 효과 레이어·�
   await page.click('.layer-add-item[data-kind="effect"]');
   await expect(page.locator('.gallery-panel')).toBeVisible();
 
-  // 검색 "[시험] 빛" → 시험 빛줄기만(이름 고유)
-  await page.fill('.gallery-search', '[시험] 빛');
+  // 검색 "마법진" → magic-circle 만(이름 고유). 시험 효과는 갤러리에서 숨김(S5-5).
+  await page.fill('.gallery-search', '마법진');
   await expect(page.locator('.gallery-grid .gallery-card')).toHaveCount(1);
-  await page.locator('.gallery-card[data-id="test-light-rays"]').dblclick();
+  await page.locator('.gallery-card[data-id="magic-circle"]').dblclick();
 
   const r = await page.evaluate(() => {
     const id = window.__editorState.get().selection[0];
@@ -26,7 +26,7 @@ test('F4-1 — 갤러리: 분류·검색, 카드 선택 → 효과 레이어·�
     return { type: l?.type, effectId: l?.effectId };
   });
   expect(r.type).toBe('effect');
-  expect(r.effectId).toBe('test-light-rays');
+  expect(r.effectId).toBe('magic-circle');
   const depth1 = await page.evaluate(() => window.__store.undoDepth?.() ?? -1);
   if (depth0 >= 0 && depth1 >= 0) expect(depth1 - depth0).toBe(1);
 });
