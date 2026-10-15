@@ -401,6 +401,12 @@ export function initExport(store, editorState, projectApi = null) {
   // ── 동작: 목표에 맞추기 ──────────────────────────────────────────────────
   function stopEstimate() { clearTimeout(estTimer); if (estCtrl) { estCtrl.abort(); estCtrl = null; } }
 
+  // 오류 안내 문구. 메모리 초과는 한국어로 크기를 줄이라고 안내한다.
+  function errText(err) {
+    if (err?.code === 'memory') return '캔버스·프레임 수가 커서 메모리가 부족합니다. 크기를 줄여 보세요.';
+    return err?.message ?? String(err);
+  }
+
   async function runFit() {
     if (running || !deps) return;
     const preset = getPreset(settings.presetId);
@@ -432,7 +438,7 @@ export function initExport(store, editorState, projectApi = null) {
       if (!res.reached) showToast('목표 용량에 맞추지 못했습니다. 가장 작은 결과를 표시합니다.');
     } catch (err) {
       if (err?.name === 'AbortError') setStep('취소됨');
-      else { setStep('오류: ' + err.message); showToast('맞추기 실패: ' + err.message); }
+      else { const t = errText(err); setStep('오류: ' + t); showToast('맞추기 실패: ' + t); }
     } finally {
       setBusy(false); abortCtrl = null;
     }
@@ -477,7 +483,7 @@ export function initExport(store, editorState, projectApi = null) {
       }
     } catch (err) {
       if (err?.name === 'AbortError') setStep('취소됨');
-      else { setStep('오류: ' + err.message); showToast('내보내기 실패: ' + err.message); }
+      else { const t = errText(err); setStep('오류: ' + t); showToast('내보내기 실패: ' + t); }
     } finally {
       setBusy(false); abortCtrl = null;
     }

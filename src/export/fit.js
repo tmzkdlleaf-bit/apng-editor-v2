@@ -2,7 +2,7 @@
 // 같은 크기에서는 굽기를 한 번만(baker 캐시) 하고 인코딩만 바꿔 다시 한다.
 import { bakeFrames } from '../core/export/bake.js';
 import { createRenderEngine } from '../core/render/frame.js';
-import { encode } from './encode.js';
+import { encode, createEncoder } from './encode.js';
 import { FORMAT_INFO } from './index.js';
 
 const SCALE_MULS = [1, 0.75, 0.5, 0.25];
@@ -64,6 +64,9 @@ export async function fitToTarget(doc, preset, deps = {}, ctx = {}) {
   if (typeof deps.createCanvas !== 'function') throw new Error('createCanvas 함수가 필요합니다.');
   const engine = _engineFrom(deps, doc);
   const baker  = deps.baker ?? createBaker(engine, doc, deps.createCanvas);
+  // 워커 하나를 맞추기 내내 재사용(후보마다 새 워커+wasm 로딩 방지). 바깥에서 주입하면 공유.
+  const enc    = deps.encoder ?? createEncoder();
+  const ownEnc = !deps.encoder;
 
   const format   = preset.format;
   const info     = FORMAT_INFO[format];
@@ -86,6 +89,7 @@ export async function fitToTarget(doc, preset, deps = {}, ctx = {}) {
 
   const abortCheck = () => { if (signal?.aborted) throw new DOMException('취소됨', 'AbortError'); };
   let best = null; // { buf, bytes, baked, scale, scaleMul, encOpts, reduced }
+  let lastWarning = null; // 메모리 경고로 전부 건너뛸 때 보고용
 
   async function pass(reduced) {
     for (const mul of scaleMuls) {
@@ -93,12 +97,12 @@ export async function fitToTarget(doc, preset, deps = {}, ctx = {}) {
       const scale = baseScale * mul;
       let baked = await baker.get(scale, { trim, playback, signal });
       if (baked.aborted) throw new DOMException('취소됨', 'AbortError');
-      if (baked.warning) { onLog({ text: `건너뜀(x${mul}): 메모리 경고`, bytes: null, scaleMul: mul }); continue; }
+      if (baked.warning) { lastWarning = baked.warning; onLog({ text: `건너뜀(x${mul}): 메모리 경고`, bytes: null, scaleMul: mul }); continue; }
       if (reduced) baked = halveFrames(baked);
 
       for (const encOpts of encList) {
         abortCheck();
-        const { buf, bytes } = await encode(baked, format, { ...encOpts, loops }, { signal });
+        const { buf, bytes } = await enc.encode(baked, format, { ...encOpts, loops }, { signal });
         const label = `x${mul} / ${optionLabel(format, encOpts)}${reduced ? ' / 프레임½' : ''}`;
         onLog({ text: `${label} → ${(bytes / 1024).toFixed(1)} KB`, bytes, scaleMul: mul, label, reduced });
         onProgress?.();
@@ -111,38 +115,50 @@ export async function fitToTarget(doc, preset, deps = {}, ctx = {}) {
     return false;
   }
 
-  let reached = await pass(false);
-  if (!reached && target != null && allowFrameReduction) {
-    onLog({ text: '프레임 줄이기(fps 절반)로 다시 시도', bytes: null });
-    reached = await pass(true);
-  }
+  try {
+    let reached = await pass(false);
+    if (!reached && target != null && allowFrameReduction) {
+      onLog({ text: '프레임 줄이기(fps 절반)로 다시 시도', bytes: null });
+      reached = await pass(true);
+    }
 
-  const blob = new Blob([best.buf], { type: info.mime });
-  const durationMs = best.baked.frames.reduce((a, f) => a + f.delayMs, 0);
-  return {
-    blob,
-    bytes: best.bytes,
-    width: best.baked.width,
-    height: best.baked.height,
-    frameCount: best.baked.frames.length,
-    durationMs,
-    format,
-    reached: target == null ? true : reached,
-    bakeCount: baker.bakeCount(),
-    settings: {
-      presetId: preset.id,
-      presetName: preset.name,
-      scaleMul: best.scaleMul,
-      scale: best.scale,
-      ...best.encOpts,
-      trim,
-      loops,
-      frameReduced: best.reduced,
-      targetBytes: target,
-      filename: `${deps.name ?? '프로젝트'}_${preset.id}.${info.ext}`,
-      mime: info.mime,
-    },
-  };
+    // 모든 크기가 메모리 경고로 건너뛰어 결과가 하나도 없으면 읽을 수 있는 오류를 던진다.
+    if (!best) {
+      const err = new Error('캔버스·프레임 수가 커서 메모리가 부족합니다. 크기를 줄여 보세요.');
+      err.code = 'memory';
+      if (lastWarning) err.warning = lastWarning;
+      throw err;
+    }
+
+    const blob = new Blob([best.buf], { type: info.mime });
+    const durationMs = best.baked.frames.reduce((a, f) => a + f.delayMs, 0);
+    return {
+      blob,
+      bytes: best.bytes,
+      width: best.baked.width,
+      height: best.baked.height,
+      frameCount: best.baked.frames.length,
+      durationMs,
+      format,
+      reached: target == null ? true : reached,
+      bakeCount: baker.bakeCount(),
+      settings: {
+        presetId: preset.id,
+        presetName: preset.name,
+        scaleMul: best.scaleMul,
+        scale: best.scale,
+        ...best.encOpts,
+        trim,
+        loops,
+        frameReduced: best.reduced,
+        targetBytes: target,
+        filename: `${deps.name ?? '프로젝트'}_${preset.id}.${info.ext}`,
+        mime: info.mime,
+      },
+    };
+  } finally {
+    if (ownEnc) enc.dispose();  // 성공·실패·취소 모두에서 워커 정리
+  }
 }
 
 // 여러 프리셋을 한 번에. 굽기는 크기가 같으면 공유(하나의 baker).
@@ -150,16 +166,21 @@ export async function exportMany(doc, presets, deps = {}, ctx = {}) {
   if (typeof deps.createCanvas !== 'function') throw new Error('createCanvas 함수가 필요합니다.');
   const engine = _engineFrom(deps, doc);
   const baker  = createBaker(engine, doc, deps.createCanvas);
+  const encoder = createEncoder();  // 모든 프리셋이 워커 하나를 공유
   const results = [];
-  for (const preset of presets) {
-    if (ctx.signal?.aborted) throw new DOMException('취소됨', 'AbortError');
-    const r = await fitToTarget(doc, preset, { ...deps, engine, baker }, {
-      ...ctx,
-      onLog: (e) => ctx.onLog?.({ ...e, presetId: preset.id }),
-    });
-    results.push(r);
+  try {
+    for (const preset of presets) {
+      if (ctx.signal?.aborted) throw new DOMException('취소됨', 'AbortError');
+      const r = await fitToTarget(doc, preset, { ...deps, engine, baker, encoder }, {
+        ...ctx,
+        onLog: (e) => ctx.onLog?.({ ...e, presetId: preset.id }),
+      });
+      results.push(r);
+    }
+    return { results, bakeCount: baker.bakeCount() };
+  } finally {
+    encoder.dispose();
   }
-  return { results, bakeCount: baker.bakeCount() };
 }
 
 // 용량 예상 — 추정식이 아니라 실제 인코딩 한 번. exportAnimation 과 같은 경로.

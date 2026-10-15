@@ -56,13 +56,14 @@ export async function exportAnimation(doc, opts = {}) {
   const eng = engine ?? createRenderEngine({ createCanvas, assets, effects, motions });
   const loopCount = loops ?? (playback === 'once' ? 1 : 0);
 
-  // 1) 굽기
+  // 1) 굽기 — allowLargeMemory 면 한도를 풀어 실제로 굽는다(경고만 내고 프레임 없는 결과 금지).
   const baked = await bakeFrames(eng, doc, {
     scale, range, playback, trim, createCanvas, signal,
+    ...(allowLargeMemory ? { maxMemoryMB: Infinity } : {}),
     onProgress: (d, t) => onProgress({ phase: 'bake', done: d, total: t }),
   });
   if (baked.aborted) throw new DOMException('취소됨', 'AbortError');
-  if (baked.warning && !allowLargeMemory) {
+  if (baked.warning) {
     const err = new Error('예상 메모리가 한도를 초과했습니다.');
     err.code = 'memory';
     err.warning = baked.warning;

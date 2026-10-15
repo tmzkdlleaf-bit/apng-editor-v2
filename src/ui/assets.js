@@ -69,9 +69,20 @@ export function createAssets(store, onReady) {
     return null;
   }
 
+  // 지울 때 ImageBitmap·anim 프레임을 close 해서 GPU/메모리를 바로 돌려준다.
+  function _closeBitmap(v) { if (v && v !== 'pending') { try { v.close?.(); } catch {} } }
+  function _closeAnim(v) {
+    if (v && v !== 'pending') { for (const fr of (v.frames ?? [])) { try { fr.close?.(); } catch {} } }
+  }
   function invalidate(assetId) {
-    if (assetId != null) { _cache.delete(assetId); _animCache.delete(assetId); }
-    else { _cache.clear(); _animCache.clear(); }
+    if (assetId != null) {
+      _closeBitmap(_cache.get(assetId)); _cache.delete(assetId);
+      _closeAnim(_animCache.get(assetId)); _animCache.delete(assetId);
+    } else {
+      for (const v of _cache.values()) _closeBitmap(v);
+      for (const v of _animCache.values()) _closeAnim(v);
+      _cache.clear(); _animCache.clear();
+    }
   }
 
   // 에셋 준비 완료 구독(썸네일 무효화용). unsub 반환.

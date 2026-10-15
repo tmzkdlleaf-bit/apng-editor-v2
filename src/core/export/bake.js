@@ -120,16 +120,24 @@ export async function bakeFrames(engine, doc, opts = {}) {
 
   const total = order.length;
   let done = 0;
+  // 프레임마다 setTimeout(0)을 쓰면 브라우저가 최소 4ms로 늘려 전체가 느려진다.
+  // 마지막 양보 후 일정 시간(16ms)이 지났을 때만 양보한다(취소 반응성·진행 표시는 유지).
+  const YIELD_MS = 16;
+  let lastYield = (typeof performance !== 'undefined') ? performance.now() : Date.now();
   for (let k = 0; k < baseIndices.length; k++) {
     if (signal?.aborted) return { aborted: true };
     const fi = baseIndices[k];
     engine.renderFrame(ctx, doc, fi, { scale });
+    // getImageData 는 매번 새 Uint8ClampedArray 를 돌려주므로 그대로 쓴다(복사 불필요).
     const id = ctx.getImageData(0, 0, outW, outH);
-    rendered.set(fi, new Uint8ClampedArray(id.data));
+    rendered.set(fi, id.data);
     done++;
     onProgress(Math.min(done, total), total);
-    // 프레임마다 이벤트 루프에 양보
-    await new Promise((r) => setTimeout(r, 0));
+    const now = (typeof performance !== 'undefined') ? performance.now() : Date.now();
+    if (now - lastYield >= YIELD_MS) {
+      await new Promise((r) => setTimeout(r, 0));
+      lastYield = (typeof performance !== 'undefined') ? performance.now() : Date.now();
+    }
   }
 
   // 순서대로 펼치며 지연시간 부여. 기준 프레임 인덱스의 원래 위치(k)로 baseDelays를 찾는다.
