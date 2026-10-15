@@ -106,7 +106,7 @@ function _drawShape(ctx, shape) {
 }
 
 export function renderShapeLayer(outputCtx, layer, worldTr, totalAlpha, rctx) {
-  const { pool, cache, width, height, f } = rctx;
+  const { pool, cache, width, height, viewOffsetX = 0, viewOffsetY = 0, f } = rctx;
   const shape = layer.shape ?? {};
 
   // 콘텐츠 캐시 키 (프레임 무관 — 도형 속성만)
@@ -153,6 +153,7 @@ export function renderShapeLayer(outputCtx, layer, worldTr, totalAlpha, rctx) {
   const tmpC = tmp.getContext('2d');
 
   tmpC.save();
+  tmpC.translate(-viewOffsetX, -viewOffsetY);  // view 일부만 그릴 때 마스크 캔버스와 좌표 일치
   applyTransform(tmpC, worldTr);
   tmpC.drawImage(contentCanvas, -cw / 2, -ch / 2);
   tmpC.restore();

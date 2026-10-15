@@ -6,6 +6,25 @@ function _cssFont(size, weight, font) {
   return `${weight ?? 400} ${size ?? 48}px ${font ?? 'sans-serif'}`;
 }
 
+// 폭 실측용 ctx — 모듈에서 한 번만 만든다(렌더마다 새로 만들지 않음, 렌더 규칙 4).
+// core 는 DOM 을 못 쓰므로 OffscreenCanvas 를 쓴다(Worker·테스트에서도 동작).
+let _measureCtx = null;
+function _getMeasureCtx() {
+  if (!_measureCtx && typeof OffscreenCanvas !== 'undefined') {
+    _measureCtx = new OffscreenCanvas(1, 1).getContext('2d');
+  }
+  return _measureCtx;
+}
+
+// 한 줄의 실제 폭(px). letterSpacing 은 글자 사이에만(마지막 글자 뒤 제외) 더한다.
+function _measureLineWidth(mctx, line, letterSpacing) {
+  const chars = [...line];
+  if (!chars.length) return 0;
+  let w = 0;
+  for (const ch of chars) w += mctx.measureText(ch).width;
+  return w + letterSpacing * Math.max(0, chars.length - 1);
+}
+
 // 결정론 진행도 [0,1] — 렌더 경로라 Date.now/random 금지. loop: once(유지)/loop/pingpong.
 function _progress(f, startF, endF, loop) {
   const dur = Math.max(1, (endF ?? 0) - (startF ?? 0));
@@ -17,7 +36,9 @@ function _progress(f, startF, endF, loop) {
 }
 function _smooth(t) { t = Math.max(0, Math.min(1, t)); return t * t * (3 - 2 * t); }
 
-function _drawLines(ctx, layer, f, frameCount) {
+// shadowScale: 캔버스 그림자는 CTM 축척을 안 따르므로, ctx 가 이미 scale 된 경로(동적)에서는
+//   그림자 거리·흐림에 배율을 곱해 정적 경로(1배로 굽고 blit 때 확대)와 같은 크기로 보이게 한다.
+function _drawLines(ctx, layer, f, frameCount, shadowScale = 1) {
   const text         = layer.text         ?? '';
   const color        = layer.color        ?? '#ffffff';
   const align        = layer.align        ?? 'center';
@@ -35,13 +56,13 @@ function _drawLines(ctx, layer, f, frameCount) {
   ctx.textBaseline = 'top';
 
   const lines      = String(text).split('\n');
-  const totalChars = lines.join('').length;
+  const totalChars = lines.reduce((s, l) => s + [...l].length, 0);  // 코드포인트 기준
 
   if (shadow) {
     ctx.shadowColor   = shadow.color   ?? 'rgba(0,0,0,0.5)';
-    ctx.shadowOffsetX = shadow.offsetX ?? 2;
-    ctx.shadowOffsetY = shadow.offsetY ?? 2;
-    ctx.shadowBlur    = shadow.blur    ?? 0;   // 그림자 흐림(F1) — ctx.shadowBlur 은 사파리도 지원
+    ctx.shadowOffsetX = (shadow.offsetX ?? 2) * shadowScale;
+    ctx.shadowOffsetY = (shadow.offsetY ?? 2) * shadowScale;
+    ctx.shadowBlur    = (shadow.blur    ?? 0) * shadowScale;   // 그림자 흐림(F1) — ctx.shadowBlur 은 사파리도 지원
   }
 
   const lh     = fontSize * lineHeight;
@@ -79,14 +100,15 @@ function _drawLines(ctx, layer, f, frameCount) {
   const baseAlpha = ctx.globalAlpha;
   for (let li = 0; li < lines.length; li++) {
     const line = lines[li];
+    const chars = [...line];  // 이모지 등 2칸 문자를 쪼개지 않음(_lineStartX 와 기준 일치)
     const y = startY + li * lh;
     let curX = _lineStartX(ctx, line, letterSpacing, align);
     const prevAlign = ctx.textAlign;
     ctx.textAlign = 'left'; // 수동 배치
-    for (let ci = 0; ci < line.length; ci++) {
+    for (let ci = 0; ci < chars.length; ci++) {
       const globalIdx = charIdx;
       charIdx++;
-      const ch = line[ci];
+      const ch = chars[ci];
       const chW = ctx.measureText(ch).width;
       if (globalIdx >= visibleChars) { curX += chW + letterSpacing; continue; }
 
@@ -113,7 +135,7 @@ function _drawLines(ctx, layer, f, frameCount) {
     ctx.textAlign = prevAlign;
 
     // 커서(타자기): 공개가 끝나지 않았으면 마지막 글자 뒤에 깜빡이는 막대
-    if (reveal?.cursor && visibleChars < totalChars && charIdx >= visibleChars && charIdx - line.length < visibleChars) {
+    if (reveal?.cursor && visibleChars < totalChars && charIdx >= visibleChars && charIdx - chars.length < visibleChars) {
       const blink = (f % 12) < 6 ? 1 : 0.15;
       ctx.save(); ctx.globalAlpha = baseAlpha * blink; ctx.fillRect(curX, y, Math.max(2, fontSize * 0.06), fontSize); ctx.restore();
     }
@@ -122,24 +144,31 @@ function _drawLines(ctx, layer, f, frameCount) {
 }
 
 function _wordReveal(lines, p) {
-  // 단어 단위 공개 → 공개된 '글자 수'로 환산
+  // 단어 단위 공개 → 공개된 '글자 수'로 환산.
+  // globalIdx 는 줄바꿈을 세지 않으므로(줄마다 charIdx 누적) 여기서도 '\n' 을 빼고 센다.
   const flat = lines.join('\n');
   const words = flat.split(/(\s+)/); // 공백 보존
   const realWords = words.filter((w) => w.trim().length);
   const showW = Math.round(p * realWords.length);
-  let shown = 0, chars = 0, done = 0;
+  let chars = 0, done = 0;
   for (const tok of words) {
     if (tok.trim().length) { if (done >= showW) break; done++; }
-    chars += tok.length;
+    chars += [...tok.replace(/\n/g, '')].length;  // 줄바꿈 제외, 코드포인트 기준
   }
   return chars;
 }
 function _clearShadow(ctx) { ctx.shadowColor = 'transparent'; ctx.shadowOffsetX = ctx.shadowOffsetY = ctx.shadowBlur = 0; }
 
+// 글자별 그리기 경로의 줄 시작 x (앵커 원점 기준, 첫 글자의 왼쪽 끝).
+//   left:   0            (앵커에서 오른쪽으로)
+//   center: -totalW/2
+//   right:  -totalW      (앵커에서 왼쪽으로, 끝이 앵커)
+// totalW 는 글자 사이 간격만 더한다(마지막 글자 뒤 간격 제외).
 function _lineStartX(ctx, line, letterSpacing, align) {
-  const totalW = [...line].reduce((s, ch) => s + ctx.measureText(ch).width + letterSpacing, 0);
-  if (align === 'right') return  totalW / 2;
-  return -totalW / 2;
+  const totalW = _measureLineWidth(ctx, line, letterSpacing);
+  if (align === 'right')  return -totalW;
+  if (align === 'center') return -totalW / 2;
+  return 0;
 }
 
 function _textCacheKey(layer) {
@@ -148,28 +177,62 @@ function _textCacheKey(layer) {
     `:${JSON.stringify(layer.stroke)}:${JSON.stringify(layer.shadow)}`;
 }
 
-// 콘텐츠 캔버스 크기 추정 — core에서 DOM 없이 계산 (한국어/CJK 포함 보수적 추정)
-function _textContentSize(layer) {
-  const text      = String(layer.text ?? '');
-  const lines     = text.split('\n');
-  const fontSize  = layer.size ?? 48;
-  const lineH     = layer.lineHeight ?? 1.2;
-  const lSpacing  = layer.letterSpacing ?? 0;
-  const maxLen    = Math.max(1, ...lines.map(l => l.length));
+// 텍스트 레이아웃 — measureText 로 실측한다. core 는 DOM 을 못 쓰므로 모듈 측정용
+// OffscreenCanvas 를 재사용한다. 측정 ctx 가 없으면(사파리 Worker 등) 보수적으로 어림한다.
+//   반환:
+//     cw, ch           콘텐츠 캔버스 크기(여백 포함)
+//     anchorX, anchorY 캔버스 안에서 앵커(transform 점)의 위치 = 그리기 원점 = blit 오프셋
+//     W, H             여백 뺀 글자 블록 크기(실측)
+//     boxOx, boxOy     선택 상자 중심이 앵커에서 떨어진 거리(정렬 반영)
+function _textLayout(layer) {
+  const text     = String(layer.text ?? '');
+  const lines    = text.split('\n');
+  const fontSize = layer.size ?? 48;
+  const lineH    = layer.lineHeight ?? 1.2;
+  const lSpacing = layer.letterSpacing ?? 0;
+  const align    = layer.align ?? 'center';
+
+  const mctx = _getMeasureCtx();
+  let W = 1;
+  if (mctx) {
+    mctx.font = _cssFont(layer.size, layer.weight, layer.font);
+    for (const line of lines) {
+      const w = _measureLineWidth(mctx, line, Math.abs(lSpacing));
+      if (w > W) W = w;
+    }
+  } else {
+    // 폴백: 실측 불가 시 보수적 어림(한국어/CJK 포함)
+    const maxLen = Math.max(1, ...lines.map((l) => [...l].length));
+    W = Math.max(1, fontSize * 1.1 * maxLen + Math.abs(lSpacing) * maxLen);
+  }
+  const H = lines.length * fontSize * lineH;
+
   const strokePad = layer.stroke?.width ? Math.ceil(layer.stroke.width) + 4 : 4;
   const shadowPad = layer.shadow
     ? Math.abs(layer.shadow.offsetX ?? 0) + Math.abs(layer.shadow.offsetY ?? 0) + (layer.shadow.blur ?? 0) + 4
     : 0;
   const pad = strokePad + shadowPad;
-  const cw = Math.max(1, Math.ceil(fontSize * 1.8 * maxLen + lSpacing * maxLen + pad * 2));
-  const ch = Math.max(1, Math.ceil(lines.length * fontSize * lineH + pad * 2));
-  return { cw, ch };
+
+  // 앵커(0,0) 기준 글자 x 범위 — 정렬에 따라 한쪽으로 뻗는다.
+  let xmin, xmax, boxOx;
+  if (align === 'left')       { xmin = 0;      xmax = W;   boxOx =  W / 2; }
+  else if (align === 'right') { xmin = -W;     xmax = 0;   boxOx = -W / 2; }
+  else                        { xmin = -W / 2; xmax = W / 2; boxOx = 0; }
+  const ymin = -H / 2, ymax = H / 2;
+
+  const cw = Math.max(1, Math.ceil((xmax - xmin) + pad * 2));
+  const ch = Math.max(1, Math.ceil((ymax - ymin) + pad * 2));
+  const anchorX = -xmin + pad;  // 캔버스 안 앵커 위치
+  const anchorY = -ymin + pad;
+
+  return { cw, ch, anchorX, anchorY, W, H, boxOx, boxOy: 0, pad };
 }
 
-// 외부 공개: renderer와 hit.js가 동일한 추정값을 쓰도록 export
+// 외부 공개: hit.js 선택 상자가 실측 폭·정렬 기준점을 쓰도록 export.
+//   w/h = 실측 글자 블록 크기, ox/oy = 상자 중심이 앵커에서 떨어진 거리(정렬 반영).
 export function measureTextBounds(layer) {
-  const { cw, ch } = _textContentSize(layer);
-  return { w: cw, h: ch };
+  const { W, H, boxOx, boxOy, pad } = _textLayout(layer);
+  return { w: W + pad, h: H + pad, ox: boxOx, oy: boxOy };
 }
 
 export function renderTextLayer(outputCtx, layer, worldTr, totalAlpha, rctx) {
@@ -182,25 +245,26 @@ export function renderTextLayer(outputCtx, layer, worldTr, totalAlpha, rctx) {
     const cacheKey = _textCacheKey(layer);
     let contentCanvas = cache?.get(cacheKey);
     if (!contentCanvas) {
-      const { cw, ch } = _textContentSize(layer);
-      const cc  = pool.borrow(cw, ch);
+      const layout = _textLayout(layer);
+      const cc  = pool.borrow(layout.cw, layout.ch);
       const ccx = cc.getContext('2d');
       ccx.save();
-      ccx.translate(cw / 2, ch / 2);
+      ccx.translate(layout.anchorX, layout.anchorY);  // 원점 = 앵커(transform 점)
       _drawLines(ccx, layer, f, frameCount);
       ccx.restore();
       contentCanvas = cc;
+      contentCanvas._layout = layout;  // blit 오프셋 재사용(프레임마다 재측정 안 함)
       cache?.set(cacheKey, contentCanvas);
     }
 
-    const cw = contentCanvas.width;
-    const ch = contentCanvas.height;
+    const { cw, ch, anchorX, anchorY } = contentCanvas._layout;
 
     outputCtx.save();
     applyTransform(outputCtx, worldTr);
     outputCtx.globalAlpha = totalAlpha;
     outputCtx.globalCompositeOperation = blendToComposite(layer.blend);
-    outputCtx.drawImage(contentCanvas, -cw / 2, -ch / 2);
+    // 앵커가 worldTr 원점에 오도록 캔버스의 cw×ch 영역만 그린다(풀 캔버스가 더 클 수 있음).
+    outputCtx.drawImage(contentCanvas, 0, 0, cw, ch, -anchorX, -anchorY, cw, ch);
     outputCtx.restore();
     return;
   }
@@ -214,7 +278,8 @@ export function renderTextLayer(outputCtx, layer, worldTr, totalAlpha, rctx) {
   tmpC.save();
   tmpC.translate(-viewOffsetX, -viewOffsetY);
   applyTransform(tmpC, worldTr);
-  _drawLines(tmpC, layer, f, frameCount);
+  // 동적 경로는 ctx 가 worldTr.scale 로 축척된 상태 — 그림자에 같은 배율을 곱해 정적 경로와 크기 일치
+  _drawLines(tmpC, layer, f, frameCount, worldTr.scale ?? 1);
   tmpC.restore();  // identity로 복원
 
   if (layer.mask && rctx.renderMask) {

@@ -1,7 +1,12 @@
-import { evalTransform } from '../../core/anim/evaluate.js';
+import { evalTransform, evalCamera } from '../../core/anim/evaluate.js';
 import { composeTransforms } from '../../core/render/matrix.js';
 import { measureTextBounds } from '../../core/render/layers/text.js';
+import motionRegistry from '../../motions/registry.js';
 
+// 렌더(frame.js)와 같은 합성: 카메라를 루트로 두고, 모션 클립도 반영한다.
+// screenToDoc 은 카메라가 적용된 doc-canvas 좌표를 돌려주므로, 선택 상자·기즈모가
+// 실제로 그려진 위치와 맞으려면 카메라·모션을 포함해 합성해야 한다(문서 단위).
+// 기본 카메라(zoom=1, x=0, y=0)는 항등이라 기존 동작과 같다.
 export function getDocWorldTr(doc, layerId, f) {
   const layer = doc.layers[layerId];
   if (!layer) return null;
@@ -14,9 +19,13 @@ export function getDocWorldTr(doc, layerId, f) {
     cur = doc.layers[cur.parentId];
   }
 
-  let tr = { x: 0, y: 0, scale: 1, scaleX: 1, scaleY: 1, rotation: 0, alpha: 1 };
+  const cam = evalCamera(doc, f);
+  let tr = {
+    x: cam.x ?? 0, y: cam.y ?? 0, scale: cam.zoom ?? 1,
+    scaleX: 1, scaleY: 1, rotation: 0, alpha: 1,
+  };
   for (const id of chain) {
-    const localTr = evalTransform(doc, id, f, null);
+    const localTr = evalTransform(doc, id, f, motionRegistry);
     tr = composeTransforms(tr, localTr);
   }
   return tr;
@@ -36,9 +45,10 @@ export function getLayerBounds(layer, assets) {
     w = layer.shape?.w ?? 100;
     h = layer.shape?.h ?? 100;
   } else if (type === 'text') {
-    // renderer와 동일한 추정값 사용 (measureTextBounds export)
+    // renderer와 동일한 실측값·정렬 기준점 사용(measureTextBounds export).
+    // 정렬에 따라 상자 중심이 앵커에서 벗어나므로 ox/oy 를 그대로 쓴다.
     const bounds = measureTextBounds(layer);
-    w = bounds.w; h = bounds.h;
+    return { hw: bounds.w / 2, hh: bounds.h / 2, ox: bounds.ox ?? 0, oy: bounds.oy ?? 0 };
   } else if (type === 'image' || type === 'anim') {
     if (assets) {
       const bm = type === 'image'

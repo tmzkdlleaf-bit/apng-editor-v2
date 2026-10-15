@@ -2,7 +2,7 @@
 import { blendToComposite } from '../blend.js';
 
 export function renderInstanceLayer(outputCtx, layer, worldTr, totalAlpha, rctx, renderLayerFn) {
-  const { doc, pool, width, height, f } = rctx;
+  const { doc, pool, width, height, viewOffsetX = 0, viewOffsetY = 0, f } = rctx;
   const masterId = layer.masterId;
   const master   = masterId ? doc.layers[masterId] : null;
   if (!master || master.type !== 'group') return;
@@ -11,6 +11,11 @@ export function renderInstanceLayer(outputCtx, layer, worldTr, totalAlpha, rctx,
   const childOrder = master.childOrder ?? [];
   const offscreen  = pool.borrow(width, height);
   const offCtx     = offscreen.getContext('2d');
+
+  // 자식이 doc 좌표로 그릴 수 있도록 view 오프셋 적용 (group.js 와 동일)
+  if (viewOffsetX || viewOffsetY) {
+    offCtx.translate(-viewOffsetX, -viewOffsetY);
+  }
 
   const childParentTr = { ...worldTr, alpha: 1 };
 

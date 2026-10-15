@@ -3,6 +3,7 @@
 import { effects as effectsRegistry } from '../../effects/registry.js';
 import motionRegistry from '../../motions/registry.js';
 import { getAsset } from '../../core/io/assets.js';
+import { decodeAnim } from '../../core/io/anim-decode.js';
 import { getPresets, getPreset, isDefaultPreset, saveUserPreset } from '../../export/presets.js';
 import { exportAnimation, getExportWarnings } from '../../export/index.js';
 import { fitToTarget, exportMany } from '../../export/fit.js';
@@ -527,11 +528,44 @@ export function initExport(store, editorState, projectApi = null) {
   // ── 열기/닫기 ────────────────────────────────────────────────────────────
   async function prepareDeps() {
     const doc = store.get();
-    const bmps = {};
-    for (const aid of Object.keys(doc.assets ?? {})) {
+    // 레이어 종류별로 에셋을 모은다(그룹·인스턴스 안의 레이어도 doc.layers 평면 맵에 다 있음).
+    const imgIds = new Set();
+    const animIds = new Set();
+    for (const l of Object.values(doc.layers ?? {})) {
+      if (!l || l.assetId == null) continue;
+      if (l.type === 'anim') animIds.add(l.assetId);
+      else if (l.type === 'image') imgIds.add(l.assetId);
+    }
+
+    const bmps = {};   // assetId → ImageBitmap (정지 이미지)
+    const anims = {};  // assetId → { frames, delays } (움직이는 이미지)
+
+    for (const aid of imgIds) {
       try { const b = await getAsset(aid); if (b) bmps[aid] = await createImageBitmap(b); } catch {}
     }
-    deps = { assets: { getBitmap: (id) => bmps[id] ?? null, getAnimFrames: () => null } };
+    for (const aid of animIds) {
+      try {
+        const b = await getAsset(aid);
+        if (!b) continue;
+        const res = await decodeAnim(b);
+        if (res && res.frames?.length) anims[aid] = res;
+        else { const bmp = await createImageBitmap(b); bmps[aid] = bmp; } // 디코드 실패 시 정지 이미지로
+      } catch {}
+    }
+
+    deps = {
+      assets: {
+        getBitmap: (id) => bmps[id] ?? null,
+        getAnimFrames: (id) => anims[id] ?? null,
+      },
+      // 창을 닫을 때 만든 비트맵을 모두 close() 한다(메모리 누수 방지).
+      dispose() {
+        for (const bmp of Object.values(bmps)) { try { bmp.close?.(); } catch {} }
+        for (const a of Object.values(anims)) {
+          for (const fr of (a.frames ?? [])) { try { fr.close?.(); } catch {} }
+        }
+      },
+    };
   }
 
   async function doOpen() {
@@ -563,6 +597,8 @@ export function initExport(store, editorState, projectApi = null) {
     if (estCtrl) { estCtrl.abort(); estCtrl = null; }
     if (lastResult?.url) { URL.revokeObjectURL(lastResult.url); }
     lastResult = null;
+    if (deps?.dispose) { try { deps.dispose(); } catch {} }
+    deps = null;
     _destroyDropdowns();
   }
 

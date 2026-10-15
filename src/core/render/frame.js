@@ -127,11 +127,13 @@ export function createRenderEngine(opts = {}) {
     const viewOffsetX = view ? Math.round(view.x * renderScale) : 0;
     const viewOffsetY = view ? Math.round(view.y * renderScale) : 0;
 
+    // 합성은 전부 문서 단위로 한다. renderScale 은 leaf 렌더러에 넘기기 직전
+    // (_renderLayer)에서 한 번만 곱한다 — 배율에 따라 위치가 틀어지지 않도록.
     const cam   = evalCamera(doc, f);
     const camTr = {
-      x:        (cam.x ?? 0) * renderScale,
-      y:        (cam.y ?? 0) * renderScale,
-      scale:    (cam.zoom ?? 1) * renderScale,
+      x:        (cam.x ?? 0),
+      y:        (cam.y ?? 0),
+      scale:    (cam.zoom ?? 1),
       rotation: 0,
       alpha:    1,
     };
@@ -179,9 +181,9 @@ export function createRenderEngine(opts = {}) {
   }
 
   function _renderLayer(outputCtx, layer, parentTr, rctx) {
-    const { doc, f, motions: mot } = rctx;
+    const { doc, f, motions: mot, renderScale } = rctx;
     const localTr   = evalTransform(doc, layer.id, f, mot);
-    const worldTr   = composeTransforms(parentTr, localTr);
+    const worldTr   = composeTransforms(parentTr, localTr);  // 문서 단위
     const opacity   = layer.opacity ?? 1;
     const totalAlpha = (worldTr.alpha ?? 1) * opacity;
 
@@ -192,14 +194,38 @@ export function createRenderEngine(opts = {}) {
       _renderLayer(offCtx, child, groupParentTr, childRctx ?? rctx);
     };
 
-    if      (type === 'image')    renderImageLayer(outputCtx, layer, worldTr, totalAlpha, rctx);
-    else if (type === 'anim')     renderAnimLayer(outputCtx, layer, worldTr, totalAlpha, rctx);
-    else if (type === 'text')     renderTextLayer(outputCtx, layer, worldTr, totalAlpha, rctx);
-    else if (type === 'shape')    renderShapeLayer(outputCtx, layer, worldTr, totalAlpha, rctx);
-    else if (type === 'group')    renderGroupLayer(outputCtx, layer, worldTr, totalAlpha, rctx, childRenderFn);
-    else if (type === 'instance') renderInstanceLayer(outputCtx, layer, worldTr, totalAlpha, rctx, childRenderFn);
-    else if (type === 'adjust')   renderAdjustLayer(outputCtx, layer, worldTr, totalAlpha, rctx);
-    else if (type === 'effect')   renderEffectLayer(outputCtx, layer, worldTr, totalAlpha, rctx);
+    // group·instance 는 geometry 를 직접 쓰지 않고 자식에게 worldTr 을 그대로 넘긴다
+    // → 문서 단위 worldTr 을 그대로 전달하고, renderScale 은 각 leaf 가 곱한다.
+    if (type === 'group') {
+      renderGroupLayer(outputCtx, layer, worldTr, totalAlpha, rctx, childRenderFn);
+      return;
+    }
+    if (type === 'instance') {
+      renderInstanceLayer(outputCtx, layer, worldTr, totalAlpha, rctx, childRenderFn);
+      return;
+    }
+
+    // leaf: 위치·축척에 renderScale 을 여기서 한 번만 곱한다(배율 1 이면 그대로).
+    const sTr = _scaleWorldTr(worldTr, renderScale);
+
+    if      (type === 'image')  renderImageLayer(outputCtx, layer, sTr, totalAlpha, rctx);
+    else if (type === 'anim')   renderAnimLayer(outputCtx, layer, sTr, totalAlpha, rctx);
+    else if (type === 'text')   renderTextLayer(outputCtx, layer, sTr, totalAlpha, rctx);
+    else if (type === 'shape')  renderShapeLayer(outputCtx, layer, sTr, totalAlpha, rctx);
+    else if (type === 'adjust') renderAdjustLayer(outputCtx, layer, sTr, totalAlpha, rctx);
+    else if (type === 'effect') renderEffectLayer(outputCtx, layer, sTr, totalAlpha, rctx);
+  }
+
+  // 문서 단위 worldTr 에 renderScale 을 곱해 물리 픽셀 worldTr 로 만든다.
+  // 위치(x,y)와 전체 축척(scale)만 곱한다. scaleX/scaleY(비율)·회전·alpha 는 그대로.
+  function _scaleWorldTr(tr, rs) {
+    if (!rs || rs === 1) return tr;
+    return {
+      ...tr,
+      x:     (tr.x ?? 0) * rs,
+      y:     (tr.y ?? 0) * rs,
+      scale: (tr.scale ?? 1) * rs,
+    };
   }
 
   function stats() {
