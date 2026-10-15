@@ -98,12 +98,22 @@ export function applyCommand(doc, cmd) {
         const dx = (width - oldW) / 2;
         const dy = (height - oldH) / 2;
         if (dx !== 0 || dy !== 0) {
+          // 값만이 아니라 키프레임 v 도 같이 옮긴다(키가 있으면 value 는 무시되므로).
+          // prop 객체를 통째로 새로 만들어 교체한다(되돌리기 1건에 원래 객체로 복원).
+          const offsetAxis = (propPath, prop, delta) => {
+            if (!prop) return;
+            const np = { ...prop, value: (prop.value ?? 0) + delta };
+            if (prop.keys?.length) np.keys = prop.keys.map(k => ({ ...k, v: k.v + delta }));
+            _pa(doc, patches, propPath, np);
+          };
           for (const id of Object.keys(doc.layers)) {
-            _pa(doc, patches, ['layers', id, 'transform', 'x', 'value'],
-              (doc.layers[id].transform.x.value ?? 0) + dx);
-            _pa(doc, patches, ['layers', id, 'transform', 'y', 'value'],
-              (doc.layers[id].transform.y.value ?? 0) + dy);
+            const t = doc.layers[id].transform;
+            offsetAxis(['layers', id, 'transform', 'x'], t.x, dx);
+            offsetAxis(['layers', id, 'transform', 'y'], t.y, dy);
           }
+          // 카메라 X/Y 는 줌 중심점 — 같이 옮겨야 화면 framing 이 유지된다(줌 1 이면 무해).
+          offsetAxis(['camera', 'x'], doc.camera?.x, dx);
+          offsetAxis(['camera', 'y'], doc.camera?.y, dy);
         }
       }
       break;
@@ -181,7 +191,8 @@ export function applyCommand(doc, cmd) {
     }
 
     case 'setProp': {
-      const { id, path: dotPath, value, f, ease = 'linear' } = cmd;
+      // ease 는 명시됐을 때만 바꾼다(기본값 강제 금지). 기존 키 값만 바꾸면 이징·베지어 유지.
+      const { id, path: dotPath, value, f, ease } = cmd;
       if (!doc.layers[id]) break;
       const propPath = ['layers', id, ...dotPath.split('.')];
       const prop = _get(doc, propPath);
@@ -191,8 +202,15 @@ export function applyCommand(doc, cmd) {
         // 키프레임 추가/수정 — value는 건드리지 않음
         const keys = [...(prop.keys ?? [])];
         const idx = keys.findIndex(k => k.f === f);
-        if (idx !== -1) keys[idx] = { ...keys[idx], v: value, ease };
-        else { keys.push({ f, v: value, ease }); keys.sort((a, b) => a.f - b.f); }
+        if (idx !== -1) {
+          // 기존 키: ease 가 명시됐을 때만 바꾸고, 아니면 기존 ease·bezier 유지
+          const nk = { ...keys[idx], v: value };
+          if (ease !== undefined) nk.ease = ease;
+          keys[idx] = nk;
+        } else {
+          keys.push({ f, v: value, ease: ease ?? 'linear' });
+          keys.sort((a, b) => a.f - b.f);
+        }
         _pa(doc, patches, [...propPath, 'keys'], keys);
       } else {
         // 정적 값 — 키프레임이 있으면 오류
@@ -209,7 +227,7 @@ export function applyCommand(doc, cmd) {
 
     case 'setCameraProp': {
       // 카메라(doc.camera.x/y/zoom) 값·키프레임. prop 은 { value, keys }.
-      const { prop: which, value, f, ease = 'linear' } = cmd;
+      const { prop: which, value, f, ease } = cmd;
       if (!['x', 'y', 'zoom'].includes(which)) break;
       const propPath = ['camera', which];
       const prop = _get(doc, propPath);
@@ -217,8 +235,14 @@ export function applyCommand(doc, cmd) {
       if (f !== undefined) {
         const keys = [...(prop.keys ?? [])];
         const idx = keys.findIndex(k => k.f === f);
-        if (idx !== -1) keys[idx] = { ...keys[idx], v: value, ease };
-        else { keys.push({ f, v: value, ease }); keys.sort((a, b) => a.f - b.f); }
+        if (idx !== -1) {
+          const nk = { ...keys[idx], v: value };
+          if (ease !== undefined) nk.ease = ease;
+          keys[idx] = nk;
+        } else {
+          keys.push({ f, v: value, ease: ease ?? 'linear' });
+          keys.sort((a, b) => a.f - b.f);
+        }
         _pa(doc, patches, [...propPath, 'keys'], keys);
       } else {
         if (prop.keys?.length) throw new Error('키프레임이 있는 카메라 값은 f를 지정');
@@ -252,15 +276,18 @@ export function applyCommand(doc, cmd) {
     }
 
     case 'setKey': {
-      const { id, path: dotPath, f, v, ease = 'linear' } = cmd;
+      const { id, path: dotPath, f, v, ease = 'linear', bezier } = cmd;
       if (!doc.layers[id]) break;
       const propPath = ['layers', id, ...dotPath.split('.')];
       const prop = _get(doc, propPath);
       if (!prop) break;
       const keys = [...(prop.keys ?? [])];
       const idx = keys.findIndex(k => k.f === f);
-      if (idx !== -1) keys[idx] = { f, v, ease };
-      else { keys.push({ f, v, ease }); keys.sort((a, b) => a.f - b.f); }
+      const nk = { f, v, ease };
+      // cubicBezier 면 제어점도 함께 보존(복사·붙여넣기에서 베지어가 버려지지 않게).
+      if (ease === 'cubicBezier' && Array.isArray(bezier)) nk.bezier = bezier.slice();
+      if (idx !== -1) keys[idx] = nk;
+      else { keys.push(nk); keys.sort((a, b) => a.f - b.f); }
       _pa(doc, patches, [...propPath, 'keys'], keys);
       break;
     }
@@ -284,8 +311,12 @@ export function applyCommand(doc, cmd) {
         const propPath = ['layers', id, ...dotPath.split('.')];
         const prop = _get(doc, propPath);
         if (!prop?.keys) continue;
-        const keys = prop.keys.map(k => fSet.has(k.f) ? { ...k, f: k.f + delta } : k);
-        keys.sort((a, b) => a.f - b.f);
+        // 옮긴 키가 선택 안 된 다른 키와 같은 프레임에 겹치면 옮긴 키가 이긴다(retimeKeys 와 동일).
+        const moved = prop.keys.map(k => fSet.has(k.f) ? { k: { ...k, f: k.f + delta }, m: true } : { k, m: false });
+        const byF = new Map();
+        for (const { k, m } of moved) if (!m) byF.set(k.f, k);   // 비선택 먼저 깔고
+        for (const { k, m } of moved) if (m)  byF.set(k.f, k);   // 옮긴 것으로 덮어쓴다
+        const keys = [...byF.values()].sort((a, b) => a.f - b.f);
         _pa(doc, patches, [...propPath, 'keys'], keys);
       }
       break;
@@ -460,7 +491,14 @@ export function applyCommand(doc, cmd) {
     case 'duplicateLayers': {
       const { ids } = cmd;
 
-      // 전체 복제 대상(원본 + 자손) id 매핑 구축
+      // 선택 중 다른 선택의 자손인 id 는 최상위 복제 대상에서 뺀다(group 명령과 동일).
+      // 안 그러면 그룹+자식을 함께 고르면 자식이 새 그룹과 원래 그룹 양쪽에 들어가 구조가 깨진다.
+      const allDescs = new Set();
+      for (const id of ids) for (const d of _getAllDescendants(doc, id)) allDescs.add(d);
+      const topIds = ids.filter(id => !allDescs.has(id) && doc.layers[id]);
+      const topSet = new Set(topIds);
+
+      // 전체 복제 대상(최상위 + 자손) id 매핑 구축
       const idMap = new Map();
 
       function collectIds(layerId) {
@@ -471,7 +509,7 @@ export function applyCommand(doc, cmd) {
           for (const childId of l.childOrder) collectIds(childId);
         }
       }
-      for (const id of ids) collectIds(id);
+      for (const id of topIds) collectIds(id);
 
       // 각 레이어 복제
       for (const [origId, newLayerId] of idMap) {
@@ -480,7 +518,7 @@ export function applyCommand(doc, cmd) {
         dup.id = newLayerId;
 
         // 최상위 복제본에만 ' 복사' 추가
-        if (ids.includes(origId)) {
+        if (topSet.has(origId)) {
           dup.name = orig.name + ' 복사';
         }
 
@@ -490,7 +528,7 @@ export function applyCommand(doc, cmd) {
         }
 
         // 자손의 parentId를 새 id로 교체
-        if (!ids.includes(origId) && dup.parentId && idMap.has(dup.parentId)) {
+        if (!topSet.has(origId) && dup.parentId && idMap.has(dup.parentId)) {
           dup.parentId = idMap.get(dup.parentId);
         }
 
@@ -499,17 +537,23 @@ export function applyCommand(doc, cmd) {
           dup.childOrder = dup.childOrder.map(cid => idMap.get(cid) ?? cid);
         }
 
-        // mask.sourceId가 복제 범위 안을 가리키면 새 id로 교체
+        // 복제 범위 안을 가리키는 참조는 새 id로 교체(인스턴스 마스터·마스크 소스·효과 소스).
+        if (dup.masterId && idMap.has(dup.masterId)) {
+          dup.masterId = idMap.get(dup.masterId);
+        }
         if (dup.mask?.sourceId && idMap.has(dup.mask.sourceId)) {
           dup.mask = { ...dup.mask, sourceId: idMap.get(dup.mask.sourceId) };
+        }
+        if (Array.isArray(dup.sources)) {
+          dup.sources = dup.sources.map(s =>
+            (s?.sourceId && idMap.has(s.sourceId)) ? { ...s, sourceId: idMap.get(s.sourceId) } : s);
         }
 
         _pa(doc, patches, ['layers', newLayerId], dup);
       }
 
       // 최상위 복제본을 원본 바로 뒤에 삽입
-      for (const id of ids) {
-        if (!idMap.has(id)) continue;
+      for (const id of topIds) {
         const layer = doc.layers[id];
         const parentId = layer.parentId ?? null;
         const order = _getOrder(doc, parentId);

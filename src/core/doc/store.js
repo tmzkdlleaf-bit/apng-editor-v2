@@ -156,6 +156,8 @@ export function createStore(initDoc) {
   }
 
   function undo() {
+    // 드래그(begin~commit) 진행 중엔 되돌리기를 무시한다(preview 중간값이라 기록이 꼬임).
+    if (_batch) return null;
     if (!_undo.length) return null;
     const entry = _undo.pop();
     applyPatches(_doc, entry.invPatches);
@@ -165,6 +167,7 @@ export function createStore(initDoc) {
   }
 
   function redo() {
+    if (_batch) return null;
     if (!_redo.length) return null;
     const entry = _redo.pop();
     applyPatches(_doc, entry.patches);

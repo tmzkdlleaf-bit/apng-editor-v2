@@ -42,6 +42,8 @@ export function initStage(containerEl, store, editorState) {
   let _overlayReq = false;
   let _draftMode = false;
   let _autoDraft = false;
+  let _recentMs = [];      // 최근 렌더 시간 표본(에셋 로딩 프레임 제외)
+  let _settleTimer = null; // 입력/재생이 멎으면 원해상도로 한 번 다시 그리기
   let _lastRenderMs = 0;
   let _sceneMsSamples = []; // 전체 장면 그리기(체커 포함) 시간 표본
   let _snapLines = [];
@@ -145,11 +147,32 @@ export function initStage(containerEl, store, editorState) {
 
     const elapsed = performance.now() - t0;
     _lastRenderMs = elapsed;
-    if (elapsed > 16 && !_draftMode) _autoDraft = true;
+
+    // 느린 프레임 판단: 에셋 로딩 중 프레임은 제외(첫 로딩은 원래 느림).
+    // 한 번 느렸다고 켜지지 말고 최근 몇 프레임 평균으로 자동 절반 해상도를 켠다.
+    if ((assets.pendingCount?.() ?? 0) === 0) {
+      _recentMs.push(elapsed);
+      if (_recentMs.length > 5) _recentMs.shift();
+    }
+    if (!_draftMode && !_autoDraft && _recentMs.length >= 2) {
+      const avg = _recentMs.reduce((a, b) => a + b, 0) / _recentMs.length;
+      if (avg > 16) _autoDraft = true;
+    }
 
     const blitX = Math.max(0, ox) * dpr;
     const blitY = Math.max(0, oy) * dpr;
     ctx.drawImage(offscreen, blitX, blitY);
+
+    // 자동 절반 해상도일 때: 드래그·재생이 계속되면 매 프레임 타이머가 리셋돼 흐린 상태 유지.
+    // 입력/재생이 멎으면(일정 시간 새 요청 없음) 한 번 원래 해상도로 다시 그린다.
+    if (_autoDraft && !_draftMode) {
+      clearTimeout(_settleTimer);
+      _settleTimer = setTimeout(() => {
+        _autoDraft = false;
+        _recentMs = [];
+        requestScene();
+      }, 250);
+    }
 
     _sceneMsSamples.push(performance.now() - _sceneT0);
     if (_sceneMsSamples.length > 240) _sceneMsSamples.shift();
@@ -234,12 +257,12 @@ export function initStage(containerEl, store, editorState) {
   function setDraftMode(on) {
     if (_draftMode === on) return;
     _draftMode = on;
-    if (!on) { _autoDraft = false; requestScene(); }
+    if (!on) { _autoDraft = false; _recentMs = []; clearTimeout(_settleTimer); requestScene(); }
   }
 
   function _onDraftMode(on) {
     setDraftMode(on);
-    if (!on) _autoDraft = false;
+    if (!on) { _autoDraft = false; _recentMs = []; clearTimeout(_settleTimer); }
   }
 
   overlayCanvas.addEventListener('pointermove', () => {
@@ -337,6 +360,7 @@ export function initStage(containerEl, store, editorState) {
       ro.disconnect();
       drag.cleanup();
       cleanupView();
+      clearTimeout(_settleTimer);
     },
   };
 }

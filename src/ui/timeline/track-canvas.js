@@ -224,7 +224,8 @@ export function initTrackCanvas(tracksEl, layersEl, store, editorState, playback
     if (hit.kind === 'handle') {
       store.begin('키 스트레치');
       _drag = { type: 'stretch', label: '키 스트레치', row: hit.row,
-        minF: hit.minF, maxF: hit.maxF, startX: x, lastK: 1 };
+        minF: hit.minF, maxF: hit.maxF, startX: x, lastK: 1,
+        origSel: es.kfSelection.map(r => ({ ...r })) };  // 드래그 시작 때 원래 선택 고정
       bodyCanvas.setPointerCapture(e.pointerId);
       e.preventDefault();
       return;
@@ -282,7 +283,8 @@ export function initTrackCanvas(tracksEl, layersEl, store, editorState, playback
       }
       if (_pending.type === 'kf-move') {
         store.begin('키 이동');
-        _drag = { type: 'kf-move', label: '키 이동', startX: _pending.startX, anchorF: _pending.anchorF, lastDelta: 0 };
+        _drag = { type: 'kf-move', label: '키 이동', startX: _pending.startX, anchorF: _pending.anchorF, lastDelta: 0,
+          origSel: editorState.get().kfSelection.map(r => ({ ...r })) };  // 드래그 시작 때 원래 선택 고정
       } else {
         _boxSel = { x0: _pending.startX, y0: _pending.startY, x1: x, y1: y };
       }
@@ -463,30 +465,33 @@ export function initTrackCanvas(tracksEl, layersEl, store, editorState, playback
 
   function _previewMoveKeys(delta) {
     store.cancel(); store.begin('키 이동');
-    const es = editorState.get();
+    // 항상 "원래 선택 + 이번 delta" 로 계산한다(매번 되돌린 뒤 다시 적용하므로 누적 금지).
+    const orig = _drag.origSel ?? editorState.get().kfSelection;
     const fc = store.get().meta.frameCount ?? 1;
-    // 범위 밖으로 나가면 delta 클램프
+    // 범위 밖으로 나가면 delta 클램프 (원래 선택 기준)
     let d = delta;
-    for (const r of es.kfSelection) {
+    for (const r of orig) {
       if (r.f + d < 0) d = Math.max(d, -r.f);
       if (r.f + d > fc - 1) d = Math.min(d, fc - 1 - r.f);
     }
-    const cmds = _groupByLayerPath(es.kfSelection).map(g => ({
+    const cmds = _groupByLayerPath(orig).map(g => ({
       type: 'moveKeys', id: g.id,
       refs: g.frames.map(f => ({ path: g.path, f })),
       delta: d,
     }));
     if (cmds.length) store.preview(cmds.length === 1 ? cmds[0] : { type: 'batch', cmds });
-    // 선택도 새 프레임으로 갱신
-    editorState.set({ kfSelection: es.kfSelection.map(r => ({ ...r, f: r.f + d })) });
+    // 선택도 원래 선택 + delta 로 갱신
+    editorState.set({ kfSelection: orig.map(r => ({ ...r, f: r.f + d })) });
   }
 
   function _previewStretch(k) {
-    const es = editorState.get();
+    // 항상 원래 선택 기준으로 비례 재배치(누적 금지). 겹침 검사는 현재 비선택 키 기준.
+    const orig = _drag.origSel ?? editorState.get().kfSelection;
+    const curSel = editorState.get().kfSelection;
     const fc = store.get().meta.frameCount ?? 1;
-    // 각 그룹에서 선택 프레임을 minF 기준 비례 재배치
-    const groups = _groupByLayerPath(es.kfSelection);
-    // 전체 유효성 먼저 검사
+    const doc = store.get();
+    const groups = _groupByLayerPath(orig);
+    // 전체 유효성 먼저 검사(실패하면 직전 미리보기 유지)
     const plan = [];
     for (const g of groups) {
       const minF = Math.min(...g.frames);
@@ -499,23 +504,20 @@ export function initTrackCanvas(tracksEl, layersEl, store, editorState, playback
         seen.add(to);
         moves.push({ from: f, to });
       }
-      // 선택 안 된 키와 겹치는지
-      const layer = store.get().layers[g.id];
+      // 선택 안 된 키와 겹치는지 — 현재 doc 키 중 '현재 선택 위치'가 아닌 것(움직이지 않는 키)
       const key   = g.path.split('.')[1];
-      const otherF = new Set((layer?.transform?.[key]?.keys ?? [])
-        .map(kf => kf.f).filter(ff => !g.frames.includes(ff)));
+      const curSelF = new Set(curSel.filter(r => r.id === g.id && r.path === g.path).map(r => r.f));
+      const otherF = new Set((doc.layers[g.id]?.transform?.[key]?.keys ?? [])
+        .map(kf => kf.f).filter(ff => !curSelF.has(ff)));
       for (const m of moves) if (otherF.has(m.to)) return; // 막기
       plan.push({ g, moves });
     }
     store.cancel(); store.begin('키 스트레치');
     const cmds = plan.map(p => ({ type: 'retimeKeys', id: p.g.id, path: p.g.path, moves: p.moves }));
     if (cmds.length) store.preview(cmds.length === 1 ? cmds[0] : { type: 'batch', cmds });
-    // 선택 갱신
+    // 선택 갱신 (원래 프레임 → 새 프레임)
     const newSel = [];
-    for (const p of plan) {
-      const toMap = new Map(p.moves.map(m => [m.from, m.to]));
-      for (const f of p.g.frames) newSel.push({ id: p.g.id, path: p.g.path, f: toMap.get(f) });
-    }
+    for (const p of plan) for (const m of p.moves) newSel.push({ id: p.g.id, path: p.g.path, f: m.to });
     editorState.set({ kfSelection: newSel });
   }
 

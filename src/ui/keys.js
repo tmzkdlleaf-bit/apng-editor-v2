@@ -30,6 +30,9 @@ export function initKeys(store, editorState, getDragging = () => false) {
 
   function _handler(e) {
     if (_isInputFocused()) return;
+    // 드래그(begin~commit) 진행 중엔 문서를 바꾸는 단축키를 무시한다.
+    // (apply 가 예외를 던지거나 되돌리기 기록이 꼬이는 것을 막는다. Esc 는 drag.js 가 먼저 처리.)
+    if (store.isBatching?.()) return;
 
     const es  = editorState.get();
     const doc = store.get();

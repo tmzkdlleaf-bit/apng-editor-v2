@@ -53,7 +53,7 @@ export function getLayerBounds(layer, assets) {
     if (assets) {
       const bm = type === 'image'
         ? assets.getBitmap?.(layer.assetId)
-        : assets.getAnimFrames?.(layer.assetId)?.[0];
+        : assets.getAnimFrames?.(layer.assetId)?.frames?.[0];
       if (!bm) return null;
       w = bm.width ?? bm.naturalWidth ?? 0;
       h = bm.height ?? bm.naturalHeight ?? 0;
