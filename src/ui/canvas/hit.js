@@ -7,7 +7,13 @@ import motionRegistry from '../../motions/registry.js';
 // screenToDoc 은 카메라가 적용된 doc-canvas 좌표를 돌려주므로, 선택 상자·기즈모가
 // 실제로 그려진 위치와 맞으려면 카메라·모션을 포함해 합성해야 한다(문서 단위).
 // 기본 카메라(zoom=1, x=0, y=0)는 항등이라 기존 동작과 같다.
-export function getDocWorldTr(doc, layerId, f) {
+function _cameraTr(doc, f) {
+  const cam = evalCamera(doc, f);
+  return { x: cam.x ?? 0, y: cam.y ?? 0, scale: cam.zoom ?? 1, scaleX: 1, scaleY: 1, rotation: 0, alpha: 1 };
+}
+
+// opts.camera=false 면 카메라 없는 '문서(raw) 단위' 월드. 기본(true)은 카메라 포함(화면/히트/기즈모용).
+export function getDocWorldTr(doc, layerId, f, opts = {}) {
   const layer = doc.layers[layerId];
   if (!layer) return null;
 
@@ -19,16 +25,38 @@ export function getDocWorldTr(doc, layerId, f) {
     cur = doc.layers[cur.parentId];
   }
 
-  const cam = evalCamera(doc, f);
-  let tr = {
-    x: cam.x ?? 0, y: cam.y ?? 0, scale: cam.zoom ?? 1,
-    scaleX: 1, scaleY: 1, rotation: 0, alpha: 1,
-  };
+  let tr = (opts.camera === false)
+    ? { x: 0, y: 0, scale: 1, scaleX: 1, scaleY: 1, rotation: 0, alpha: 1 }
+    : _cameraTr(doc, f);
   for (const id of chain) {
     const localTr = evalTransform(doc, id, f, motionRegistry);
     tr = composeTransforms(tr, localTr);
   }
   return tr;
+}
+
+// 레이어의 '부모' 월드 변환. 자식은 부모 체인(카메라 포함), 최상위는 카메라 자체를 부모로 본다.
+// 화면/_toDoc 좌표(카메라 월드)를 레이어 로컬 값(transform.x/y)으로 역변환할 때 공통으로 쓴다.
+export function getParentWorldTr(doc, layerId, f) {
+  const layer = doc.layers[layerId];
+  if (!layer) return null;
+  if (layer.parentId) return getDocWorldTr(doc, layer.parentId, f);
+  return _cameraTr(doc, f);
+}
+
+// 월드 좌표(카메라 월드) → parentTr 안의 로컬 transform 값으로 역변환.
+// composeTransforms(parentTr, { x }) === world 를 만족하는 x 를 돌려준다(피벗 모델).
+export function worldToLocalInParent(worldX, worldY, parentTr) {
+  if (!parentTr) return { x: worldX, y: worldY };
+  const rad = (parentTr.rotation ?? 0) * Math.PI / 180;
+  const cos = Math.cos(rad), sin = Math.sin(rad);
+  const s = parentTr.scale ?? 1;
+  const dx = worldX - (parentTr.x ?? 0);
+  const dy = worldY - (parentTr.y ?? 0);
+  return {
+    x: (parentTr.x ?? 0) + (dx * cos + dy * sin) / s,
+    y: (parentTr.y ?? 0) + (dy * cos - dx * sin) / s,
+  };
 }
 
 // 레이어 반폭/반높이 + anchor 오프셋 (ox, oy)

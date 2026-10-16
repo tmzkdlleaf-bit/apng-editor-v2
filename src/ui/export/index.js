@@ -47,6 +47,7 @@ export function initExport(store, editorState, projectApi = null) {
 
   let deps = null;         // { assets } 준비된 에셋 어댑터
   let open = false;
+  let _openToken = 0;      // 열기마다 증가 — 준비(prepareDeps)가 늦게 끝나도 닫혔으면 버리게
   let running = false;
   let abortCtrl = null;
   let estTimer = null;
@@ -441,6 +442,7 @@ export function initExport(store, editorState, projectApi = null) {
       else { const t = errText(err); setStep('오류: ' + t); showToast('맞추기 실패: ' + t); }
     } finally {
       setBusy(false); abortCtrl = null;
+      if (!open) _disposeDeps();  // 굽는 중 닫았으면 실제로 멈춘 지금 비트맵을 닫는다
     }
   }
 
@@ -486,6 +488,7 @@ export function initExport(store, editorState, projectApi = null) {
       else { const t = errText(err); setStep('오류: ' + t); showToast('내보내기 실패: ' + t); }
     } finally {
       setBusy(false); abortCtrl = null;
+      if (!open) _disposeDeps();  // 굽는 중 닫았으면 실제로 멈춘 지금 비트맵을 닫는다
     }
   }
 
@@ -532,7 +535,7 @@ export function initExport(store, editorState, projectApi = null) {
   }
 
   // ── 열기/닫기 ────────────────────────────────────────────────────────────
-  async function prepareDeps() {
+  async function prepareDeps(token) {
     const doc = store.get();
     // 레이어 종류별로 에셋을 모은다(그룹·인스턴스 안의 레이어도 doc.layers 평면 맵에 다 있음).
     const imgIds = new Set();
@@ -559,7 +562,7 @@ export function initExport(store, editorState, projectApi = null) {
       } catch {}
     }
 
-    deps = {
+    const built = {
       assets: {
         getBitmap: (id) => bmps[id] ?? null,
         getAnimFrames: (id) => anims[id] ?? null,
@@ -572,6 +575,14 @@ export function initExport(store, editorState, projectApi = null) {
         }
       },
     };
+    // 준비가 끝났을 때 창이 닫혔거나 다시 열렸으면 만든 비트맵을 바로 닫고 버린다.
+    if (token !== _openToken || !open) { built.dispose(); return; }
+    deps = built;
+  }
+
+  function _disposeDeps() {
+    if (deps?.dispose) { try { deps.dispose(); } catch {} }
+    deps = null;
   }
 
   async function doOpen() {
@@ -586,7 +597,9 @@ export function initExport(store, editorState, projectApi = null) {
     resultsEl.style.display = 'none';
     renderSettings();
     updateRunLabel();
-    await prepareDeps();
+    const myToken = ++_openToken;
+    await prepareDeps(myToken);
+    if (myToken !== _openToken || !open) return; // 준비 중 닫힘/재열림
     scheduleEstimate();
   }
 
@@ -598,13 +611,14 @@ export function initExport(store, editorState, projectApi = null) {
       cancel();
     }
     open = false;
+    _openToken++;  // 진행 중 prepareDeps 를 무효화
     modal.style.display = 'none';
     clearTimeout(estTimer);
     if (estCtrl) { estCtrl.abort(); estCtrl = null; }
     if (lastResult?.url) { URL.revokeObjectURL(lastResult.url); }
     lastResult = null;
-    if (deps?.dispose) { try { deps.dispose(); } catch {} }
-    deps = null;
+    // 굽는 중이면 실제로 멈춘 뒤(run 의 finally) 비트맵을 닫는다. 아니면 지금 닫는다.
+    if (!running) _disposeDeps();
     _destroyDropdowns();
   }
 

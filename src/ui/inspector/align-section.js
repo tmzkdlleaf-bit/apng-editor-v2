@@ -8,7 +8,9 @@ import { buildPropCmd } from '../canvas/edit-prop.js';
 function _layerBox(doc, id, f) {
   const layer = doc.layers[id];
   if (!layer) return null;
-  const tr = getDocWorldTr(doc, id, f);
+  // 정렬은 문서(raw) 공간 작업 — 캔버스 가장자리(0..docW)가 기준이라 카메라를 뺀 월드를 쓴다.
+  // (카메라를 포함하면 끌기와 같은 카메라 월드 오염이 생겨 "왼쪽"이 0이 아닌 곳에 붙는다.)
+  const tr = getDocWorldTr(doc, id, f, { camera: false });
   const b  = getLayerBounds(layer);
   if (!tr || !b) return null;
   // 가로·세로 보정 반영(축 정렬 기준). sx = 전체 scale × scaleX.

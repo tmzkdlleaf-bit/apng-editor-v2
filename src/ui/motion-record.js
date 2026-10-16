@@ -1,5 +1,6 @@
 // 모션 기록(F3-5) — 재생하면서 드래그한 움직임을 키프레임으로 녹화.
 // 머리줄 기록 버튼(빨간 점) → 3·2·1 → 녹화 → 키 줄이기 후 기록 1건. Esc 취소.
+import { getParentWorldTr, worldToLocalInParent } from './canvas/hit.js';
 
 // 키 줄이기 — 오차 허용치(tol) 이내로 선형 보간되는 중간 키를 뺀다(Douglas–Peucker).
 export function reduceKeys(points, tol = 2) {
@@ -85,7 +86,12 @@ export function createMotionRecorder(deps) {
     // 프레임이 바뀔 때마다 현재 포인터 위치를 샘플
     _unsubF = editorState.subscribe((p) => {
       if (!('f' in p) || _state !== 'recording') return;
-      if (_pointerDoc) _samples.push({ f: editorState.get().f, x: _pointerDoc.x, y: _pointerDoc.y });
+      if (_pointerDoc) {
+        // 포인터는 카메라 월드(stage.screenToDoc) → 그 프레임의 부모(최상위는 카메라) 로컬로 변환해 저장.
+        const fNow = editorState.get().f;
+        const loc = worldToLocalInParent(_pointerDoc.x, _pointerDoc.y, getParentWorldTr(store.get(), _layerId, fNow));
+        _samples.push({ f: fNow, x: loc.x, y: loc.y });
+      }
       // 마지막 프레임 지나면 종료
       const fc = store.get().meta.frameCount ?? 1;
       if (editorState.get().f >= fc - 1) finish();

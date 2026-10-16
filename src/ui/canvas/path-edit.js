@@ -3,6 +3,7 @@
 import { screenToDoc, docToScreen } from './transform.js';
 import { evalProp } from '../../core/anim/prop.js';
 import { motionPathKeyFrames } from './gizmo.js';
+import { getDocWorldTr, getParentWorldTr, worldToLocalInParent } from './hit.js';
 
 const HIT = 8; // 점 히트 반경(px)
 
@@ -47,7 +48,9 @@ export function initPathEdit(overlayCanvas, store, editorState) {
     if (!layer) return null;
     const px = layer.transform.x, py = layer.transform.y;
     for (const f of motionPathKeyFrames(layer)) {
-      const s = _toScreen(evalProp(px, f), evalProp(py, f));
+      // 점의 화면 위치는 카메라가 적용된 월드 기준(기즈모와 일치).
+      const w = getDocWorldTr(doc, layer.id, f);
+      const s = _toScreen(w.x, w.y);
       if ((s.x - cx) ** 2 + (s.y - cy) ** 2 <= HIT * HIT) {
         return { id: layer.id, f, hasX: (px.keys ?? []).some(k => k.f === f), hasY: (py.keys ?? []).some(k => k.f === f) };
       }
@@ -69,9 +72,11 @@ export function initPathEdit(overlayCanvas, store, editorState) {
     if (!_drag) return;
     const rect = overlayCanvas.getBoundingClientRect();
     const d = _toDoc(e.clientX - rect.left, e.clientY - rect.top);
+    // 카메라 월드 → 레이어 로컬 값으로 역변환(최상위는 카메라가 부모).
+    const loc = worldToLocalInParent(d.x, d.y, getParentWorldTr(store.get(), _drag.id, _drag.f));
     const cmds = [];
-    if (_drag.hasX) cmds.push({ type: 'setProp', id: _drag.id, path: 'transform.x', value: d.x, f: _drag.f });
-    if (_drag.hasY) cmds.push({ type: 'setProp', id: _drag.id, path: 'transform.y', value: d.y, f: _drag.f });
+    if (_drag.hasX) cmds.push({ type: 'setProp', id: _drag.id, path: 'transform.x', value: loc.x, f: _drag.f });
+    if (_drag.hasY) cmds.push({ type: 'setProp', id: _drag.id, path: 'transform.y', value: loc.y, f: _drag.f });
     if (cmds.length) store.preview(cmds.length === 1 ? cmds[0] : { type: 'batch', cmds });
   }
   function _onUp(e) {

@@ -184,7 +184,22 @@ function _textCacheKey(layer) {
 //     anchorX, anchorY 캔버스 안에서 앵커(transform 점)의 위치 = 그리기 원점 = blit 오프셋
 //     W, H             여백 뺀 글자 블록 크기(실측)
 //     boxOx, boxOy     선택 상자 중심이 앵커에서 떨어진 거리(정렬 반영)
+// 레이아웃 캐시 — measureTextBounds(선택 상자)가 포인터 움직임마다 글자를 다시 재지 않도록.
+// 콘텐츠 캐시와 같은 키. 폰트 로딩 완료 시 clearTextLayoutCache()로 비운다(폭이 달라지므로).
+const _layoutCache = new Map();
+export function clearTextLayoutCache() { _layoutCache.clear(); }
+
 function _textLayout(layer) {
+  const key = _textCacheKey(layer);
+  const cached = _layoutCache.get(key);
+  if (cached) return cached;
+  const layout = _computeTextLayout(layer);
+  if (_layoutCache.size > 256) _layoutCache.clear(); // 무한 증가 방지(간단 상한)
+  _layoutCache.set(key, layout);
+  return layout;
+}
+
+function _computeTextLayout(layer) {
   const text     = String(layer.text ?? '');
   const lines    = text.split('\n');
   const fontSize = layer.size ?? 48;

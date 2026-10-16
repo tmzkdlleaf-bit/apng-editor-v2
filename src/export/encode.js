@@ -84,15 +84,29 @@ export function encode(baked, format, options = {}, ctx = {}) {
 
 // 워커 하나를 재사용하는 인코더. 용량 맞추기/여러 형식처럼 encode 를 여러 번 부를 때
 // 매번 워커+WebP wasm 를 다시 읽지 않도록 한다. 한 번에 하나씩만 인코딩한다(순차 호출 전제).
+// 준비(워커+WebP wasm 로딩) 대기 한도. 느린 환경에서도 영원히 대기하지 않도록.
+const READY_TIMEOUT_MS = 15000;
+
 export function createEncoder() {
   let worker = null;
   let readyPromise = null;
   let readyResolve = null;
+  let readyReject = null;
+  let readySettled = false;
   let pending = null;  // { onProgress, resolve, reject }
+
+  function _dropWorker() {
+    if (worker) { try { worker.terminate(); } catch {} }
+    worker = null; readyPromise = null; readyResolve = null; readyReject = null; readySettled = false;
+  }
 
   function _spawn() {
     worker = _spawnWorker();
-    readyPromise = new Promise((res) => { readyResolve = res; });
+    readySettled = false;
+    readyPromise = new Promise((res, rej) => {
+      readyResolve = () => { if (!readySettled) { readySettled = true; res(); } };
+      readyReject  = (e) => { if (!readySettled) { readySettled = true; rej(e); } };
+    });
     worker.onmessage = ({ data: m }) => {
       if (m.type === 'ready')     { readyResolve?.(); return; }
       if (!pending) return;
@@ -102,13 +116,35 @@ export function createEncoder() {
       if (m.type === 'error')     { pending.reject(new Error(m.message)); return; }
     };
     worker.onerror = (err) => {
-      pending?.reject(new Error('인코더 워커 오류: ' + (err.message ?? '(알 수 없음)')));
+      const e = new Error('인코더 워커를 불러오지 못했습니다: ' + (err.message ?? '(알 수 없음)'));
+      // 준비 전이면 준비 Promise 를 거절하고 워커를 버린다(다음 호출 때 새로 만듦).
+      if (!readySettled) { readyReject?.(e); _dropWorker(); }
+      else pending?.reject(e);
     };
+  }
+
+  // 준비 대기 — 취소 신호·시간초과로도 끝난다. 준비 전 취소/실패면 워커를 버린다.
+  function _awaitReady(signal) {
+    return new Promise((resolve, reject) => {
+      let done = false;
+      const cleanup = () => { clearTimeout(timer); if (signal) signal.removeEventListener('abort', onAbort); };
+      const fin = (fn, v) => { if (done) return; done = true; cleanup(); fn(v); };
+      const onAbort = () => { _dropWorker(); fin(reject, new DOMException('취소됨', 'AbortError')); };
+      const timer = setTimeout(() => {
+        _dropWorker();
+        fin(reject, new Error('인코더 준비가 너무 오래 걸립니다. 잠시 후 다시 시도하세요.'));
+      }, READY_TIMEOUT_MS);
+      if (signal) {
+        if (signal.aborted) { onAbort(); return; }
+        signal.addEventListener('abort', onAbort, { once: true });
+      }
+      readyPromise.then(() => fin(resolve), (e) => fin(reject, e));
+    });
   }
 
   function dispose() {
     if (worker) { try { worker.terminate(); } catch {} }
-    worker = null; readyPromise = null; readyResolve = null;
+    worker = null; readyPromise = null; readyResolve = null; readyReject = null; readySettled = false;
     if (pending) { const p = pending; pending = null; p.reject(new DOMException('취소됨', 'AbortError')); }
   }
 
@@ -121,7 +157,7 @@ export function createEncoder() {
     if (signal?.aborted) throw new DOMException('취소됨', 'AbortError');
 
     if (!worker) _spawn();
-    await readyPromise;
+    await _awaitReady(signal);  // 준비 대기(취소·실패·시간초과로도 끝남)
 
     return new Promise((resolve, reject) => {
       let settled = false;

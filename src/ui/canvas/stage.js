@@ -8,6 +8,7 @@ import { initPathEdit } from './path-edit.js';
 import { createAssets } from '../assets.js';
 import { effects as effectsRegistry } from '../../effects/registry.js';
 import motionRegistry from '../../motions/registry.js';
+import { clearTextLayoutCache } from '../../core/render/layers/text.js';
 
 export function initStage(containerEl, store, editorState) {
   containerEl.innerHTML = '';
@@ -88,7 +89,7 @@ export function initStage(containerEl, store, editorState) {
         if (ly?.type === 'text' && loaded.has(ly.font)) { engine.invalidate(id); hit = true; }
       }
       // 그 폰트를 '실제로 쓰는' 글자 레이어가 있을 때만 다시 그린다(무관한 폰트 로딩은 무시).
-      if (hit) requestScene();
+      if (hit) { clearTextLayoutCache(); requestScene(); }
     });
   }
 

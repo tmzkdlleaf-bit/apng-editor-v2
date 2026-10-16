@@ -2,7 +2,7 @@
 // 같은 크기에서는 굽기를 한 번만(baker 캐시) 하고 인코딩만 바꿔 다시 한다.
 import { bakeFrames } from '../core/export/bake.js';
 import { createRenderEngine } from '../core/render/frame.js';
-import { encode, createEncoder } from './encode.js';
+import { createEncoder } from './encode.js';
 import { FORMAT_INFO } from './index.js';
 
 const SCALE_MULS = [1, 0.75, 0.5, 0.25];

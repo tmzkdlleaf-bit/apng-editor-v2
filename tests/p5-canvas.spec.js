@@ -675,9 +675,13 @@ test.describe('P5 캔버스 조작', () => {
       Object.values(window.__store.get().layers).find(l => l.name === '사각형').transform.x.value
     );
 
-    for (let i = 0; i < 5; i++) {
-      await page.keyboard.press('ArrowRight');
-    }
+    // 한 틱에 5번 연속 디스패치 — 합치기 창(500ms)이 "누름 사이 간격"이라, 부하로 느려지면
+    // page.keyboard.press 사이 간격이 창을 넘어 기록이 2건으로 쪼개질 수 있다. 동기로 보내 그 흔들림을 없앤다.
+    await page.evaluate(() => {
+      for (let i = 0; i < 5; i++) {
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+      }
+    });
 
     const movedX = await page.evaluate(() =>
       Object.values(window.__store.get().layers).find(l => l.name === '사각형').transform.x.value

@@ -1,4 +1,4 @@
-import { hitTest, getDocWorldTr, getLayerBounds } from './hit.js';
+import { hitTest, getDocWorldTr, getLayerBounds, getParentWorldTr, worldToLocalInParent } from './hit.js';
 import { screenToDoc, localToScreen } from './transform.js';
 import { computeSnap } from './snap.js';
 import { buildPropCmd, getStartValue } from './edit-prop.js';
@@ -186,10 +186,8 @@ export function initDrag(overlayCanvas, store, editorState, onSnapLines, onDraft
 
   function _startMoveDrag(e, ids, docPos, doc, f) {
     const origPositions = ids.map(id => {
-      const layer = doc.layers[id];
-      const parentWorldTr = layer?.parentId
-        ? getDocWorldTr(doc, layer.parentId, f)
-        : null;
+      // 최상위 레이어의 부모 = 카메라 변환. 화면 이동량을 카메라 줌·회전만큼 되돌려 레이어 값에 더한다.
+      const parentWorldTr = getParentWorldTr(doc, id, f);
       return {
         id,
         x: getStartValue(doc, id, 'transform.x', f),
@@ -311,8 +309,8 @@ export function initDrag(overlayCanvas, store, editorState, onSnapLines, onDraft
       const centerCornerDY = dragDocY - centerDocY;
       const origCenterDist = Math.sqrt(centerCornerDX ** 2 + centerCornerDY ** 2) || 1;
 
-      // 그룹 자식이면 부모 world transform 저장 (위치 보정 역변환용)
-      const parentWorldTr = layer.parentId ? getDocWorldTr(doc, layer.parentId, f) : null;
+      // 부모 world transform 저장(위치 역변환용). 최상위는 카메라 변환이 부모.
+      const parentWorldTr = getParentWorldTr(doc, id, f);
 
       _drag = {
         type: 'scale',
@@ -457,24 +455,13 @@ export function initDrag(overlayCanvas, store, editorState, onSnapLines, onDraft
     const currentDoc = store.get();
     const cmds = [buildPropCmd(currentDoc, id, 'transform.scale', newLocalScale, f, autoKey)];
 
-    if (isRoot) {
-      if (shiftKey) {
-        cmds.push(buildPropCmd(currentDoc, id, 'transform.x', origAnchorDocX, f, autoKey));
-        cmds.push(buildPropCmd(currentDoc, id, 'transform.y', origAnchorDocY, f, autoKey));
-      } else {
-        const newAnchorX = ePivotX + k * (origAnchorDocX - ePivotX);
-        const newAnchorY = ePivotY + k * (origAnchorDocY - ePivotY);
-        cmds.push(buildPropCmd(currentDoc, id, 'transform.x', newAnchorX, f, autoKey));
-        cmds.push(buildPropCmd(currentDoc, id, 'transform.y', newAnchorY, f, autoKey));
-      }
-    } else if (parentWorldTr) {
-      // 그룹 자식: 원하는 세계 좌표 → 부모 로컬 좌표로 역변환
-      const newWorldX = shiftKey ? origAnchorDocX : (ePivotX + k * (origAnchorDocX - ePivotX));
-      const newWorldY = shiftKey ? origAnchorDocY : (ePivotY + k * (origAnchorDocY - ePivotY));
-      const localPos = _worldToChildLocal(newWorldX, newWorldY, parentWorldTr);
-      cmds.push(buildPropCmd(currentDoc, id, 'transform.x', localPos.x, f, autoKey));
-      cmds.push(buildPropCmd(currentDoc, id, 'transform.y', localPos.y, f, autoKey));
-    }
+    // 원하는 앵커 세계 좌표(카메라 월드) → 부모(최상위는 카메라) 로컬로 역변환.
+    // 카메라가 기본값이면 parentWorldTr 가 항등이라 결과가 전과 같다.
+    const newWorldX = shiftKey ? origAnchorDocX : (ePivotX + k * (origAnchorDocX - ePivotX));
+    const newWorldY = shiftKey ? origAnchorDocY : (ePivotY + k * (origAnchorDocY - ePivotY));
+    const localPos = _worldToChildLocal(newWorldX, newWorldY, parentWorldTr);
+    cmds.push(buildPropCmd(currentDoc, id, 'transform.x', localPos.x, f, autoKey));
+    cmds.push(buildPropCmd(currentDoc, id, 'transform.y', localPos.y, f, autoKey));
 
     store.preview({ type: 'batch', cmds });
   }
@@ -492,14 +479,18 @@ export function initDrag(overlayCanvas, store, editorState, onSnapLines, onDraft
 
     const currentDoc = store.get();
     const cmds = [];
-    for (const { id, scale: origScale, x: origX, y: origY } of origScales) {
+    for (const { id, scale: origScale, worldTr } of origScales) {
       const layer = currentDoc.layers[id];
       if (!layer || layer.locked) continue;
       cmds.push(buildPropCmd(currentDoc, id, 'transform.scale', origScale * k, f, autoKey));
-      if (!layer.parentId) {
+      if (!layer.parentId && worldTr) {
+        // 피벗 기준 세계 좌표 스케일 후 부모(카메라) 로컬로 역변환(카메라 줌에서도 반대쪽 고정).
         const pivotDoc = _drag.pivotDoc;
-        cmds.push(buildPropCmd(currentDoc, id, 'transform.x', pivotDoc.x + k * (origX - pivotDoc.x), f, autoKey));
-        cmds.push(buildPropCmd(currentDoc, id, 'transform.y', pivotDoc.y + k * (origY - pivotDoc.y), f, autoKey));
+        const wx = pivotDoc.x + k * (worldTr.x - pivotDoc.x);
+        const wy = pivotDoc.y + k * (worldTr.y - pivotDoc.y);
+        const loc = worldToLocalInParent(wx, wy, getParentWorldTr(currentDoc, id, f));
+        cmds.push(buildPropCmd(currentDoc, id, 'transform.x', loc.x, f, autoKey));
+        cmds.push(buildPropCmd(currentDoc, id, 'transform.y', loc.y, f, autoKey));
       }
     }
     if (cmds.length) store.preview({ type: 'batch', cmds });
