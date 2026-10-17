@@ -13,7 +13,7 @@ test('F2-6 — 카메라 버튼 → 카메라 섹션·영역, 키 넣으면 카�
   await expect(camBtn).toBeVisible();
   await camBtn.click();
   expect(await page.evaluate(() => window.__editorState.get().cameraActive)).toBe(true);
-  await expect(page.locator('.inspector-section', { hasText: '카메라' })).toBeVisible();
+  await expect(page.locator('.inspector-section:has(.inspector-section-title:text-is("카메라"))')).toBeVisible();
 
   // 카메라 키를 넣으면 타임라인에 카메라 행이 생긴다
   await page.evaluate(() => window.__store.apply({ type: 'setCameraProp', prop: 'zoom', value: 1.2, f: 0 }));
@@ -47,7 +47,7 @@ test('F2-6 — 카메라 섹션 줌 입력 → setCameraProp, 되돌리기', asy
   await openApp(page);
   await page.locator('.tl-layers-head .tl-cam-btn').click();
   await page.waitForTimeout(80);
-  const sec = page.locator('.inspector-section', { hasText: '카메라' });
+  const sec = page.locator('.inspector-section:has(.inspector-section-title:text-is("카메라"))');
   // 줌 숫자 칸(세 번째 num-input: X, Y, 줌)
   const zoomInput = sec.locator('.num-input').nth(2);
   await zoomInput.fill('150');

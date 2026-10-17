@@ -410,6 +410,7 @@ export function initExport(store, editorState, projectApi = null) {
 
   async function runFit() {
     if (running || !deps) return;
+    const myDeps = deps;  // 이 작업이 쓰는 비트맵. 재열기로 교체되면 finally 에서 이걸 닫는다.
     const preset = getPreset(settings.presetId);
     if (!preset || preset.targetBytes == null) return;
     const doc = store.get();
@@ -442,13 +443,16 @@ export function initExport(store, editorState, projectApi = null) {
       else { const t = errText(err); setStep('오류: ' + t); showToast('맞추기 실패: ' + t); }
     } finally {
       setBusy(false); abortCtrl = null;
-      if (!open) _disposeDeps();  // 굽는 중 닫았으면 실제로 멈춘 지금 비트맵을 닫는다
+      // 재열기로 deps 가 교체됐으면 이 작업이 쓰던 비트맵을 닫는다. 아니고 창이 닫혔으면 현재 deps 를 닫는다.
+      if (myDeps && myDeps !== deps) { try { myDeps.dispose?.(); } catch {} }
+      else if (!open) _disposeDeps();
     }
   }
 
   // ── 동작: 내보내기(단일 또는 여러 형식) ─────────────────────────────────
   async function runExport() {
     if (running || !deps) return;
+    const myDeps = deps;  // 이 작업이 쓰는 비트맵. 재열기로 교체되면 finally 에서 이걸 닫는다.
     const doc = store.get();
     stopEstimate();
     window.__lastExport = null;
@@ -488,7 +492,9 @@ export function initExport(store, editorState, projectApi = null) {
       else { const t = errText(err); setStep('오류: ' + t); showToast('내보내기 실패: ' + t); }
     } finally {
       setBusy(false); abortCtrl = null;
-      if (!open) _disposeDeps();  // 굽는 중 닫았으면 실제로 멈춘 지금 비트맵을 닫는다
+      // 재열기로 deps 가 교체됐으면 이 작업이 쓰던 비트맵을 닫는다. 아니고 창이 닫혔으면 현재 deps 를 닫는다.
+      if (myDeps && myDeps !== deps) { try { myDeps.dispose?.(); } catch {} }
+      else if (!open) _disposeDeps();
     }
   }
 
@@ -587,6 +593,13 @@ export function initExport(store, editorState, projectApi = null) {
 
   async function doOpen() {
     if (open) return;
+    // 이전 세션 비트맵이 남아 있으면(굽는 중 닫기로 정리가 미뤄진 경우) 넘겨받아 정리한다 — 재열기 누수 방지.
+    // 아직 굽는 중이면 지금 닫으면 진행 중 그리기가 깨지므로, deps 참조만 떼 두고(교체) 그 작업의 finally 가 닫게 한다.
+    if (deps) {
+      const stale = deps;
+      deps = null;
+      if (!running) { try { stale.dispose?.(); } catch {} }
+    }
     open = true;
     window.__lastExport = null;
     settings = loadSettings();
@@ -642,6 +655,8 @@ export function initExport(store, editorState, projectApi = null) {
   const api = {
     open: doOpen, close: doClose,
     isOpen: () => open,
+    isBusy: () => running,
+    depsReady: () => !!deps,
     getState: () => ({ ...settings, together: [...together] }),
     getLastResult: () => lastResult,
     el: modal,

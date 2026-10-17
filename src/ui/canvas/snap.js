@@ -20,7 +20,8 @@ function _candidates(doc, es, excludeIds) {
     for (let gy = 0; gy <= docH; gy += step) pts.push({ x: null, y: gy });
   }
 
-  // 다른 레이어 경계·중심
+  // 다른 레이어 경계·중심 — align-section._layerBox 와 같은 기준(축척·앵커 오프셋 반영).
+  // bbox 중심 = x + ox*sx, 반폭 = hw*sx (sx = 전체 scale × scaleX). 회전은 무시(축 정렬 스냅).
   const { f } = es;
   for (const id of doc.order) {
     if (excludeIds.includes(id)) continue;
@@ -30,12 +31,16 @@ function _candidates(doc, es, excludeIds) {
     if (!worldTr) continue;
     const bounds = getLayerBounds(layer);
     if (!bounds) continue;
-    const { x, y } = worldTr;
-    const { hw, hh } = bounds;
-    pts.push({ x, y: null });
-    pts.push({ x: null, y });
-    pts.push({ x: x - hw, y: null }, { x: x + hw, y: null });
-    pts.push({ x: null, y: y - hh }, { x: null, y: y + hh });
+    const { hw, hh, ox = 0, oy = 0 } = bounds;
+    const sx = (worldTr.scale ?? 1) * (worldTr.scaleX ?? 1);
+    const sy = (worldTr.scale ?? 1) * (worldTr.scaleY ?? 1);
+    const cx = worldTr.x + ox * sx;
+    const cy = worldTr.y + oy * sy;
+    const hwS = hw * sx, hhS = hh * sy;
+    pts.push({ x: cx, y: null });
+    pts.push({ x: null, y: cy });
+    pts.push({ x: cx - hwS, y: null }, { x: cx + hwS, y: null });
+    pts.push({ x: null, y: cy - hhS }, { x: null, y: cy + hhS });
   }
 
   return pts;

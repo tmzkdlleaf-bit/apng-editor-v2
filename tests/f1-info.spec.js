@@ -38,6 +38,6 @@ test('F1-9 — 그룹 선택 → 그룹 정보(자식 수) 표시, 이미지 선
 test('F1-9 — 카메라 키 없음 → 카메라 섹션 숨김 / anim 레이어 없음 → anim 섹션 숨김', async ({ page }) => {
   await openApp(page);
   // 데모에는 카메라 키·anim 레이어가 없다 → 두 섹션 모두 숨김(표시 조건 검증).
-  await expect(page.locator('.inspector-section', { hasText: '카메라' })).toBeHidden();
+  await expect(page.locator('.inspector-section:has(.inspector-section-title:text-is("카메라"))')).toBeHidden();
   await expect(page.locator('.inspector-section', { hasText: '움직이는 이미지' })).toBeHidden();
 });

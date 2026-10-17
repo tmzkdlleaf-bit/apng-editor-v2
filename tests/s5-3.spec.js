@@ -92,34 +92,4 @@ test('S5-3 — 효과 결정론·루프·시드·극값', async ({ page }) => {
   }
 });
 
-test('S5-3 — 성능(768×768 프레임당 중앙값 ms)', async ({ page }) => {
-  await page.goto('/');
-  await page.waitForFunction(() => !!window.__store);
-  const perf = await page.evaluate(async (catsArr) => {
-    const cats = new Set(catsArr);
-    const { createRenderEngine } = await import('/src/core/render/frame.js');
-    const { effects, getAllEffects } = await import('/src/effects/registry.js');
-    const { createDoc, createLayer } = await import('/src/core/doc/schema.js');
-    const mk = (w, h) => { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; };
-    const S = 768;
-    const engFx = createRenderEngine({ createCanvas: mk, effects });
-    const list = getAllEffects().filter((e) => cats.has(e.category) && !e.id.startsWith('test-'));
-    const out = {};
-    const cv = mk(S, S); const cctx = cv.getContext('2d');
-    for (const eff of list) {
-      const doc = createDoc({ width: S, height: S, fps: 12, frameCount: 24 });
-      const fx = createLayer('effect', { name: 'fx', effectId: eff.id });
-      fx.params = {}; for (const d of (eff.params ?? [])) fx.params[d.key] = d.default;
-      doc.layers[fx.id] = fx; doc.order.push(fx.id);
-      engFx.renderFrame(cctx, doc, 0, {});
-      const ts = [];
-      for (let f = 0; f < 15; f++) { const t0 = performance.now(); engFx.renderFrame(cctx, doc, f, {}); ts.push(performance.now() - t0); }
-      ts.sort((a, b) => a - b);
-      out[eff.id] = ts[Math.floor(ts.length / 2)];
-    }
-    return out;
-  }, [...CATS]);
-  const lines = Object.entries(perf).map(([id, ms]) => `${id}: ${ms.toFixed(2)}ms`);
-  console.log('S5-3 성능(768², 프레임당 중앙값):\n  ' + lines.join('\n  '));
-  for (const [id, ms] of Object.entries(perf)) expect(ms, `${id} 성능`).toBeLessThan(25);
-});
+// 성능 측정은 npm run perf(tests/perf/s5-perf.spec.js, 작업자 1개)로 옮겼다.

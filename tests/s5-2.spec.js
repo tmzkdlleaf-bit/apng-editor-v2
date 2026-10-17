@@ -85,46 +85,4 @@ test('S5-2 — 효과 결정론·루프·시드·극값', async ({ page }) => {
   }
 });
 
-test('S5-2 — 성능(768×768 프레임당 중앙값 ms)', async ({ page }) => {
-  await page.goto('/');
-  await page.waitForFunction(() => !!window.__store);
-  const perf = await page.evaluate(async (catsArr) => {
-    const cats = new Set(catsArr);
-    const { createRenderEngine } = await import('/src/core/render/frame.js');
-    const { effects, getAllEffects } = await import('/src/effects/registry.js');
-    const { createDoc, createLayer } = await import('/src/core/doc/schema.js');
-    const mk = (w, h) => { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; };
-    const S = 768;
-    const engFx = createRenderEngine({ createCanvas: mk, effects });
-    const list = getAllEffects().filter((e) => cats.has(e.category));
-    const out = {};
-    const cv = mk(S, S); const cctx = cv.getContext('2d');
-    for (const eff of list) {
-      const doc = createDoc({ width: S, height: S, fps: 12, frameCount: 24 });
-      let srcId = null;
-      if ((eff.sources ?? []).length) {
-        const shp = createLayer('shape', { name: 'src' });
-        shp.shape = { kind: 'ellipse', w: S * 0.6, h: S * 0.6, fill: '#88bbff', stroke: null };
-        shp.transform.x.value = S / 2; shp.transform.y.value = S / 2;
-        doc.layers[shp.id] = shp; doc.order.push(shp.id); srcId = shp.id;
-      }
-      const fx = createLayer('effect', { name: 'fx', effectId: eff.id });
-      fx.params = {}; for (const d of (eff.params ?? [])) fx.params[d.key] = d.default;
-      if (srcId) fx.sources = eff.sources.map((s) => ({ key: s.key, sourceId: srcId }));
-      doc.layers[fx.id] = fx; doc.order.push(fx.id);
-      engFx.renderFrame(cctx, doc, 0, {});
-      const ts = [];
-      for (let f = 0; f < 15; f++) { const t0 = performance.now(); engFx.renderFrame(cctx, doc, f, {}); ts.push(performance.now() - t0); }
-      ts.sort((a, b) => a - b);
-      out[eff.id] = ts[Math.floor(ts.length / 2)];
-    }
-    return out;
-  }, [...CATS]);
-  const lines = Object.entries(perf).map(([id, ms]) => `${id}: ${ms.toFixed(2)}ms`);
-  console.log('S5-2 성능(768², 프레임당 중앙값):\n  ' + lines.join('\n  '));
-  // 효과별 기준(평소 값의 ~2.5배, 최소 25ms)으로 부하 중 CI 흔들림을 줄인다.
-  // 색수차(chromatic)·하프톤(halftone)은 측정이 무겁다(검토 3-6) — 넉넉히 잡고 효과 코드는 이 묶음에서 안 고침.
-  // 평소: chromatic ~18ms, halftone ~11ms, hologram ~6ms, 나머지 <4ms.
-  const LIMIT = { chromatic: 60, halftone: 60, hologram: 40, vhs: 40, glitch: 40, 'tv-noise': 40, datarain: 40 };
-  for (const [id, ms] of Object.entries(perf)) expect(ms, `${id} 성능`).toBeLessThan(LIMIT[id] ?? 25);
-});
+// 성능 측정은 npm run perf(tests/perf/s5-perf.spec.js, 작업자 1개)로 옮겼다.
