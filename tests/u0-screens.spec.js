@@ -6,7 +6,11 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 
 const __dir = dirname(fileURLToPath(import.meta.url));
-const OUT = join(__dir, '..', 'docs', 'screens');
+// 기본(npm test)은 커밋되지 않는 test-results/screens/ 에 찍는다(.gitignore 됨).
+// docs/screens/ 는 문서용 — npm run screens(SCREENS_DOCS=1)일 때만 갱신한다.
+const OUT = process.env.SCREENS_DOCS
+  ? join(__dir, '..', 'docs', 'screens')
+  : join(__dir, '..', 'test-results', 'screens');
 
 test.use({ viewport: { width: 1400, height: 900 } });
 

@@ -4,3 +4,4 @@ test-results/
 playwright-report/
 old/
 .claude/
+test-out.txt

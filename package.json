@@ -8,6 +8,7 @@
     "test": "playwright test",
     "perf": "playwright test --config=playwright.perf.config.js",
     "sheets": "playwright test --config=playwright.sheets.config.js",
+    "screens": "playwright test --config=playwright.screens.config.js",
     "build": "node scripts/build.mjs"
   },
   "devDependencies": {
