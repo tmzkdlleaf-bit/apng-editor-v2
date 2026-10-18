@@ -27,6 +27,11 @@ function _worldDeltaToLocal(ddx, ddy, parentWorldTr) {
 // composeTransforms: worldTr.x = parent.x + parent.scale * ((child.x - parent.x)*cos - (child.y - parent.y)*sin)
 // 역산: child.x = parent.x + (dx*cos + dy*sin) / parent.scale  where dx = world.x - parent.x
 function _worldToChildLocal(worldX, worldY, parentTr) {
+  // R8-1 카메라 아핀(화면=z·local+T, 회전 0): 역은 (world−T)/z.
+  if (parentTr?._cam) {
+    const s = parentTr.scale ?? 1;
+    return { x: (worldX - (parentTr.x ?? 0)) / s, y: (worldY - (parentTr.y ?? 0)) / s };
+  }
   const pRad = (parentTr.rotation ?? 0) * Math.PI / 180;
   const pCos = Math.cos(pRad), pSin = Math.sin(pRad);
   const pS   = parentTr.scale ?? 1;

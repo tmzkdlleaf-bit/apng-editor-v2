@@ -1,6 +1,8 @@
 // 렌더 엔진 — createRenderEngine() + renderFrame(ctx, doc, f, opts)
 import { evalTransform, evalCamera } from '../anim/evaluate.js';
-import { composeTransforms } from './matrix.js';
+import { composeTransforms, applyCamera, cameraScreenTr } from './matrix.js';
+
+const _IDENTITY_TR = { x: 0, y: 0, scale: 1, scaleX: 1, scaleY: 1, rotation: 0, alpha: 1 };
 import { createPool }  from './pool.js';
 import { createCache } from './cache.js';
 import { renderMask as _renderMask } from './mask.js';
@@ -129,14 +131,10 @@ export function createRenderEngine(opts = {}) {
 
     // 합성은 전부 문서 단위로 한다. renderScale 은 leaf 렌더러에 넘기기 직전
     // (_renderLayer)에서 한 번만 곱한다 — 배율에 따라 위치가 틀어지지 않도록.
+    // R8-1: 카메라는 더 이상 합성 부모가 아니다(줌 1에서 이동 불가). 가운데 축척+이동 아핀으로
+    //   리프마다 applyCamera 로 얹는다. 루트 부모는 항등. 그룹/인스턴스는 문서 단위로 합성된다.
     const cam   = evalCamera(doc, f);
-    const camTr = {
-      x:        (cam.x ?? 0),
-      y:        (cam.y ?? 0),
-      scale:    (cam.zoom ?? 1),
-      rotation: 0,
-      alpha:    1,
-    };
+    const camScr = cameraScreenTr(cam, doc.meta.width, doc.meta.height);
 
     const rctx = {
       doc,
@@ -157,6 +155,7 @@ export function createRenderEngine(opts = {}) {
       cache,
       createCanvas,
       renderScale,
+      camScr,            // R8-1: leaf 에서 applyCamera 로 얹는 카메라(가운데 축척+이동)
       renderMask: null,
     };
 
@@ -168,7 +167,7 @@ export function createRenderEngine(opts = {}) {
         }
         // 효과 소스 슬롯(ignoreVisible)은 숨김 레이어도 재료로 그린다.
         if (maskOpts?.ignoreVisible || sourceLayer.visible !== false) {
-          _renderLayer(maskCtx, sourceLayer, camTr, rctx);
+          _renderLayer(maskCtx, sourceLayer, _IDENTITY_TR, rctx);
         }
       });
     };
@@ -177,7 +176,7 @@ export function createRenderEngine(opts = {}) {
       const layer = doc.layers[layerId];
       if (!layer || layer.visible === false) continue;
       // 레이어 하나가 터져도 프레임 전체가 멈추지 않게 그 레이어만 건너뛴다(R7-6). 경고는 한 번만.
-      try { _renderLayer(ctx, layer, camTr, rctx); }
+      try { _renderLayer(ctx, layer, _IDENTITY_TR, rctx); }
       catch (err) { _warnLayerError(layer?.id, err); }
     }
   }
@@ -190,9 +189,9 @@ export function createRenderEngine(opts = {}) {
   }
 
   function _renderLayer(outputCtx, layer, parentTr, rctx) {
-    const { doc, f, motions: mot, renderScale } = rctx;
+    const { doc, f, motions: mot, renderScale, camScr } = rctx;
     const localTr   = evalTransform(doc, layer.id, f, mot);
-    const worldTr   = composeTransforms(parentTr, localTr);  // 문서 단위
+    const worldTr   = composeTransforms(parentTr, localTr);  // 문서 단위(카메라 없음)
     const opacity   = layer.opacity ?? 1;
     const totalAlpha = (worldTr.alpha ?? 1) * opacity;
 
@@ -214,8 +213,12 @@ export function createRenderEngine(opts = {}) {
       return;
     }
 
-    // leaf: 위치·축척에 renderScale 을 여기서 한 번만 곱한다(배율 1 이면 그대로).
-    const sTr = _scaleWorldTr(worldTr, renderScale);
+    // leaf: 카메라(가운데 축척+이동)를 얹은 뒤, renderScale 을 여기서 한 번만 곱한다.
+    //   그룹/인스턴스는 위에서 문서 단위 worldTr 로 처리했고, 자식 leaf 들이 각자 카메라를 얹는다.
+    //   scope=full 이펙트는 출력 프레임 전체를 덮는 후처리라 카메라로 옮기지 않는다(소스는 이미 카메라 적용됨).
+    const isFullEffect = (type === 'effect') && (!layer.scope || layer.scope === 'full');
+    const screenTr = isFullEffect ? worldTr : applyCamera(worldTr, camScr);
+    const sTr = _scaleWorldTr(screenTr, renderScale);
 
     if      (type === 'image')  renderImageLayer(outputCtx, layer, sTr, totalAlpha, rctx);
     else if (type === 'anim')   renderAnimLayer(outputCtx, layer, sTr, totalAlpha, rctx);

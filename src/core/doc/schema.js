@@ -91,7 +91,7 @@ export function createDoc({
 } = {}) {
   return {
     format:  'apng-editor',
-    version: 2,
+    version: 3,
     meta: {
       width, height, fps, frameCount,
       background: { type: 'transparent' },

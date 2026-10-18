@@ -53,15 +53,20 @@ test.describe('R4 재현', () => {
       for (const i of d0.order) if (d0.layers[i].name === '사각형') id = i;
       store.apply({ type: 'setCameraProp', prop: 'zoom', value: 2 });
       esApi.set({ selection: [id] });
-      const w = store.get().layers[id].shape?.w ?? 100;
       const btn = document.querySelector('.align-btn[data-align="left"]');
       btn.click();
       await new Promise((r) => setTimeout(r, 20));
+      // R8-1 새 의미: "보이는 화면 기준" 왼쪽 정렬 → 레이어의 화면(카메라 적용) 왼쪽 끝이 출력 프레임 0 에 붙는다.
+      const { getDocWorldTr, getLayerBounds } = await import('/src/ui/canvas/hit.js');
       const doc = store.get();
-      return { x: evalProp(doc.layers[id].transform.x, esApi.get().f), hw: w / 2 };
+      const wtr = getDocWorldTr(doc, id, esApi.get().f, { camera: true });
+      const b   = getLayerBounds(doc.layers[id]);
+      const sx  = (wtr.scale ?? 1) * (wtr.scaleX ?? 1);
+      const screenLeft = wtr.x + ((b.ox ?? 0) - b.hw) * sx;
+      return { screenLeft };
     });
-    // 왼쪽 정렬: 앵커(중심) = 왼끝(0) + 반폭 → transform.x ≈ 반폭 (raw doc, 카메라 무관)
-    expect(Math.abs(r.x - r.hw)).toBeLessThanOrEqual(1.5);
+    // 화면(카메라 적용) 왼쪽 끝이 출력 프레임 왼쪽(0)에 붙는다.
+    expect(Math.abs(r.screenLeft)).toBeLessThanOrEqual(1.5);
   });
 
   // R4-2: 재사용 인코더가 워커 로딩 실패/준비 대기 중 취소에도 끝나야 한다(무한 대기 금지).

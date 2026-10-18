@@ -1,7 +1,13 @@
 // 문서 버전 마이그레이션 — version을 보고 최신으로 올린다.
-// 지금은 v1뿐. 뒤 버전이 생기면 MIGRATIONS[n] = (doc) => doc(n+1) 을 추가한다.
+// 뒤 버전이 생기면 MIGRATIONS[n] = (doc) => doc(n+1) 을 추가한다.
+import { evalProp } from '../anim/prop.js';
 
-export const CURRENT_VERSION = 2;
+export const CURRENT_VERSION = 3;
+
+function _easeAt(prop, f) {
+  const k = (prop?.keys ?? []).find((kk) => kk.f === f);
+  return k?.ease ?? 'linear';
+}
 
 // version n → n+1 변환 함수 목록
 const MIGRATIONS = {
@@ -20,6 +26,42 @@ const MIGRATIONS = {
       };
     }
     return { ...doc, version: 2, layers };
+  },
+
+  // v2 → v3 (R8-1): 카메라 의미 변경. 예전 "점 (X0,Y0) 기준 줌" → 새 "가운데 기준 줌 + 화면 이동".
+  //   같은 프레임의 화면 결과가 같도록: X = (cx − X0)(1 − z)/z, Y = (cy − Y0)(1 − z)/z (z=0 이면 0).
+  //   키프레임이 있으면 x·y·zoom 의 키 프레임을 모두 모아 그 프레임마다 새 X/Y 키를 넣는다(줌은 그대로).
+  //   키 사이 구간은 근사(옛 식은 z 에 따라 비선형).
+  2: (doc) => {
+    const meta = doc.meta ?? {};
+    const cx = (Number(meta.width)  || 768) / 2;
+    const cy = (Number(meta.height) || 768) / 2;
+    const cam = doc.camera ?? {};
+    const xP = cam.x, yP = cam.y, zP = cam.zoom ?? { value: 1 };
+    const conv = (c0, z, center) => (z === 0 ? 0 : (center - c0) * (1 - z) / z);
+    const hasKeys = (p) => Array.isArray(p?.keys) && p.keys.length > 0;
+
+    let newX, newY;
+    if (hasKeys(xP) || hasKeys(yP) || hasKeys(zP)) {
+      const frames = new Set();
+      for (const p of [xP, yP, zP]) for (const k of (p?.keys ?? [])) frames.add(k.f);
+      const sorted = [...frames].sort((a, b) => a - b);
+      const xKeys = [], yKeys = [];
+      for (const f of sorted) {
+        const z  = evalProp(zP, f);
+        const x0 = evalProp(xP, f);
+        const y0 = evalProp(yP, f);
+        xKeys.push({ f, v: conv(x0, z, cx), ease: _easeAt(xP, f) });
+        yKeys.push({ f, v: conv(y0, z, cy), ease: _easeAt(yP, f) });
+      }
+      newX = { value: xKeys[0]?.v ?? 0, keys: xKeys };
+      newY = { value: yKeys[0]?.v ?? 0, keys: yKeys };
+    } else {
+      const z  = zP?.value ?? 1;
+      newX = { value: conv(xP?.value ?? 0, z, cx) };
+      newY = { value: conv(yP?.value ?? 0, z, cy) };
+    }
+    return { ...doc, version: 3, camera: { x: newX, y: newY, zoom: zP } };
   },
 };
 

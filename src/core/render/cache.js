@@ -38,6 +38,15 @@ export function createCache(createCanvas, maxPx = DEFAULT_MAX_PX) {
     }
   }
 
+  // 단일 키 삭제(텍스트 배율 단계 상한 등에서 특정 변형만 퇴거할 때).
+  function del(key) {
+    if (!_map.has(key)) return;
+    const e = _map.get(key);
+    _totalPx -= e.px;
+    _map.delete(key);
+  }
+  function keys() { return [..._map.keys()]; }
+
   function invalidate(layerId) {
     if (!layerId) {
       _map.clear();
@@ -67,5 +76,5 @@ export function createCache(createCanvas, maxPx = DEFAULT_MAX_PX) {
   // 하위 호환 유지
   function resetAdjustCount() { _adjustCount = 0; }
 
-  return { get, set, invalidate, resetFrameStats, resetAdjustCount, incAdjustCount, getAdjustCount, getLastHits, getLastMisses };
+  return { get, set, del, keys, invalidate, resetFrameStats, resetAdjustCount, incAdjustCount, getAdjustCount, getLastHits, getLastMisses };
 }

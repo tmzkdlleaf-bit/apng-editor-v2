@@ -6,10 +6,11 @@ import { createNumberField } from '../controls/number-field.js';
 import { evalProp } from '../../core/anim/prop.js';
 import { cameraHasKeys } from '../timeline/rows.js';
 
+// R8-1: X/Y = 화면 이동(카메라가 +X 로 가면 그림은 왼쪽으로), 줌 = 화면 가운데 기준.
 const PROPS = [
-  { key: 'x',    label: 'X',  min: -9999, max: 9999, step: 1,    def: 0,   mul: 1 },
-  { key: 'y',    label: 'Y',  min: -9999, max: 9999, step: 1,    def: 0,   mul: 1 },
-  { key: 'zoom', label: '줌', min: 10,    max: 1000, step: 1,    def: 100, mul: 100 }, // 표시 %, 저장 배율
+  { key: 'x',    label: '이동 X', min: -9999, max: 9999, step: 1,    def: 0,   mul: 1 },
+  { key: 'y',    label: '이동 Y', min: -9999, max: 9999, step: 1,    def: 0,   mul: 1 },
+  { key: 'zoom', label: '줌',     min: 10,    max: 1000, step: 1,    def: 100, mul: 100 }, // 표시 %, 저장 배율
 ];
 
 export function createCameraSection(store, editorState) {

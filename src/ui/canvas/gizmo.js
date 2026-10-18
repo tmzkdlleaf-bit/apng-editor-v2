@@ -64,8 +64,9 @@ export function drawOverlay(ctx, doc, es, snapLines = [], W, H) {
     const cam = evalCamera(doc, f);
     const czoom = cam.zoom ?? 1;
     const cx = docW / 2, cy = docH / 2;
-    const tx = cx * (1 - czoom) + czoom * (cam.x ?? 0);
-    const ty = cy * (1 - czoom) + czoom * (cam.y ?? 0);
+    // R8-1 새 의미: 화면 = z·p + T, T = c·(1−z) − z·(X,Y). 렌더(applyCamera)와 같은 식.
+    const tx = cx * (1 - czoom) - czoom * (cam.x ?? 0);
+    const ty = cy * (1 - czoom) - czoom * (cam.y ?? 0);
     // 카메라가 담는 doc 영역: screen=zoom*p+t ∈ [0,doc] → p ∈ [-t/zoom, (doc-t)/zoom]
     const rx0 = -tx / czoom, ry0 = -ty / czoom;
     const rx1 = (docW - tx) / czoom, ry1 = (docH - ty) / czoom;

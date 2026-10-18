@@ -187,7 +187,25 @@ function _textCacheKey(layer) {
 // 레이아웃 캐시 — measureTextBounds(선택 상자)가 포인터 움직임마다 글자를 다시 재지 않도록.
 // 콘텐츠 캐시와 같은 키. 폰트 로딩 완료 시 clearTextLayoutCache()로 비운다(폭이 달라지므로).
 const _layoutCache = new Map();
-export function clearTextLayoutCache() { _layoutCache.clear(); }
+export function clearTextLayoutCache() { _layoutCache.clear(); _stepLru.clear(); }
+
+// R8-2: 렌더 배율을 단계로 맞춰 그 단계로 굽는다(글자가 확대·2배 내보내기에서 선명하게).
+//   실제 배율 이상인 것 중 가장 작은 단계를 고르고, 4 초과는 4.
+const _SCALE_STEPS = [0.5, 1, 1.5, 2, 3, 4];
+function _scaleStep(s) {
+  if (!(s > 0)) return 1;
+  if (s >= 4) return 4;
+  for (const step of _SCALE_STEPS) if (step >= s - 1e-6) return step;
+  return 4;
+}
+// 레이어당 캐시된 단계는 2개까지만 — 미리보기를 확대해도 캐시가 무한히 늘지 않게.
+const _stepLru = new Map(); // layerId -> [cacheKey, ...] (최근이 뒤)
+function _rememberStep(cache, layerId, key) {
+  let arr = (_stepLru.get(layerId) ?? []).filter((k) => k !== key);
+  arr.push(key);
+  while (arr.length > 2) { const old = arr.shift(); cache.del?.(old); }
+  _stepLru.set(layerId, arr);
+}
 
 function _textLayout(layer) {
   const key = _textCacheKey(layer);
@@ -257,25 +275,33 @@ export function renderTextLayer(outputCtx, layer, worldTr, totalAlpha, rctx) {
   const hasMask  = !!(layer.mask && rctx.renderMask);
 
   if (isStatic && !hasMask) {
-    const cacheKey = _textCacheKey(layer);
+    // R8-2: 화면 배율(worldTr.scale = renderScale×카메라줌×레이어scale)을 단계로 맞춰 그 단계로 굽는다.
+    //   step=1 이면 예전과 픽셀 단위로 같다.
+    const step = _scaleStep(worldTr.scale ?? 1);
+    const cacheKey = _textCacheKey(layer) + ':s' + step;
     let contentCanvas = cache?.get(cacheKey);
     if (!contentCanvas) {
       const layout = _textLayout(layer);
-      const cc  = pool.borrow(layout.cw, layout.ch);
+      const cw  = Math.max(1, Math.ceil(layout.cw * step));
+      const ch  = Math.max(1, Math.ceil(layout.ch * step));
+      const cc  = pool.borrow(cw, ch);
       const ccx = cc.getContext('2d');
       ccx.save();
-      ccx.translate(layout.anchorX, layout.anchorY);  // 원점 = 앵커(transform 점)
+      ccx.scale(step, step);                          // 단계 해상도로 굽는다(글자·외곽선·그림자·여백 모두 × 단계)
+      ccx.translate(layout.anchorX, layout.anchorY);  // 원점 = 앵커(transform 점), 1배 좌표
       _drawLines(ccx, layer, f, frameCount);
       ccx.restore();
       contentCanvas = cc;
-      contentCanvas._layout = layout;  // blit 오프셋 재사용(프레임마다 재측정 안 함)
+      contentCanvas._layout = { cw, ch, anchorX: layout.anchorX * step, anchorY: layout.anchorY * step, step };
       cache?.set(cacheKey, contentCanvas);
+      if (cache) _rememberStep(cache, layer.id, cacheKey);
     }
 
-    const { cw, ch, anchorX, anchorY } = contentCanvas._layout;
+    const { cw, ch, anchorX, anchorY, step: st } = contentCanvas._layout;
 
     outputCtx.save();
     applyTransform(outputCtx, worldTr);
+    outputCtx.scale(1 / st, 1 / st);                  // 단계로 키운 콘텐츠를 1/단계로 줄여 같은 크기로(선명하게)
     outputCtx.globalAlpha = totalAlpha;
     outputCtx.globalCompositeOperation = blendToComposite(layer.blend);
     // 앵커가 worldTr 원점에 오도록 캔버스의 cw×ch 영역만 그린다(풀 캔버스가 더 클 수 있음).

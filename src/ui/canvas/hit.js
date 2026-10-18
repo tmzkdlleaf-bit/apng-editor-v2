@@ -1,18 +1,20 @@
 import { evalTransform, evalCamera } from '../../core/anim/evaluate.js';
-import { composeTransforms } from '../../core/render/matrix.js';
+import { composeTransforms, applyCamera, cameraScreenTr } from '../../core/render/matrix.js';
 import { measureTextBounds } from '../../core/render/layers/text.js';
 import motionRegistry from '../../motions/registry.js';
 
-// 렌더(frame.js)와 같은 합성: 카메라를 루트로 두고, 모션 클립도 반영한다.
-// screenToDoc 은 카메라가 적용된 doc-canvas 좌표를 돌려주므로, 선택 상자·기즈모가
-// 실제로 그려진 위치와 맞으려면 카메라·모션을 포함해 합성해야 한다(문서 단위).
-// 기본 카메라(zoom=1, x=0, y=0)는 항등이라 기존 동작과 같다.
-function _cameraTr(doc, f) {
+const _IDENTITY = { x: 0, y: 0, scale: 1, scaleX: 1, scaleY: 1, rotation: 0, alpha: 1 };
+
+// R8-1: 카메라는 가운데 축척+이동 아핀(회전 0). 합성 부모가 아니라 문서 월드에 얹는 affine 이다.
+//   최상위 레이어의 '부모'로 쓸 때는 이 아핀 객체(_cam 표시)를 돌려주고, 역변환은 affine 역으로 한다.
+function _cameraParentTr(doc, f) {
   const cam = evalCamera(doc, f);
-  return { x: cam.x ?? 0, y: cam.y ?? 0, scale: cam.zoom ?? 1, scaleX: 1, scaleY: 1, rotation: 0, alpha: 1 };
+  const { z, tx, ty } = cameraScreenTr(cam, doc.meta.width, doc.meta.height);
+  return { x: tx, y: ty, scale: z, scaleX: 1, scaleY: 1, rotation: 0, alpha: 1, _cam: true };
 }
 
 // opts.camera=false 면 카메라 없는 '문서(raw) 단위' 월드. 기본(true)은 카메라 포함(화면/히트/기즈모용).
+// 렌더(frame.js)와 같은 모델: 문서 단위로 합성한 뒤 카메라 아핀을 얹는다.
 export function getDocWorldTr(doc, layerId, f, opts = {}) {
   const layer = doc.layers[layerId];
   if (!layer) return null;
@@ -25,29 +27,35 @@ export function getDocWorldTr(doc, layerId, f, opts = {}) {
     cur = doc.layers[cur.parentId];
   }
 
-  let tr = (opts.camera === false)
-    ? { x: 0, y: 0, scale: 1, scaleX: 1, scaleY: 1, rotation: 0, alpha: 1 }
-    : _cameraTr(doc, f);
+  let tr = _IDENTITY;
   for (const id of chain) {
     const localTr = evalTransform(doc, id, f, motionRegistry);
     tr = composeTransforms(tr, localTr);
   }
+  if (opts.camera !== false) {
+    tr = applyCamera(tr, cameraScreenTr(evalCamera(doc, f), doc.meta.width, doc.meta.height));
+  }
   return tr;
 }
 
-// 레이어의 '부모' 월드 변환. 자식은 부모 체인(카메라 포함), 최상위는 카메라 자체를 부모로 본다.
+// 레이어의 '부모' 월드 변환. 자식은 부모 체인(카메라 포함), 최상위는 카메라 아핀을 부모로 본다.
 // 화면/_toDoc 좌표(카메라 월드)를 레이어 로컬 값(transform.x/y)으로 역변환할 때 공통으로 쓴다.
 export function getParentWorldTr(doc, layerId, f) {
   const layer = doc.layers[layerId];
   if (!layer) return null;
   if (layer.parentId) return getDocWorldTr(doc, layer.parentId, f);
-  return _cameraTr(doc, f);
+  return _cameraParentTr(doc, f);
 }
 
-// 월드 좌표(카메라 월드) → parentTr 안의 로컬 transform 값으로 역변환.
-// composeTransforms(parentTr, { x }) === world 를 만족하는 x 를 돌려준다(피벗 모델).
+// 월드 좌표 → parentTr 안의 로컬 transform 값으로 역변환.
+// 카메라 아핀(_cam)이면 화면=z·local+T 의 역(회전 0): local=(world−T)/z.
+// 그 외(그룹 등)는 피벗 모델: composeTransforms(parentTr, { x }) === world 를 만족하는 x.
 export function worldToLocalInParent(worldX, worldY, parentTr) {
   if (!parentTr) return { x: worldX, y: worldY };
+  if (parentTr._cam) {
+    const s = parentTr.scale ?? 1;
+    return { x: (worldX - (parentTr.x ?? 0)) / s, y: (worldY - (parentTr.y ?? 0)) / s };
+  }
   const rad = (parentTr.rotation ?? 0) * Math.PI / 180;
   const cos = Math.cos(rad), sin = Math.sin(rad);
   const s = parentTr.scale ?? 1;

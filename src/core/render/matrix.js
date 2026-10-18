@@ -41,14 +41,31 @@ export function layerMatrix(tr) {
   return [s * cos, s * sin, -s * sin, s * cos, tx, ty];
 }
 
-// 카메라 행렬: T(cx,cy) * S(zoom) * T(-cx+camX, -cy+camY)
+// 카메라(R8-1): 화면 가운데 c=(W/2,H/2) 기준 줌 + 이동.
+//   화면 = c + z·(p − c − (X,Y)) = z·p + T,  T = c·(1−z) − z·(X,Y)
+//   카메라가 오른쪽(X+)으로 가면 그림은 왼쪽으로. 기본값(X0,Y0,z1)이면 항등.
+export function cameraScreenTr(cam, width, height) {
+  const z  = cam?.zoom ?? 1;
+  const cx = width / 2, cy = height / 2;
+  return { z, tx: cx * (1 - z) - z * (cam?.x ?? 0), ty: cy * (1 - z) - z * (cam?.y ?? 0) };
+}
+
+// worldTr(문서 단위)에 카메라를 얹어 화면 단위 worldTr 로. 회전 0·균등 줌이라 위치·전체 scale 만 바뀐다.
+export function applyCamera(worldTr, camScr) {
+  if (!camScr) return worldTr;
+  const { z, tx, ty } = camScr;
+  return {
+    ...worldTr,
+    x:     z * (worldTr.x ?? 0) + tx,
+    y:     z * (worldTr.y ?? 0) + ty,
+    scale: z * (worldTr.scale ?? 1),
+  };
+}
+
+// 카메라 행렬(새 의미): 화면 = z·p + T. (표시용 보조 — 렌더는 applyCamera 사용)
 export function cameraMatrix(cam, width, height) {
-  const cx   = width  / 2;
-  const cy   = height / 2;
-  const zoom = cam.zoom ?? 1;
-  const tx   = cx * (1 - zoom) + zoom * (cam.x ?? 0);
-  const ty   = cy * (1 - zoom) + zoom * (cam.y ?? 0);
-  return [zoom, 0, 0, zoom, tx, ty];
+  const { z, tx, ty } = cameraScreenTr(cam, width, height);
+  return [z, 0, 0, z, tx, ty];
 }
 
 // 부모→자식 변환 합성 (그룹 계층 구조용)
