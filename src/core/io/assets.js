@@ -2,7 +2,7 @@
 // 바이트는 IndexedDB assets 저장소(Blob). doc.assets[id]에는 메타만 둔다.
 // DOM을 쓰지 않는다(crypto.subtle, createImageBitmap은 워커에도 있다).
 import {
-  getAssetBlob, putAssetBlob, hasAssetBlob, deleteAssetBlob, allAssetIds, listProjects,
+  getAssetBlob, putAssetBlob, hasAssetBlob, deleteAssetBlob, allAssetIds, listProjects, getAssetSavedAt,
 } from './idb.js';
 
 // 파일 바이트의 SHA-256 앞 16자(8바이트) → 'ast_' 접두어
@@ -66,13 +66,18 @@ export function collectAssetIds(doc, set = new Set()) {
   return set;
 }
 
-// 어떤 프로젝트도 가리키지 않는 에셋 Blob을 지운다(열 때/지울 때만 호출).
-export async function purgeOrphanAssets() {
+// 어떤 프로젝트도 가리키지 않는 에셋 Blob을 지운다. 앱 시작 때만 부른다(그때는 되돌리기 기록이 없다).
+// 최근(maxAgeMs 이내)에 저장된 고아는 남긴다 — 열려 있는 문서의 되돌리기, 아직 저장 안 된 변경,
+// 다른 탭이 방금 넣은 이미지를 지우지 않기 위해서다(R7-3).
+export async function purgeOrphanAssets({ maxAgeMs = 24 * 60 * 60 * 1000, now = Date.now() } = {}) {
   const projects = await listProjects();
   const used = new Set();
   for (const p of projects) collectAssetIds(p.doc, used);
   const all = await allAssetIds();
   for (const id of all) {
-    if (!used.has(id)) await deleteAssetBlob(id);
+    if (used.has(id)) continue;
+    const savedAt = await getAssetSavedAt(id);
+    if (now - savedAt < maxAgeMs) continue; // 최근 저장 — 보호
+    await deleteAssetBlob(id);
   }
 }

@@ -11,11 +11,19 @@ export function openDB() {
   _dbPromise = new Promise((resolve, reject) => {
     const req = indexedDB.open(DB_NAME, DB_VER);
     req.onupgradeneeded = (e) => {
+      // 기존 저장소는 유지하고 없는 것만 만든다(데이터 보존). 뒤 버전에서 스키마가 바뀌면 여기서 이관.
       const db = e.target.result;
       if (!db.objectStoreNames.contains('projects')) db.createObjectStore('projects', { keyPath: 'id' });
       if (!db.objectStoreNames.contains('assets'))   db.createObjectStore('assets',   { keyPath: 'id' });
     };
-    req.onsuccess = (e) => resolve(e.target.result);
+    // 다른 탭이 더 높은 버전으로 열려고 하면(onblocked) 우리가 먼저 닫아 길을 비운다.
+    req.onblocked = () => { try { _dbPromise = null; } catch {} };
+    req.onsuccess = (e) => {
+      const db = e.target.result;
+      // 다른 탭이 버전 업그레이드를 시작하면 이 연결을 닫아 막지 않는다.
+      db.onversionchange = () => { try { db.close(); } catch {} _dbPromise = null; };
+      resolve(db);
+    };
     req.onerror   = () => reject(req.error);
   });
   return _dbPromise;
@@ -57,7 +65,12 @@ export async function getAssetBlob(id) {
   const rec = await _read('assets', os => _req(os.get(id)));
   return rec?.blob ?? null;
 }
-export async function putAssetBlob(id, blob) { return _write('assets', os => os.put({ id, blob })); }
+// savedAt: 저장 시각(ms). 시작 정리가 "최근에 저장된 고아"를 건드리지 않게 한다(다른 탭·미저장 변경 보호).
+export async function putAssetBlob(id, blob, savedAt = Date.now()) { return _write('assets', os => os.put({ id, blob, savedAt })); }
+export async function getAssetSavedAt(id) {
+  const rec = await _read('assets', os => _req(os.get(id)));
+  return rec?.savedAt ?? 0;
+}
 export async function deleteAssetBlob(id)    { return _write('assets', os => os.delete(id)); }
 export async function allAssetIds()          { return _read('assets', os => _req(os.getAllKeys())); }
 export async function hasAssetBlob(id) {

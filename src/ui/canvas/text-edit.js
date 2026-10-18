@@ -61,7 +61,11 @@ export function initTextEdit(overlayCanvas, containerEl, store, editorState, ass
 
     ta.addEventListener('input', onInput);
     ta.addEventListener('keydown', (ev) => {
-      if (ev.key === 'Escape') { ev.preventDefault(); finish(false); }
+      // 한글 조합 중 Esc 는 조합 취소용이므로 무시(편집 취소로 번지지 않게).
+      if (ev.key === 'Escape') {
+        if (ev.isComposing || ev.keyCode === 229) return;
+        ev.preventDefault(); finish(false);
+      }
       // Enter 는 줄바꿈 허용. 확정은 바깥 클릭/blur.
     });
     // 바깥 클릭(캔버스 포함) 확정

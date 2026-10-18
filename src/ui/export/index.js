@@ -302,14 +302,23 @@ export function initExport(store, editorState, projectApi = null) {
       if (w.type === 'oneshot') lines.push(w.message);
       else if (w.type === 'seam') lines.push('루프 이음새: 시작과 끝 상태가 달라 반복이 매끄럽지 않을 수 있습니다.');
     }
-    if (lines.length) { warnEl.style.display = ''; warnEl.innerHTML = lines.map((l) => `<div>⚠ ${l}</div>`).join(''); }
+    if (lines.length) { warnEl.style.display = ''; warnEl.innerHTML = lines.map((l) => `<div>주의: ${l}</div>`).join(''); }
     else { warnEl.style.display = 'none'; warnEl.innerHTML = ''; }
   }
 
   function renderTogether() {
     const presets = getPresets().filter((p) => p.id !== settings.presetId);
-    togetherEl.innerHTML = `<div class="ex-together-title">함께 만들기</div>` +
-      presets.map((p) => `<label class="ex-inline"><input type="checkbox" class="ex-together-ctl" value="${p.id}" ${together.has(p.id) ? 'checked' : ''}>${p.name}</label>`).join('');
+    // 용도 이름은 사용자·localStorage 에서 온 글자다 — textContent 로 넣어 HTML 해석을 막는다(R7-7).
+    togetherEl.textContent = '';
+    const title = document.createElement('div'); title.className = 'ex-together-title'; title.textContent = '함께 만들기';
+    togetherEl.appendChild(title);
+    for (const p of presets) {
+      const label = document.createElement('label'); label.className = 'ex-inline';
+      const cb = document.createElement('input'); cb.type = 'checkbox'; cb.className = 'ex-together-ctl';
+      cb.value = p.id; cb.checked = together.has(p.id);
+      label.append(cb, document.createTextNode(p.name));
+      togetherEl.appendChild(label);
+    }
     togetherEl.querySelectorAll('.ex-together-ctl').forEach((el) => {
       el.addEventListener('change', () => {
         if (el.checked) together.add(el.value); else together.delete(el.value);
@@ -506,10 +515,14 @@ export function initExport(store, editorState, projectApi = null) {
       const ok = t == null ? true : res.bytes <= t;
       const row = document.createElement('div');
       row.className = 'ex-result-row';
-      row.innerHTML = `<span class="ex-result-name">${presets[i].name}</span>
-        <span class="ex-result-meta">${res.format.toUpperCase()} · ${res.width}×${res.height} · ${fmtBytes(res.bytes)} <span class="${ok ? 'ok' : 'over'}">${t == null ? '' : (ok ? '충족' : '넘음')}</span></span>
-        <button class="ex-result-save">저장</button>`;
-      row.querySelector('.ex-result-save').addEventListener('click', () => {
+      // 용도 이름은 사용자·localStorage 에서 온 글자다 — textContent 로 넣어 HTML 해석을 막는다(R7-7).
+      const nameEl = document.createElement('span'); nameEl.className = 'ex-result-name'; nameEl.textContent = presets[i].name;
+      const metaEl = document.createElement('span'); metaEl.className = 'ex-result-meta';
+      // 형식·크기·용량은 모두 코드가 만든 숫자/상수다.
+      metaEl.innerHTML = `${res.format.toUpperCase()} · ${res.width}×${res.height} · ${fmtBytes(res.bytes)} <span class="${ok ? 'ok' : 'over'}">${t == null ? '' : (ok ? '충족' : '넘음')}</span>`;
+      const saveBtn = document.createElement('button'); saveBtn.className = 'ex-result-save'; saveBtn.textContent = '저장';
+      row.append(nameEl, metaEl, saveBtn);
+      saveBtn.addEventListener('click', () => {
         download(res.blob, res.settings.filename);
         window.__lastExport = { filename: res.settings.filename, mime: res.settings.mime, bytes: res.bytes };
       });

@@ -3,7 +3,7 @@
 import { checkLoopSeam } from '../core/anim/seam.js';
 import motionRegistry from '../motions/registry.js';
 
-const PROP_KO = { x: 'X', y: 'Y', scale: '크기', rotation: '회전', alpha: '투명도', zoom: '줌' };
+const PROP_KO = { x: 'X', y: 'Y', scale: '크기', scaleX: '가로', scaleY: '세로', rotation: '회전', alpha: '투명도', zoom: '줌' };
 
 let _open = null;
 
@@ -42,7 +42,10 @@ export function openLoopCheck(store, editorState) {
       row.className = 'loopcheck-row';
       const maxDiff = Math.max(...list.map((i) => Math.abs(i.atEnd - i.at0)));
       const props = list.map((i) => `${PROP_KO[i.prop] ?? i.prop} ${(Math.abs(i.atEnd - i.at0)).toFixed(1)}`).join(', ');
-      row.innerHTML = `<span class="lc-name">${name}</span><span class="lc-diff">${props}</span>`;
+      // 레이어 이름은 사용자·파일에서 온 글자다 — textContent 로 넣어 HTML 로 해석되지 않게 한다(R7-7).
+      const nameSpan = document.createElement('span'); nameSpan.className = 'lc-name'; nameSpan.textContent = name;
+      const diffSpan = document.createElement('span'); diffSpan.className = 'lc-diff'; diffSpan.textContent = props;
+      row.append(nameSpan, diffSpan);
       row.title = `차이 최대 ${maxDiff.toFixed(2)}`;
       row.addEventListener('click', () => {
         if (layerId === '__camera__') editorState.set({ cameraActive: true, selection: [] });

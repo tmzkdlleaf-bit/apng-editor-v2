@@ -7,19 +7,23 @@ const VERSION = '__SW_VERSION__';          // 빌드가 교체(없으면 dev 기
 const CACHE = 'apng2-' + (VERSION === '__SW_VERSION__' ? 'dev' : VERSION);
 
 self.addEventListener('install', (e) => {
-  self.skipWaiting();
+  // skipWaiting 하지 않는다 — 새 워커는 대기(waiting) 상태로 두고, "새로고침" 버튼이 보내는
+  // skip-waiting 메시지로만 교체한다. 첫 설치(기존 컨트롤러 없음)는 대기 단계가 없어 곧바로 활성화된다.
+  // 바로 활성화되면 controllerchange 가 버튼보다 먼저 일어나 reload 흐름이 깨진다(R7-1).
   e.waitUntil((async () => {
     const cache = await caches.open(CACHE);
+    // 미리 캐시는 브라우저 HTTP 캐시를 거치지 않게 받는다(옛 파일이 새 캐시에 섞이는 것 방지).
+    const reload = (url) => new Request(url, { cache: 'reload' });
     try {
       const res = await fetch('./sw-files.json', { cache: 'no-cache' });
       if (res.ok) {
         const files = await res.json();
-        if (Array.isArray(files) && files.length) await cache.addAll(files);
+        if (Array.isArray(files) && files.length) await cache.addAll(files.map(reload));
       }
     } catch { /* dev 등 목록 없음 — 런타임 캐시로 대체 */ }
     // 최소한 진입점은 캐시
-    try { await cache.add('./'); } catch {}
-    try { await cache.add('./index.html'); } catch {}
+    try { await cache.add(reload('./')); } catch {}
+    try { await cache.add(reload('./index.html')); } catch {}
   })());
 });
 

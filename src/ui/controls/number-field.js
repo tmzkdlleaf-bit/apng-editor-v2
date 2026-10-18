@@ -118,6 +118,8 @@ export function createNumberField({
       onCommit();
     }
     if (e.key === 'Enter') {
+      // 한글 조합 중 Enter 는 글자 확정용 — 값 커밋으로 번지지 않게 무시.
+      if (e.isComposing || e.keyCode === 229) return;
       e.preventDefault();
       const v = parseFloat(inputEl.value);
       if (Number.isFinite(v)) {
@@ -132,6 +134,7 @@ export function createNumberField({
       inputEl.blur();
     }
     if (e.key === 'Escape') {
+      if (e.isComposing || e.keyCode === 229) return;
       e.preventDefault();
       inputEl.value = _mixed ? '' : _fmt(_current);
       onCancel();

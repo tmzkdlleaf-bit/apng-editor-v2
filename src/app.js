@@ -145,7 +145,8 @@ const projectApi = {
   },
   async deleteProject(id) {
     await idbDeleteProject(id);
-    try { await purgeOrphanAssets(); } catch {}
+    // 여기서는 에셋을 정리하지 않는다 — 열려 있는 문서의 되돌리기로 살릴 수 있는 이미지나
+    // 다른 탭/미저장 변경의 이미지를 지울 수 있다(R7-3). 정리는 앱 시작 때만 한다.
     if (id === projectId) {
       // 현재를 지웠으면 다른 프로젝트로, 없으면 새로.
       const rest = (await listProjects()).filter((p) => p.id !== id);
@@ -189,7 +190,16 @@ if (!isDemo) {
 
 // ── 오프라인 설치(PWA, F5-5) ──────────────────────────────────────────────
 // 데스크톱 앱(Tauri)에서는 서비스 워커를 등록하지 않는다.
-if (!isDemo && !isDesktop() && typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+// 개발 서버(localhost/127.0.0.1)에서는 등록하지 않는다 — 서비스 워커가 옛 캐시를 먼저 보여줘
+// "고쳤는데 그대로" 착각을 일으킨다(R7-2). 오프라인 테스트처럼 꼭 필요할 때만 ?sw=1 로 켠다.
+const _swForced = typeof location !== 'undefined' && new URLSearchParams(location.search).get('sw') === '1';
+const _swLocal  = typeof location !== 'undefined' && /^(localhost|127\.0\.0\.1|\[::1\])$/i.test(location.hostname);
+const _swEnabled = _swForced || !_swLocal;
+if (!isDemo && !isDesktop() && typeof navigator !== 'undefined' && 'serviceWorker' in navigator && !_swEnabled) {
+  // 이미 등록된 것이 있으면 해제(개발 중 과거에 켰던 경우).
+  navigator.serviceWorker.getRegistrations?.().then((regs) => { for (const r of regs) r.unregister(); }).catch(() => {});
+}
+if (!isDemo && !isDesktop() && typeof navigator !== 'undefined' && 'serviceWorker' in navigator && _swEnabled) {
   let _refreshed = false;
   let _updating  = false; // 사용자가 "새로고침"을 눌러 새 버전으로 교체 중일 때만 true
   navigator.serviceWorker.register('./sw.js').then((reg) => {

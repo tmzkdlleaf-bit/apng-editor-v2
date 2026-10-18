@@ -187,8 +187,11 @@ export function init(store, editorState, projectApi = null) {
     const doc  = store.get();
     const { width: w, height: h, fps, frameCount } = doc.meta;
     const dur = (frameCount / Math.max(1, fps)).toFixed(1);
-    canvasInfoEl.innerHTML = `<span class="ci-text">${w} × ${h} · ${fps}fps · ${dur}초</span>`
-      + `<span class="ci-pencil">${iconMarkup('pencil', { size: 13 })}</span>`;
+    // 캔버스 크기·fps 는 불러온 파일의 meta 에서 온다 — 글자는 textContent 로 넣어 HTML 해석을 막는다(R7-7).
+    canvasInfoEl.textContent = '';
+    const textEl = document.createElement('span'); textEl.className = 'ci-text'; textEl.textContent = `${w} × ${h} · ${fps}fps · ${dur}초`;
+    const pencilEl = document.createElement('span'); pencilEl.className = 'ci-pencil'; pencilEl.innerHTML = iconMarkup('pencil', { size: 13 });
+    canvasInfoEl.append(textEl, pencilEl);
   }
   _updateCanvasInfo();
   store.subscribe({ meta: true }, _updateCanvasInfo);

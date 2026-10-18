@@ -12,7 +12,7 @@ export function checkLoopSeam(doc, motions) {
     const t0 = evalTransform(doc, layerId, 0, motions);
     const tN = evalTransform(doc, layerId, frameCount, motions, seamOpts);
 
-    for (const prop of ['x', 'y', 'scale', 'rotation', 'alpha']) {
+    for (const prop of ['x', 'y', 'scale', 'scaleX', 'scaleY', 'rotation', 'alpha']) {
       if (Math.abs(t0[prop] - tN[prop]) > 1e-6) {
         issues.push({ layerId, prop, at0: t0[prop], atEnd: tN[prop] });
       }

@@ -2,11 +2,18 @@
 // 브라우저 ImageDecoder 로 프레임과 "제각각인 지연(ms)"을 그대로 뽑는다. DOM 없음(워커 가능).
 // ImageDecoder 가 없거나(사파리 일부) 실패하면 null → 호출측이 정지 이미지로 대체.
 
+// GIF 지연 보정: 지연 ≤ 10ms 는 100ms 로 올린다(브라우저·코코포리아·디스코드와 같은 규칙).
+// 인터넷의 GIF 는 0·10ms 값이 흔해 그대로 쓰면 10~100배 빨라진다. APNG·WebP 는 손대지 않는다.
+function _fixDelay(ms, isGif) {
+  return (isGif && ms <= 10) ? 100 : ms;
+}
+
 // blob → { frames: ImageBitmap[], delays: number[](ms), width, height } 또는 null.
 export async function decodeAnim(blob) {
   if (typeof ImageDecoder === 'undefined') return null;
   let dec;
   try {
+    const isGif = (blob.type || '').includes('gif');
     const buf = await blob.arrayBuffer();
     dec = new ImageDecoder({ data: buf, type: blob.type || 'image/gif' });
     await dec.tracks.ready;
@@ -20,7 +27,7 @@ export async function decodeAnim(blob) {
       frames.push(bmp);
       // VideoFrame.duration 은 마이크로초. 없으면 100ms 기본.
       const durUs = image.duration ?? 100000;
-      delays.push(Math.max(1, Math.round(durUs / 1000)));
+      delays.push(_fixDelay(Math.max(1, Math.round(durUs / 1000)), isGif));
       image.close?.();
     }
     dec.close?.();
@@ -36,6 +43,7 @@ export async function probeAnim(blob) {
   if (typeof ImageDecoder === 'undefined') return { animated: false, frameCount: 1, delays: [], durationMs: 0 };
   let dec;
   try {
+    const isGif = (blob.type || '').includes('gif');
     const buf = await blob.arrayBuffer();
     dec = new ImageDecoder({ data: buf, type: blob.type || 'image/gif' });
     await dec.tracks.ready;
@@ -46,7 +54,7 @@ export async function probeAnim(blob) {
     if (n > 1) {
       for (let i = 0; i < n; i++) {
         const { image } = await dec.decode({ frameIndex: i, completeFramesOnly: true });
-        const d = Math.max(1, Math.round((image.duration ?? 100000) / 1000));
+        const d = _fixDelay(Math.max(1, Math.round((image.duration ?? 100000) / 1000)), isGif);
         delays.push(d); durationMs += d;
         image.close?.();
       }

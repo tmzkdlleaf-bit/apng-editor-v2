@@ -6,7 +6,8 @@ test('F5-5 — 서비스 워커 설치 후 오프라인에서 새로고침 → �
     window.__noReload = true;                 // 앱의 controllerchange 자동 reload 억제(테스트가 직접 reload)
     try { localStorage.setItem('apng2.onboarded', '1'); } catch {}
   });
-  await page.goto('/');
+  // localhost 에서는 기본으로 서비스 워커를 끈다(R7-2). 오프라인 테스트는 ?sw=1 로 켠다.
+  await page.goto('/?sw=1');
   await page.waitForFunction(() => !!window.__store);
 
   // 서비스 워커가 페이지를 제어할 때까지(활성화+claim)

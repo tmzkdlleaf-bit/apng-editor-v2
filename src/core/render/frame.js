@@ -176,8 +176,17 @@ export function createRenderEngine(opts = {}) {
     for (const layerId of doc.order) {
       const layer = doc.layers[layerId];
       if (!layer || layer.visible === false) continue;
-      _renderLayer(ctx, layer, camTr, rctx);
+      // 레이어 하나가 터져도 프레임 전체가 멈추지 않게 그 레이어만 건너뛴다(R7-6). 경고는 한 번만.
+      try { _renderLayer(ctx, layer, camTr, rctx); }
+      catch (err) { _warnLayerError(layer?.id, err); }
     }
+  }
+
+  let _warnedLayerError = false;
+  function _warnLayerError(layerId, err) {
+    if (_warnedLayerError) return;
+    _warnedLayerError = true;
+    if (typeof console !== 'undefined') console.warn('레이어 렌더 중 오류 — 해당 레이어를 건너뜁니다:', layerId, err);
   }
 
   function _renderLayer(outputCtx, layer, parentTr, rctx) {
