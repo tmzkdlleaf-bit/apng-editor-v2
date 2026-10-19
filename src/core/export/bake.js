@@ -106,7 +106,9 @@ export async function bakeFrames(engine, doc, opts = {}) {
 
   const order     = frameOrder(baseIndices, playback);
   const limitBytes = maxMemoryMB * 1024 * 1024;
-  const estBytes   = outW * outH * 4 * order.length;
+  // 실제로 동시에 들고 있는 양 = 렌더한 기준 프레임 수(baseIndices). 핑퐁의 되돌아오는 구간은
+  // 같은 배열을 재사용하므로 추가 메모리가 아니다(order.length 로 과대평가하지 않는다, R9-2).
+  const estBytes   = outW * outH * 4 * baseIndices.length;
   if (estBytes > limitBytes) {
     return { warning: { type: 'memory', estimatedBytes: estBytes, limitBytes } };
   }

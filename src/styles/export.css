@@ -93,14 +93,16 @@
 
 /* 형식 세그먼트 버튼 */
 .ex-seg { display: inline-flex; border: 1px solid var(--btnline); border-radius: var(--r-1); overflow: hidden; }
-.ex-seg-btn {
+.ex-seg-btn, .ex-mode-btn {
   height: 26px; padding: 0 var(--sp-3); border: none; border-radius: 0;
   background: var(--input); color: var(--text2); font-size: var(--fs-2); cursor: pointer;
   border-right: 1px solid var(--btnline);
 }
-.ex-seg-btn:last-child { border-right: none; }
-.ex-seg-btn:hover { color: var(--text); }
-.ex-seg-btn.is-on { background: var(--acc); color: var(--onacc); font-weight: 600; }
+.ex-seg-btn:last-child, .ex-mode-btn:last-child { border-right: none; }
+.ex-seg-btn:hover, .ex-mode-btn:hover { color: var(--text); }
+.ex-seg-btn.is-on, .ex-mode-btn.is-on { background: var(--acc); color: var(--onacc); font-weight: 600; }
+.ex-mem { margin-top: var(--sp-2); }
+.ex-mem-btn { height: 30px; padding: 0 var(--sp-3); }
 .ex-note { color: var(--dim); font-size: var(--fs-1); }
 .ex-modified { color: var(--danger); font-size: var(--fs-1); margin-left: var(--sp-2); }
 .ex-quality-row { display: inline-flex; align-items: center; gap: var(--sp-2); }

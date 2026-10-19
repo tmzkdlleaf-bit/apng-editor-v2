@@ -38,6 +38,7 @@ function defaultSettings(preset) {
     loopMode: 'infinite',  // 'infinite' | 'count'
     loopCount: 1,
     allowFrameReduction: false,
+    fitMode: 'quality',    // 'quality'(화질 우선) | 'keepSize'(크기 유지) | 'keepColor'(색 유지)
     modified: false,
   };
 }
@@ -108,6 +109,7 @@ export function initExport(store, editorState, projectApi = null) {
             <button class="ex-cancel" id="ex-cancel">취소</button>
             <details class="ex-log-wrap"><summary>로그</summary><pre class="ex-log" id="ex-log"></pre></details>
           </div>
+          <div class="ex-mem" id="ex-mem" style="display:none;"></div>
           <div class="ex-results" id="ex-results" style="display:none;"></div>
         </div>
       </div>
@@ -136,7 +138,32 @@ export function initExport(store, editorState, projectApi = null) {
   const stepEl = $('#ex-step');
   const logEl = $('#ex-log');
   const resultsEl = $('#ex-results');
+  const memEl = $('#ex-mem');
   const runBtn = $('#ex-run');
+
+  // 메모리 경고 → "○○% 크기로 내보내기" 버튼. 배율 = √(한도÷예상)을 0.05 단위로 내림.
+  function suggestShrinkMul(warning, curMul) {
+    const est = warning?.estimatedBytes, lim = warning?.limitBytes;
+    if (!est || !lim || est <= lim) return null;
+    let mul = Math.floor((curMul * Math.sqrt(lim / est)) / 0.05) * 0.05;
+    mul = Math.max(0.05, Math.min(1, mul));
+    return mul;
+  }
+  function hideMemButton() { memEl.style.display = 'none'; memEl.textContent = ''; }
+  function showMemButton(warning, rerun) {
+    const mul = suggestShrinkMul(warning, settings.scaleMul);
+    memEl.textContent = '';
+    if (mul == null) { memEl.style.display = 'none'; return; }
+    const btn = document.createElement('button');
+    btn.className = 'accent ex-mem-btn';
+    btn.textContent = `${Math.round(mul * 100)}% 크기로 내보내기`;
+    btn.addEventListener('click', () => {
+      settings.scaleMul = mul; settings.modified = true; saveSettings(); renderSettings();
+      hideMemButton(); rerun();
+    });
+    memEl.appendChild(btn);
+    memEl.style.display = '';
+  }
 
   // ── 설정 패널 렌더 ───────────────────────────────────────────────────────
   function renderSettings() {
@@ -174,6 +201,11 @@ export function initExport(store, editorState, projectApi = null) {
         </span>
       </div>
       <div class="ex-row"><label>프레임 줄이기</label><label class="ex-inline"><input type="checkbox" class="ex-ctl" data-k="allowFrameReduction" ${settings.allowFrameReduction ? 'checked' : ''}>목표 못 맞출 때 허용</label></div>
+      <div class="ex-row"><label>맞추기 방식</label>
+        <div class="ex-seg" role="group" aria-label="맞추기 방식">
+          ${[['quality', '화질 우선'], ['keepSize', '크기 유지'], ['keepColor', '색 유지']].map(([v, l]) => `<button type="button" class="ex-mode-btn${settings.fitMode === v ? ' is-on' : ''}" data-mode="${v}">${l}</button>`).join('')}
+        </div>
+      </div>
     `;
     // 컨트롤 이벤트
     settingsEl.querySelectorAll('.ex-ctl').forEach((el) => {
@@ -193,11 +225,23 @@ export function initExport(store, editorState, projectApi = null) {
       });
     });
 
+    // 맞추기 방식 세그먼트 버튼(목표에 맞추기·함께 만들기에 적용). 결과 파일을 바꾸지 않으니 예상 재계산 불필요.
+    settingsEl.querySelectorAll('.ex-mode-btn').forEach((b) => {
+      b.addEventListener('click', () => {
+        if (b.dataset.mode === settings.fitMode) return;
+        settings.fitMode = b.dataset.mode;
+        saveSettings();
+        renderSettings();
+      });
+    });
+
     // 드롭다운 마운트(select 대체). 이전 드롭다운은 정리.
     _destroyDropdowns();
     // 용도: 변경은 "수정됨"이 아니라 프리셋 적용
     _mountDropdown('presetId', presets.map((p) => ({ value: p.id, label: p.name })), settings.presetId, (v) => applyPreset(v));
-    _mountDropdown('scaleMul', SCALE_MULS.map((s) => ({ value: String(s), label: `${s * 100}%` })), String(settings.scaleMul), (v) => _setSetting('scaleMul', parseFloat(v)));
+    // 메모리 버튼 등으로 들어온 비표준 배율도 목록에 넣어 표시한다.
+    const scaleVals = [...new Set([...SCALE_MULS, settings.scaleMul])].sort((a, b) => b - a);
+    _mountDropdown('scaleMul', scaleVals.map((s) => ({ value: String(s), label: `${Math.round(s * 100)}%` })), String(settings.scaleMul), (v) => _setSetting('scaleMul', parseFloat(v)));
     if (settings.format === 'apng') {
       _mountDropdown('colors', APNG_COLORS.map((c) => ({ value: String(c.v), label: c.label })), String(settings.colors), (v) => _setSetting('colors', parseFloat(v)));
     }
@@ -425,6 +469,7 @@ export function initExport(store, editorState, projectApi = null) {
     if (!preset || preset.targetBytes == null) return;
     const doc = store.get();
     stopEstimate();
+    hideMemButton();
     abortCtrl = new AbortController();
     setBusy(true); showProgress(true); setStep('맞추는 중…'); resultsEl.style.display = 'none';
     // 현재 형식·트림·크기제한을 반영한 프리셋으로 맞춘다
@@ -432,7 +477,7 @@ export function initExport(store, editorState, projectApi = null) {
     try {
       const res = await fitToTarget(doc, fitPreset, {
         createCanvas, assets: deps.assets, effects: effectsRegistry, motions: motionRegistry,
-        name: projectName(), allowFrameReduction: settings.allowFrameReduction,
+        name: projectName(), allowFrameReduction: settings.allowFrameReduction, mode: settings.fitMode,
       }, {
         signal: abortCtrl.signal,
         onLog: (e) => { if (e.text) { appendLog(e.text); setStep('맞추는 중: ' + e.text); } },
@@ -450,7 +495,7 @@ export function initExport(store, editorState, projectApi = null) {
       if (!res.reached) showToast('목표 용량에 맞추지 못했습니다. 가장 작은 결과를 표시합니다.');
     } catch (err) {
       if (err?.name === 'AbortError') setStep('취소됨');
-      else { const t = errText(err); setStep('오류: ' + t); showToast('맞추기 실패: ' + t); }
+      else { const t = errText(err); setStep('오류: ' + t); showToast('맞추기 실패: ' + t); if (err?.code === 'memory') showMemButton(err.warning, runFit); }
     } finally {
       setBusy(false); abortCtrl = null;
       // 재열기로 deps 가 교체됐으면 이 작업이 쓰던 비트맵을 닫는다. 아니고 창이 닫혔으면 현재 deps 를 닫는다.
@@ -467,6 +512,7 @@ export function initExport(store, editorState, projectApi = null) {
     stopEstimate();
     window.__lastExport = null;
     abortCtrl = new AbortController();
+    hideMemButton();
     setBusy(true); showProgress(true); resultsEl.style.display = 'none'; resultsEl.innerHTML = '';
     multiResults.length = 0;
     // 굽기 전에 문서가 쓰는 글꼴이 실제로 로드됐는지 기다린다(결과물 글자가 폴백으로 달라지지 않게).
@@ -491,7 +537,7 @@ export function initExport(store, editorState, projectApi = null) {
         setStep(`${presets.length}개 만드는 중…`);
         const { results } = await exportMany(doc, presets, {
           createCanvas, assets: deps.assets, effects: effectsRegistry, motions: motionRegistry,
-          name: projectName(), allowFrameReduction: settings.allowFrameReduction,
+          name: projectName(), allowFrameReduction: settings.allowFrameReduction, mode: settings.fitMode,
         }, {
           signal: abortCtrl.signal,
           onLog: (e) => { if (e.text) appendLog(`[${e.presetId}] ${e.text}`); },
@@ -501,7 +547,7 @@ export function initExport(store, editorState, projectApi = null) {
       }
     } catch (err) {
       if (err?.name === 'AbortError') setStep('취소됨');
-      else { const t = errText(err); setStep('오류: ' + t); showToast('내보내기 실패: ' + t); }
+      else { const t = errText(err); setStep('오류: ' + t); showToast('내보내기 실패: ' + t); if (err?.code === 'memory') showMemButton(err.warning, runExport); }
     } finally {
       setBusy(false); abortCtrl = null;
       // 재열기로 deps 가 교체됐으면 이 작업이 쓰던 비트맵을 닫는다. 아니고 창이 닫혔으면 현재 deps 를 닫는다.
@@ -514,12 +560,28 @@ export function initExport(store, editorState, projectApi = null) {
     resultsEl.style.display = '';
     resultsEl.innerHTML = `<div class="ex-results-title">결과</div>`;
     results.forEach((res, i) => {
-      const t = presets[i].targetBytes;
-      const ok = t == null ? true : res.bytes <= t;
       const row = document.createElement('div');
       row.className = 'ex-result-row';
       // 용도 이름은 사용자·localStorage 에서 온 글자다 — textContent 로 넣어 HTML 해석을 막는다(R7-7).
       const nameEl = document.createElement('span'); nameEl.className = 'ex-result-name'; nameEl.textContent = presets[i].name;
+
+      // 메모리로 실패한 용도(R9-2 A): "○○% 크기로" 버튼으로 그 배율에 다시 내보낸다.
+      if (res.error === 'memory') {
+        const metaEl = document.createElement('span'); metaEl.className = 'ex-result-meta over'; metaEl.textContent = '메모리 부족';
+        const mul = suggestShrinkMul(res.warning, settings.scaleMul);
+        const btn = document.createElement('button'); btn.className = 'ex-result-save';
+        btn.textContent = mul != null ? `${Math.round(mul * 100)}% 크기로` : '크기 줄이기';
+        btn.addEventListener('click', () => {
+          if (mul != null) { settings.scaleMul = mul; settings.modified = true; saveSettings(); renderSettings(); }
+          runExport();
+        });
+        row.append(nameEl, metaEl, btn);
+        resultsEl.appendChild(row);
+        return;
+      }
+
+      const t = presets[i].targetBytes;
+      const ok = t == null ? true : res.bytes <= t;
       const metaEl = document.createElement('span'); metaEl.className = 'ex-result-meta';
       // 형식·크기·용량은 모두 코드가 만든 숫자/상수다.
       metaEl.innerHTML = `${res.format.toUpperCase()} · ${res.width}×${res.height} · ${fmtBytes(res.bytes)} <span class="${ok ? 'ok' : 'over'}">${t == null ? '' : (ok ? '충족' : '넘음')}</span>`;

@@ -75,8 +75,11 @@ export async function exportAnimation(doc, opts = {}) {
   if (format === 'apng') encOptions.colors   = colors ?? 0;
   if (format === 'webp') { encOptions.lossless = lossless ? 1 : 0; encOptions.quality = quality ?? 80; }
 
+  // 단일 내보내기는 굽기 결과를 복사하지 않고 그대로 워커로 넘긴다(메모리 절약, R9-2).
+  // 이 경로는 baked 를 다시 쓰지 않으므로 프레임 버퍼를 떼어 보내도 안전하다.
   const { buf, bytes } = await encode(baked, format, encOptions, {
     signal,
+    moveFrames: true,
     onProgress: (d, t) => onProgress({ phase: 'encode', done: d, total: t }),
   });
 

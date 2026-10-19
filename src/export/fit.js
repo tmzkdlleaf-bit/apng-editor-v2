@@ -1,5 +1,6 @@
-// 목표 용량 맞추기 — 후보(크기×화질)를 순서대로 실제 인코딩해 처음으로 목표에 든 것을 고른다.
-// 같은 크기에서는 굽기를 한 번만(baker 캐시) 하고 인코딩만 바꿔 다시 한다.
+// 목표 용량 맞추기 — 크기 후보마다 "목표에 드는 가장 좋은 화질"을 찾아(이분 탐색) 점수로 고른다.
+// 점수 = 크기배율² × 화질계수. 가장 높은 점수의 후보를 고른다(R9-1).
+// 방식(mode): 'quality'(화질 우선, 기본) / 'keepSize'(크기 1 고정) / 'keepColor'(화질 최고 고정, 크기만).
 import { bakeFrames } from '../core/export/bake.js';
 import { createRenderEngine } from '../core/render/frame.js';
 import { createEncoder } from './encode.js';
@@ -9,6 +10,21 @@ const SCALE_MULS = [1, 0.75, 0.5, 0.25];
 // 후보 순서(앞일수록 우선 = 화질 높음)
 const APNG_COLORS = [0, 256, 128, 64, 32];                 // 0=무손실
 const WEBP_OPTS   = [{ lossless: 1 }, { quality: 90 }, { quality: 75 }, { quality: 60 }, { quality: 45 }, { quality: 30 }];
+
+// 화질계수(바꿀 수 있는 기본값) — 점수 = 크기배율² × 화질계수.
+const QUALITY_COEF = {
+  apng: { 0: 1.0, 256: 0.92, 128: 0.8, 64: 0.62, 32: 0.45 },
+  webp: { lossless: 1.0, 90: 0.95, 75: 0.85, 60: 0.72, 45: 0.6, 30: 0.45 },
+  gif:  {}, // 화질 후보 없음 → 크기만으로 비교(계수 1)
+};
+
+function qualityCoef(format, o) {
+  const t = QUALITY_COEF[format];
+  if (!t) return 1;
+  if (format === 'apng') return t[o.colors ?? 0] ?? 0.45;
+  if (format === 'webp') return o.lossless ? t.lossless : (t[o.quality] ?? 0.45);
+  return 1;
+}
 
 function encOptionsFor(format) {
   if (format === 'apng') return APNG_COLORS.map((c) => ({ colors: c }));
@@ -54,17 +70,17 @@ function _engineFrom(deps, doc) {
 }
 
 // 한 프리셋을 목표 용량에 맞춘다.
-// deps: { createCanvas, engine?, assets?, effects?, motions?, baker?, allowFrameReduction?, name? }
+// deps: { createCanvas, engine?, assets?, effects?, motions?, baker?, allowFrameReduction?, name?, mode? }
 // ctx:  { onLog?, onProgress?, signal? }
-// 반환: { blob, bytes, width, height, frameCount, format, reached, settings, bakeCount }
+// 반환: { blob, bytes, width, height, frameCount, format, reached, settings, bakeCount, encodeCount }
 export async function fitToTarget(doc, preset, deps = {}, ctx = {}) {
   const { onLog = () => {}, onProgress = () => {}, signal = null } = ctx;
   const allowFrameReduction = !!deps.allowFrameReduction;
+  const mode = deps.mode === 'keepSize' || deps.mode === 'keepColor' ? deps.mode : 'quality';
 
   if (typeof deps.createCanvas !== 'function') throw new Error('createCanvas 함수가 필요합니다.');
   const engine = _engineFrom(deps, doc);
   const baker  = deps.baker ?? createBaker(engine, doc, deps.createCanvas);
-  // 워커 하나를 맞추기 내내 재사용(후보마다 새 워커+wasm 로딩 방지). 바깥에서 주입하면 공유.
   const enc    = deps.encoder ?? createEncoder();
   const ownEnc = !deps.encoder;
 
@@ -84,15 +100,23 @@ export async function fitToTarget(doc, preset, deps = {}, ctx = {}) {
     baseScale = Math.min(1, sw, sh);
   }
 
-  const encList   = encOptionsFor(format);
-  const scaleMuls = target == null ? [1] : SCALE_MULS; // 목표 없으면 크기1 최고화질 1회
+  const fullEnc = encOptionsFor(format);
+  // 방식별 후보 범위. keepColor: 화질 최고(첫 후보) 고정. keepSize/quality: 전체 화질 후보.
+  const encList = (mode === 'keepColor') ? [fullEnc[0]] : fullEnc;
+  // 크기 후보. 목표 없으면 1배 1회. keepSize: 1배만. 그 외: 1→0.25.
+  const scaleMuls = (target == null || mode === 'keepSize') ? [1] : SCALE_MULS;
 
   const abortCheck = () => { if (signal?.aborted) throw new DOMException('취소됨', 'AbortError'); };
-  let best = null; // { buf, bytes, baked, scale, scaleMul, encOpts, reduced }
-  let lastWarning = null; // 메모리 경고로 전부 건너뛸 때 보고용
+  let best = null;     // 목표에 든 것 중 점수 최고: { buf, bytes, baked, scale, scaleMul, encOpts, reduced, score }
+  let smallest = null; // 전체에서 가장 작은 결과(아무 것도 목표에 못 들 때 폴백)
+  let lastWarning = null;
+  let encodeCount = 0;
+
+  const MAX_COEF = 1.0; // 최고 화질(무손실)의 계수 — 더 작은 크기가 낼 수 있는 점수의 상한 계산용.
 
   async function pass(reduced) {
-    for (const mul of scaleMuls) {
+    for (let si = 0; si < scaleMuls.length; si++) {
+      const mul = scaleMuls[si];
       abortCheck();
       const scale = baseScale * mul;
       let baked = await baker.get(scale, { trim, playback, signal });
@@ -100,19 +124,60 @@ export async function fitToTarget(doc, preset, deps = {}, ctx = {}) {
       if (baked.warning) { lastWarning = baked.warning; onLog({ text: `건너뜀(x${mul}): 메모리 경고`, bytes: null, scaleMul: mul }); continue; }
       if (reduced) baked = halveFrames(baked);
 
-      for (const encOpts of encList) {
+      const cache = new Map(); // index → { buf, bytes }
+      const encAt = async (i) => {
+        if (cache.has(i)) return cache.get(i);
         abortCheck();
-        const { buf, bytes } = await enc.encode(baked, format, { ...encOpts, loops }, { signal });
-        const label = `x${mul} / ${optionLabel(format, encOpts)}${reduced ? ' / 프레임½' : ''}`;
+        const { buf, bytes } = await enc.encode(baked, format, { ...encList[i], loops }, { signal });
+        encodeCount++;
+        const label = `x${mul} / ${optionLabel(format, encList[i])}${reduced ? ' / 프레임½' : ''}`;
         onLog({ text: `${label} → ${(bytes / 1024).toFixed(1)} KB`, bytes, scaleMul: mul, label, reduced });
         onProgress?.();
+        const r = { buf, bytes };
+        cache.set(i, r);
+        if (!smallest || bytes < smallest.bytes) smallest = { buf, bytes, baked, scale, scaleMul: mul, encOpts: encList[i], reduced };
+        return r;
+      };
 
-        if (!best || bytes < best.bytes) best = { buf, bytes, baked, scale, scaleMul: mul, encOpts, reduced };
-        if (target == null) { best = { buf, bytes, baked, scale, scaleMul: mul, encOpts, reduced }; return true; }
-        if (bytes <= target) { best = { buf, bytes, baked, scale, scaleMul: mul, encOpts, reduced }; return true; }
+      let chosenIdx = -1;
+      if (target == null) {
+        await encAt(0); chosenIdx = 0;           // 목표 없음 → 최고 화질 1회
+      } else {
+        // 이분 탐색: 용량이 화질 순서로 대체로 줄므로, 목표에 드는 가장 좋은 화질(가장 작은 index)을 찾는다.
+        let lo = 0, hi = encList.length - 1;
+        while (lo <= hi) {
+          const mid = (lo + hi) >> 1;
+          const { bytes } = await encAt(mid);
+          if (bytes <= target) { chosenIdx = mid; hi = mid - 1; } // 더 좋은 화질(왼쪽) 시도
+          else lo = mid + 1;
+        }
+        // 단조성 점검(인코딩한 점들): 낮은 화질이 오히려 더 크면 순서대로 다시 확인.
+        const idxs = [...cache.keys()].sort((a, b) => a - b);
+        let mono = true;
+        for (let k = 1; k < idxs.length; k++) {
+          if (cache.get(idxs[k]).bytes > cache.get(idxs[k - 1]).bytes * 1.02) { mono = false; break; }
+        }
+        if (!mono) {
+          onLog({ text: `x${mul}: 용량이 화질 순서와 어긋나 순서대로 확인`, bytes: null, scaleMul: mul });
+          chosenIdx = -1;
+          for (let i = 0; i < encList.length; i++) { const { bytes } = await encAt(i); if (bytes <= target) { chosenIdx = i; break; } }
+        }
       }
+
+      if (chosenIdx >= 0) {
+        const c = cache.get(chosenIdx);
+        const score = mul * mul * qualityCoef(format, encList[chosenIdx]);
+        onLog({ text: `x${mul} 선택: ${optionLabel(format, encList[chosenIdx])} · ${(c.bytes / 1024).toFixed(1)}KB · 점수 ${score.toFixed(3)}`, bytes: c.bytes, scaleMul: mul, score, chosen: true });
+        if (!best || score > best.score) best = { buf: c.buf, bytes: c.bytes, baked, scale, scaleMul: mul, encOpts: encList[chosenIdx], reduced, score };
+        if (target == null) return true;
+      }
+
+      // 가지치기: 더 작은 크기가 낼 수 있는 최고 점수(다음 배율²×무손실)보다 지금 best 가 높으면 멈춘다.
+      //   → 흔한 경우(큰 크기에서 괜찮은 화질이 맞으면) 작은 크기는 굽지 않는다(굽기·인코딩 절약).
+      const nextMul = scaleMuls[si + 1];
+      if (best && nextMul != null && best.score >= nextMul * nextMul * MAX_COEF) break;
     }
-    return false;
+    return best != null;
   }
 
   try {
@@ -122,46 +187,50 @@ export async function fitToTarget(doc, preset, deps = {}, ctx = {}) {
       reached = await pass(true);
     }
 
-    // 모든 크기가 메모리 경고로 건너뛰어 결과가 하나도 없으면 읽을 수 있는 오류를 던진다.
-    if (!best) {
+    const pick = best ?? smallest;
+    if (!pick) {
       const err = new Error('캔버스·프레임 수가 커서 메모리가 부족합니다. 크기를 줄여 보세요.');
       err.code = 'memory';
       if (lastWarning) err.warning = lastWarning;
       throw err;
     }
 
-    const blob = new Blob([best.buf], { type: info.mime });
-    const durationMs = best.baked.frames.reduce((a, f) => a + f.delayMs, 0);
+    const blob = new Blob([pick.buf], { type: info.mime });
+    const durationMs = pick.baked.frames.reduce((a, f) => a + f.delayMs, 0);
     return {
       blob,
-      bytes: best.bytes,
-      width: best.baked.width,
-      height: best.baked.height,
-      frameCount: best.baked.frames.length,
+      bytes: pick.bytes,
+      width: pick.baked.width,
+      height: pick.baked.height,
+      frameCount: pick.baked.frames.length,
       durationMs,
       format,
-      reached: target == null ? true : reached,
+      reached: target == null ? true : (best != null),
       bakeCount: baker.bakeCount(),
+      encodeCount,
       settings: {
         presetId: preset.id,
         presetName: preset.name,
-        scaleMul: best.scaleMul,
-        scale: best.scale,
-        ...best.encOpts,
+        mode,
+        scaleMul: pick.scaleMul,
+        scale: pick.scale,
+        score: pick.score ?? null,
+        ...pick.encOpts,
         trim,
         loops,
-        frameReduced: best.reduced,
+        frameReduced: pick.reduced,
         targetBytes: target,
         filename: `${deps.name ?? '프로젝트'}_${preset.id}.${info.ext}`,
         mime: info.mime,
       },
     };
   } finally {
-    if (ownEnc) enc.dispose();  // 성공·실패·취소 모두에서 워커 정리
+    if (ownEnc) enc.dispose();
   }
 }
 
 // 여러 프리셋을 한 번에. 굽기는 크기가 같으면 공유(하나의 baker).
+// 메모리로 실패한 프리셋은 전체를 멈추지 않고 그 줄만 오류로 기록한다(R9-2 A).
 export async function exportMany(doc, presets, deps = {}, ctx = {}) {
   if (typeof deps.createCanvas !== 'function') throw new Error('createCanvas 함수가 필요합니다.');
   const engine = _engineFrom(deps, doc);
@@ -171,11 +240,17 @@ export async function exportMany(doc, presets, deps = {}, ctx = {}) {
   try {
     for (const preset of presets) {
       if (ctx.signal?.aborted) throw new DOMException('취소됨', 'AbortError');
-      const r = await fitToTarget(doc, preset, { ...deps, engine, baker, encoder }, {
-        ...ctx,
-        onLog: (e) => ctx.onLog?.({ ...e, presetId: preset.id }),
-      });
-      results.push(r);
+      try {
+        const r = await fitToTarget(doc, preset, { ...deps, engine, baker, encoder }, {
+          ...ctx,
+          onLog: (e) => ctx.onLog?.({ ...e, presetId: preset.id }),
+        });
+        results.push(r);
+      } catch (err) {
+        if (err?.name === 'AbortError') throw err;          // 취소는 전체 중단
+        if (err?.code === 'memory') { results.push({ error: 'memory', warning: err.warning ?? null, preset }); continue; }
+        throw err;                                          // 그 밖의 오류는 올린다
+      }
     }
     return { results, bakeCount: baker.bakeCount() };
   } finally {
@@ -198,7 +273,6 @@ export function createEstimator(doc, baseOpts = {}, { delay = 500 } = {}) {
     if (timer) { clearTimeout(timer); timer = null; }
     if (ctrl) { ctrl.abort(); ctrl = null; }
   }
-  // request(opts, onResult, onError) — 직전 요청을 취소하고 delay 뒤 실행
   function request(opts, onResult = () => {}, onError = () => {}) {
     cancel();
     timer = setTimeout(async () => {
@@ -214,4 +288,4 @@ export function createEstimator(doc, baseOpts = {}, { delay = 500 } = {}) {
   return { request, cancel };
 }
 
-export { halveFrames };
+export { halveFrames, QUALITY_COEF, qualityCoef };

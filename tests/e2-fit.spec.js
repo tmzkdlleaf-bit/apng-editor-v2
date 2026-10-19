@@ -8,8 +8,8 @@ async function gotoDemo(page) {
 }
 
 test.describe('E2 — 용량 맞추기', () => {
-  // ── 코코포리아 APNG → ≤1,000,000바이트, 고른 후보가 로그상 처음으로 맞는 것 ──
-  test('[코코 APNG] ≤1MB, 처음으로 맞는 후보 선택', async ({ page }) => {
+  // ── 코코포리아 APNG → ≤1,000,000바이트, 점수가 가장 높은 후보 선택(R9-1 화질 우선) ──
+  test('[코코 APNG] ≤1MB, 점수 최고 후보 선택', async ({ page }) => {
     await gotoDemo(page);
     const r = await page.evaluate(async () => {
       const H = await import('/tests/e1-helpers.js');
@@ -18,12 +18,13 @@ test.describe('E2 — 용량 맞추기', () => {
       const { doc, deps } = await H.demoDeps();
       const logs = [];
       const res = await fitToTarget(doc, getPreset('ccfolia-apng'), deps, { onLog: (e) => logs.push(e) });
-      const firstUnder = logs.find((l) => l.bytes != null && l.bytes <= 1_000_000);
-      return { bytes: res.bytes, reached: res.reached, chosen: res.bytes, firstUnderBytes: firstUnder?.bytes, settings: res.settings };
+      const chosenLogs = logs.filter((l) => l.chosen && l.score != null);
+      const maxScore = Math.max(...chosenLogs.map((l) => l.score));
+      return { bytes: res.bytes, reached: res.reached, resScore: res.settings.score, maxScore };
     });
     expect(r.reached).toBe(true);
     expect(r.bytes).toBeLessThanOrEqual(1_000_000);
-    expect(r.bytes).toBe(r.firstUnderBytes); // 로그상 처음으로 목표에 든 후보가 선택됨
+    expect(r.resScore).toBeCloseTo(r.maxScore, 5); // 점수가 가장 높은 후보가 선택됨
   });
 
   // ── 디스코드 스티커 → 320×320 안, ≤512,000, APNG 애니메이션 ──────────────

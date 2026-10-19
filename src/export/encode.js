@@ -20,8 +20,14 @@ function _spawnWorker() {
   return new Worker(new URL('./encode-worker.js', import.meta.url), { type: 'module' });
 }
 
-// baked.frames 복사본을 transfer 가능한 형태로(원본 baked 보존).
-function _framesForTransfer(baked) {
+// baked.frames 를 transfer 가능한 형태로.
+//   move=false(기본): 복사본을 넘긴다(원본 baked 보존 — 용량 맞추기처럼 여러 번 인코딩).
+//   move=true: 원본 버퍼를 그대로 넘긴다(복사 없음 → 메모리 절약). baked.frames 버퍼는 떨어져 나간다(1회용).
+function _framesForTransfer(baked, move = false) {
+  if (move) {
+    const frames = baked.frames.map((f) => ({ buf: f.rgba.buffer, delayMs: f.delayMs }));
+    return { frames, transfer: frames.map((f) => f.buf) };
+  }
   const frames = baked.frames.map((f) => {
     const copy = f.rgba.slice();
     return { buf: copy.buffer, delayMs: f.delayMs };
@@ -30,7 +36,7 @@ function _framesForTransfer(baked) {
 }
 
 export function encode(baked, format, options = {}, ctx = {}) {
-  const { onProgress, signal } = ctx;
+  const { onProgress, signal, moveFrames = false } = ctx;
   const loops = options.loops ?? 0;
 
   const invalid = _validate(baked);
@@ -61,7 +67,7 @@ export function encode(baked, format, options = {}, ctx = {}) {
     function postEncode() {
       // 프레임 복사·transfer 중 오류가 나도 Promise 가 끝나도록 try/catch.
       try {
-        const { frames, transfer } = _framesForTransfer(baked);
+        const { frames, transfer } = _framesForTransfer(baked, moveFrames);
         worker.postMessage(
           { type: 'encode', format, width: baked.width, height: baked.height, frames, loops, options },
           transfer,
