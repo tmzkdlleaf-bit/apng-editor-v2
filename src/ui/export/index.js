@@ -344,11 +344,22 @@ export function initExport(store, editorState, projectApi = null) {
     const lines = [];
     if (doc.meta.playback === 'pingpong') lines.push('핑퐁: 앞뒤로 재생됩니다(0→N→0).');
     for (const w of ws) {
-      if (w.type === 'oneshot') lines.push(w.message);
-      else if (w.type === 'seam') lines.push('루프 이음새: 시작과 끝 상태가 달라 반복이 매끄럽지 않을 수 있습니다.');
+      if (w.type === 'oneshot') { lines.push(w.message); continue; }
+      if (w.type !== 'seam') continue;
+      const issues = w.issues ?? [];
+      if (issues.some((i) => i.prop)) lines.push('루프 이음새: 시작과 끝 상태가 달라 반복이 매끄럽지 않을 수 있습니다.');
+      // 움직이는 이미지·글자 이음새(R10): 레이어 이름 포함 — 레이어 이름은 사용자·파일에서 오므로 textContent 로.
+      for (const i of issues.filter((x) => x.kind === 'anim')) lines.push(`움직이는 이미지 '${doc.layers[i.layerId]?.name ?? '이미지'}': 문서 길이가 GIF 길이의 배수가 아닙니다(루프 검사에서 맞추기).`);
+      for (const i of issues.filter((x) => x.kind === 'text')) lines.push(`글자 '${doc.layers[i.layerId]?.name ?? '글자'}': 타자기·글자 애니가 반복될 때 처음으로 돌아갑니다.`);
     }
-    if (lines.length) { warnEl.style.display = ''; warnEl.innerHTML = lines.map((l) => `<div>주의: ${l}</div>`).join(''); }
-    else { warnEl.style.display = 'none'; warnEl.innerHTML = ''; }
+    // 레이어 이름이 섞이므로 textContent 로 넣어 HTML 해석을 막는다(R7-7).
+    warnEl.textContent = '';
+    if (lines.length) {
+      warnEl.style.display = '';
+      for (const l of lines) { const d = document.createElement('div'); d.textContent = '주의: ' + l; warnEl.appendChild(d); }
+    } else {
+      warnEl.style.display = 'none';
+    }
   }
 
   function renderTogether() {

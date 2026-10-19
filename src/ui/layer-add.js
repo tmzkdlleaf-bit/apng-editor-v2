@@ -5,6 +5,7 @@ import { putAsset } from '../core/io/assets.js';
 import { showToast } from './shell/status.js';
 import { SHAPE_PACK, shapePreviewSvg } from './shapes-pack.js';
 import { probeAnim } from '../core/io/anim-decode.js';
+import { reduceAnim, planReduce, estAnimMemory, ANIM_MEM_LIMIT } from './anim-reduce.js';
 import { openEffectGallery } from './effect-gallery.js';
 import { getEffect } from '../effects/registry.js';
 import { importPsdFile } from './psd-import.js';
@@ -269,6 +270,18 @@ export function createLayerAddMenu(store, editorState, containerEl) {
 
     // 움직이는 이미지 레이어 — 소스 정보(프레임 수·지연·길이)를 에셋 메타에 담는다.
     const animMeta = { ...meta, animated: true, frameCount: probe.frameCount, delays: probe.delays, durationMs: probe.durationMs };
+
+    // R10-1: 예상 메모리가 기준(150MB)을 넘으면 줄이기 창. 그 안이면 그대로 추가.
+    if (estAnimMemory(animMeta) > ANIM_MEM_LIMIT) {
+      _openReduceDialog(file, animMeta, name, cx, cy);
+      return;
+    }
+    _commitAnim(assetId, animMeta, name, cx, cy);
+  }
+
+  // 움직이는 이미지 레이어 추가(에셋 메타 포함) — 한 건으로 기록.
+  function _commitAnim(assetId, animMeta, name, cx, cy) {
+    const doc = store.get();
     const layer = createLayer('anim', { name, assetId });
     layer.transform.x.value = cx; layer.transform.y.value = cy;
     const cmds = [];
@@ -276,6 +289,71 @@ export function createLayerAddMenu(store, editorState, containerEl) {
     cmds.push({ type: 'addLayer', layer, index: doc.order.length });
     store.apply(cmds.length === 1 ? cmds[0] : { type: 'batch', cmds });
     editorState.set({ selection: [layer.id] });
+  }
+
+  // R10-1 줄이기 창: 줄여서 가져오기(권장) / 그대로 / 취소.
+  function _openReduceDialog(file, metaFull, name, cx, cy) {
+    const plan = planReduce(metaFull);
+    const mb = (b) => (b / 1024 / 1024).toFixed(0);
+
+    const modal = document.createElement('div');
+    modal.className = 'canvas-settings-dialog anim-reduce-modal';
+    const panel = document.createElement('div');
+    panel.className = 'cs-panel';
+    const title = document.createElement('div'); title.className = 'cs-title'; title.textContent = '큰 움직이는 이미지';
+    const msg = document.createElement('div'); msg.className = 'ar-msg';
+    msg.textContent =
+      `${metaFull.width}×${metaFull.height} · ${metaFull.frameCount}프레임 (약 ${mb(estAnimMemory(metaFull))}MB)\n`
+      + `→ ${plan.newW}×${plan.newH} · ${plan.newFrameCount}프레임, 약 ${mb(plan.estBytes)}MB`;
+    const prog = document.createElement('div'); prog.className = 'ar-progress'; prog.style.display = 'none';
+    prog.innerHTML = '<div class="ar-bar"><div class="ar-bar-fill"></div></div>';
+    const barFill = prog.querySelector('.ar-bar-fill');
+    const progStep = document.createElement('span'); progStep.className = 'ar-step'; prog.appendChild(progStep);
+
+    const btns = document.createElement('div'); btns.className = 'cs-btns';
+    const cancelBtn = document.createElement('button'); cancelBtn.textContent = '취소';
+    const keepBtn = document.createElement('button'); keepBtn.textContent = '그대로 가져오기';
+    const reduceBtn = document.createElement('button'); reduceBtn.className = 'accent'; reduceBtn.textContent = '줄여서 가져오기';
+    btns.append(cancelBtn, keepBtn, reduceBtn);
+
+    panel.append(title, msg, prog, btns);
+    modal.appendChild(panel);
+    document.body.appendChild(modal);
+    const close = () => modal.remove();
+    modal.addEventListener('pointerdown', (e) => { if (e.target === modal) close(); });
+
+    cancelBtn.addEventListener('click', close);
+    keepBtn.addEventListener('click', async () => {
+      close();
+      showToast('큰 이미지를 그대로 가져옵니다. 메모리를 많이 쓸 수 있습니다.');
+      const { id, meta } = await putAsset(file, name);
+      _commitAnim(id, { ...meta, ...metaFull }, name, cx, cy);
+    });
+
+    let ctrl = null;
+    reduceBtn.addEventListener('click', async () => {
+      prog.style.display = '';
+      reduceBtn.disabled = true; keepBtn.disabled = true;
+      cancelBtn.textContent = '중지';
+      ctrl = new AbortController();
+      const onCancel = () => ctrl.abort();
+      cancelBtn.addEventListener('click', onCancel, { once: true });
+      try {
+        const r = await reduceAnim(file, metaFull, {
+          signal: ctrl.signal,
+          onProgress: (d, t) => { barFill.style.width = t ? Math.round((d / t) * 100) + '%' : '0%'; progStep.textContent = `${d}/${t}`; },
+        });
+        const { id, meta } = await putAsset(r.blob, name);
+        const animMeta = { ...meta, animated: true, frameCount: r.frameCount, delays: r.delays, durationMs: r.durationMs };
+        close();
+        _commitAnim(id, animMeta, name, cx, cy);
+        showToast(`${plan.newW}×${plan.newH} · ${r.frameCount}프레임으로 줄여 가져왔습니다.`);
+      } catch (err) {
+        if (err?.name === 'AbortError') { close(); return; }
+        progStep.textContent = '실패: ' + (err?.message ?? err);
+        reduceBtn.disabled = false; keepBtn.disabled = false; cancelBtn.textContent = '취소';
+      }
+    });
   }
 
   // D1: 캔버스로 끌어다 놓기 — PNG·JPG·WebP·GIF(움직이는 이미지 자동 판별)

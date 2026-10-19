@@ -262,8 +262,11 @@
 .loopcheck-ok { padding: var(--sp-3); color: var(--acctext); font-size: var(--fs-2); }
 .loopcheck-row { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3); width: 100%; text-align: left; padding: var(--sp-2); background: transparent; border: none; border-radius: var(--r-1); cursor: pointer; }
 .loopcheck-row:hover { background: var(--selrow); }
-.lc-name { color: var(--text); font-size: var(--fs-2); }
+.lc-name { color: var(--text); font-size: var(--fs-2); flex: none; }
+.lc-detail { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--sp-1) var(--sp-2); }
 .lc-diff { color: var(--danger); font-size: var(--fs-1); font-variant-numeric: tabular-nums; }
+.lc-fix { height: 24px; padding: 0 var(--sp-2); font-size: var(--fs-1); }
+.lc-fix-hint { color: var(--text2); font-size: var(--fs-1); }
 
 /* 이펙트 갤러리(F4-1) */
 .fx-gallery { width: 340px; }
@@ -464,6 +467,14 @@
   justify-content: flex-end;
   margin-top: var(--sp-2);
 }
+
+/* R10-1 큰 움직이는 이미지 줄이기 창 */
+.anim-reduce-modal .cs-panel { width: 340px; }
+.ar-msg { font-size: var(--fs-2); color: var(--text2); white-space: pre-line; line-height: 1.5; }
+.ar-progress { display: flex; align-items: center; gap: var(--sp-2); }
+.ar-bar { flex: 1; height: 6px; background: var(--input); border-radius: 999px; overflow: hidden; }
+.ar-bar-fill { height: 100%; width: 0; background: var(--acc); }
+.ar-step { font-size: var(--fs-1); color: var(--text2); font-variant-numeric: tabular-nums; }
 
 /* D3: canvas-info 버튼 */
 .canvas-info-btn {

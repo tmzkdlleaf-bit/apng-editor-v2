@@ -138,10 +138,18 @@ test.describe('R9-2 큰 캔버스 메모리', () => {
 
   // 메모리 경고 → "○○% 크기로 내보내기" 버튼이 뜨고 누르면 그 배율로 내보내진다.
   test('[버튼] 큰 문서 메모리 경고 → 크기 줄여 내보내기 버튼', async ({ page }) => {
-    await gotoDemo(page);
-    // 큰 캔버스로 바꿔 메모리 경고를 유발(1920x1080x24 demo 문서로 변경).
-    await page.evaluate(() => {
+    test.setTimeout(90000);
+    await page.addInitScript(() => { try { localStorage.setItem('apng2.onboarded', '1'); } catch {} });
+    await page.goto('/');
+    await page.waitForFunction(() => !!(window.__store && window.__stage));
+    // 단순 도형 하나 + 큰 캔버스로 메모리 경고 유발(굽기 비용은 낮게).
+    await page.evaluate(async () => {
+      const { createLayer } = await import('/src/core/doc/schema.js');
+      const s = createLayer('shape', { name: '네모' });
+      s.shape = { kind: 'rect', w: 400, h: 400, fill: '#3388ff', stroke: null };
+      s.transform.x.value = 960; s.transform.y.value = 540;
       window.__store.apply({ type: 'setMeta', patch: { width: 1920, height: 1080, frameCount: 40 } });
+      window.__store.apply({ type: 'addLayer', layer: s, index: 0 });
     });
     await page.keyboard.press('Control+e');
     await expect(page.locator('.export-modal')).toBeVisible();
