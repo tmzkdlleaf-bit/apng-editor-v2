@@ -1,0 +1,36 @@
+/* 글꼴은 vendor/fonts 의 woff2 로 내장(전체 글리프). 인터넷·CDN 에서 받지 않는다.
+   오프라인·데스크톱(Tauri)에서도 같은 글꼴로 그려져 내보낸 결과물이 달라지지 않는다.
+   Noto Sans/Serif KR 와 JetBrains Mono 는 가변(variable) 한 파일로 모든 굵기를 담는다. */
+@font-face {
+  font-family: 'Noto Sans KR'; font-style: normal; font-weight: 100 900; font-display: swap;
+  src: url('../../vendor/fonts/NotoSansKR-VF.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Noto Serif KR'; font-style: normal; font-weight: 100 900; font-display: swap;
+  src: url('../../vendor/fonts/NotoSerifKR-VF.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'JetBrains Mono'; font-style: normal; font-weight: 100 800; font-display: swap;
+  src: url('../../vendor/fonts/JetBrainsMono-VF.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Black Han Sans'; font-style: normal; font-weight: 400; font-display: swap;
+  src: url('../../vendor/fonts/BlackHanSans-Regular.woff2') format('woff2');
+}
+/* IBM Plex Sans KR 은 정적 — 고를 수 있는 굵기(300/400/500/700)만. 900 은 이 글꼴에 없다. */
+@font-face {
+  font-family: 'IBM Plex Sans KR'; font-style: normal; font-weight: 300; font-display: swap;
+  src: url('../../vendor/fonts/IBMPlexSansKR-Light.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'IBM Plex Sans KR'; font-style: normal; font-weight: 400; font-display: swap;
+  src: url('../../vendor/fonts/IBMPlexSansKR-Regular.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'IBM Plex Sans KR'; font-style: normal; font-weight: 500; font-display: swap;
+  src: url('../../vendor/fonts/IBMPlexSansKR-Medium.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'IBM Plex Sans KR'; font-style: normal; font-weight: 700; font-display: swap;
+  src: url('../../vendor/fonts/IBMPlexSansKR-Bold.woff2') format('woff2');
+}

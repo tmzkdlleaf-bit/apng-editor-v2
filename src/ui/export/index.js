@@ -10,6 +10,7 @@ import { fitToTarget, exportMany } from '../../export/fit.js';
 import { showToast } from '../shell/status.js';
 import { saveFile } from '../../platform/index.js';
 import { createDropdown } from '../controls/dropdown.js';
+import { ensureDocFonts } from '../fonts.js';
 
 const SETTINGS_KEY = 'apng2.exportSettings';
 const SCALE_MULS = [1, 0.75, 0.5, 0.25];
@@ -468,6 +469,8 @@ export function initExport(store, editorState, projectApi = null) {
     abortCtrl = new AbortController();
     setBusy(true); showProgress(true); resultsEl.style.display = 'none'; resultsEl.innerHTML = '';
     multiResults.length = 0;
+    // 굽기 전에 문서가 쓰는 글꼴이 실제로 로드됐는지 기다린다(결과물 글자가 폴백으로 달라지지 않게).
+    try { const { ok } = await ensureDocFonts(doc); if (!ok) showToast('일부 글꼴을 불러오지 못했습니다. 결과 글자가 다르게 보일 수 있습니다.'); } catch {}
     try {
       if (together.size === 0) {
         // 단일: 현재 설정 그대로 인코딩해서 저장

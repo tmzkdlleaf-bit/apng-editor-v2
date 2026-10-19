@@ -9,6 +9,7 @@ import { createAssets } from '../assets.js';
 import { effects as effectsRegistry } from '../../effects/registry.js';
 import motionRegistry from '../../motions/registry.js';
 import { clearTextLayoutCache } from '../../core/render/layers/text.js';
+import { ensureDocFonts } from '../fonts.js';
 
 export function initStage(containerEl, store, editorState) {
   containerEl.innerHTML = '';
@@ -327,8 +328,10 @@ export function initStage(containerEl, store, editorState) {
     setDraftMode,
     isDragging: () => drag.isDragging(),
     // 썸네일: 현재 문서 frame 0을 긴 변 maxPx로 그려 PNG Blob 반환(자동 저장용)
-    renderThumbnail(maxPx = 256) {
+    async renderThumbnail(maxPx = 256) {
       const doc = store.get();
+      // 글꼴이 로드된 뒤 그린다(글자 썸네일이 폴백으로 달라지지 않게).
+      try { await ensureDocFonts(doc); } catch {}
       const { width, height } = doc.meta;
       const scale = Math.min(1, maxPx / Math.max(width, height));
       const w = Math.max(1, Math.round(width * scale));
