@@ -20,19 +20,32 @@ function _spawnWorker() {
   return new Worker(new URL('./encode-worker.js', import.meta.url), { type: 'module' });
 }
 
-// baked.frames 를 transfer 가능한 형태로.
-//   move=false(기본): 복사본을 넘긴다(원본 baked 보존 — 용량 맞추기처럼 여러 번 인코딩).
-//   move=true: 원본 버퍼를 그대로 넘긴다(복사 없음 → 메모리 절약). baked.frames 버퍼는 떨어져 나간다(1회용).
+// baked.frames 를 transfer 가능한 형태로. 서로 다른 프레임 버퍼만 넘기고, 재생 순서는 번호 목록으로 보낸다.
+//   핑퐁은 되돌아오는 구간에서 같은 프레임 배열을 재사용하므로(bake.js), 그대로 map 하면
+//   같은 ArrayBuffer 가 transfer 목록에 두 번 들어가 DataCloneError 가 난다(R11-1).
+//   → 고유 버퍼만 한 번씩 넘기고 order 로 펼치면 핑퐁도 안전하고 메모리도 핑퐁만큼 줄어든다.
+//   move=false(기본): 고유 프레임의 복사본을 넘긴다(원본 baked 보존 — 용량 맞추기처럼 여러 번 인코딩).
+//   move=true: 고유 프레임의 원본 버퍼를 그대로 넘긴다(복사 없음 → 메모리 절약, 1회용).
+// 반환: { frames:[{buf}](고유), order:[번호…](프레임별), delays:[ms…](프레임별), transfer:[버퍼…] }
 function _framesForTransfer(baked, move = false) {
-  if (move) {
-    const frames = baked.frames.map((f) => ({ buf: f.rgba.buffer, delayMs: f.delayMs }));
-    return { frames, transfer: frames.map((f) => f.buf) };
+  const unique = [];                 // { buf }
+  const indexByRgba = new Map();     // Uint8ClampedArray → unique 내 번호
+  const order = [];
+  const delays = [];
+  const transfer = [];
+  for (const f of baked.frames) {
+    delays.push(f.delayMs);
+    let idx = indexByRgba.get(f.rgba);
+    if (idx === undefined) {
+      idx = unique.length;
+      indexByRgba.set(f.rgba, idx);
+      const buf = move ? f.rgba.buffer : f.rgba.slice().buffer;
+      unique.push({ buf });
+      transfer.push(buf);
+    }
+    order.push(idx);
   }
-  const frames = baked.frames.map((f) => {
-    const copy = f.rgba.slice();
-    return { buf: copy.buffer, delayMs: f.delayMs };
-  });
-  return { frames, transfer: frames.map((f) => f.buf) };
+  return { frames: unique, order, delays, transfer };
 }
 
 export function encode(baked, format, options = {}, ctx = {}) {
@@ -67,9 +80,9 @@ export function encode(baked, format, options = {}, ctx = {}) {
     function postEncode() {
       // 프레임 복사·transfer 중 오류가 나도 Promise 가 끝나도록 try/catch.
       try {
-        const { frames, transfer } = _framesForTransfer(baked, moveFrames);
+        const { frames, order, delays, transfer } = _framesForTransfer(baked, moveFrames);
         worker.postMessage(
-          { type: 'encode', format, width: baked.width, height: baked.height, frames, loops, options },
+          { type: 'encode', format, width: baked.width, height: baked.height, frames, order, delays, loops, options },
           transfer,
         );
       } catch (err) {
@@ -183,9 +196,9 @@ export function createEncoder() {
       if (signal) signal.addEventListener('abort', onAbort, { once: true });
 
       try {
-        const { frames, transfer } = _framesForTransfer(baked);
+        const { frames, order, delays, transfer } = _framesForTransfer(baked);
         worker.postMessage(
-          { type: 'encode', format, width: baked.width, height: baked.height, frames, loops, options },
+          { type: 'encode', format, width: baked.width, height: baked.height, frames, order, delays, loops, options },
           transfer,
         );
       } catch (err) {

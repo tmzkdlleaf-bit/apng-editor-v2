@@ -1,5 +1,7 @@
 // 인코더 워커 (모듈 워커) — APNG / WebP / GIF.
-// 메시지: { type:'encode', format, width, height, frames:[{buf,delayMs}], loops, options }
+// 메시지: { type:'encode', format, width, height, frames:[{buf}](고유), order:[번호…], delays:[ms…], loops, options }
+//   frames 는 서로 다른 프레임 버퍼만(핑퐁 중복 제거, R11-1). order 로 재생 순서대로 펼쳐 쓴다.
+//   (옛 형태 frames:[{buf,delayMs}] 도 order/delays 가 없으면 그대로 받는다.)
 //   → { type:'result', buf, bytes }  (buf는 transfer)
 // 진행률: { type:'progress', done, total }
 // 취소:   { type:'cancel' } 수신 → { type:'cancelled' }
@@ -160,7 +162,11 @@ self.onmessage = async (e) => {
   if (msg.type !== 'encode') return;
 
   _cancel = false;
-  const { format, width, height, frames, loops = 0, options = {} } = msg;
+  const { format, width, height, frames: uniq, order = null, delays = null, loops = 0, options = {} } = msg;
+  // order 로 고유 프레임을 재생 순서대로 펼친다(핑퐁은 같은 버퍼가 여러 번 나온다 — 읽기만 하므로 안전).
+  const frames = order
+    ? order.map((i, k) => ({ buf: uniq[i].buf, delayMs: delays ? delays[k] : uniq[i].delayMs }))
+    : uniq;
   try {
     self.postMessage({ type: 'progress', done: 0, total: frames.length });
     let buf;

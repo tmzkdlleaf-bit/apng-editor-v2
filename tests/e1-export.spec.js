@@ -126,6 +126,30 @@ test.describe('E1 — 내보내기', () => {
     expect(r.match).toEqual([true, true, true, true]);
   });
 
+  // ── 핑퐁 단일 내보내기(exportAnimation, move 전송) — 자르기 꺼짐에서도 성공 ──
+  // R11-1: 핑퐁은 되돌아오는 구간에서 같은 프레임 버퍼를 재사용한다. move 전송이 같은 ArrayBuffer 를
+  // 한 postMessage 로 두 번 넘기면 DataCloneError. 자르기 끔에서 3형식 모두 디코딩되는지 확인한다.
+  test('[핑퐁] exportAnimation 자르기 끔 — 3형식 모두 디코딩(0,1,2,1 순서)', async ({ page }) => {
+    await page.goto('/');
+    const r = await page.evaluate(async () => {
+      const H = await import('/tests/e1-helpers.js');
+      const { exportAnimation } = await import('/src/export/index.js');
+      const doc = H.movingShapeDoc({ width: 24, height: 24, fps: 10, frameCount: 3, x0: 4, x1: 16 });
+      doc.meta.playback = 'pingpong';
+      const out = {};
+      for (const [fmt, mime] of Object.entries({ apng: 'image/png', webp: 'image/webp', gif: 'image/gif' })) {
+        const res = await exportAnimation(doc, { format: fmt, trim: false, createCanvas: H.createCanvas, name: 't' });
+        const dec = await H.decode(await res.blob.arrayBuffer(), mime);
+        out[fmt] = { n: dec.n, bytes: res.bytes, frameCount: res.frameCount };
+      }
+      return out;
+    });
+    for (const fmt of ['apng', 'webp', 'gif']) {
+      expect(r[fmt].n).toBe(4);            // 핑퐁 0,1,2,1 = 4장
+      expect(r[fmt].bytes).toBeGreaterThan(0);
+    }
+  });
+
   // ── 같은 프레임 연속 → 합쳐지고 지연 합산 ────────────────────────────────
   test('[병합] 같은 프레임 연속 → 1장으로 합치고 지연 합산', async ({ page }) => {
     await page.goto('/');

@@ -1,28 +1,10 @@
 // 모션 기록(F3-5) — 재생하면서 드래그한 움직임을 키프레임으로 녹화.
 // 머리줄 기록 버튼(빨간 점) → 3·2·1 → 녹화 → 키 줄이기 후 기록 1건. Esc 취소.
 import { getParentWorldTr, worldToLocalInParent } from './canvas/hit.js';
+import { reduceKeys } from '../core/anim/reduce-keys.js';
 
-// 키 줄이기 — 오차 허용치(tol) 이내로 선형 보간되는 중간 키를 뺀다(Douglas–Peucker).
-export function reduceKeys(points, tol = 2) {
-  if (points.length <= 2) return points.slice();
-  const keep = new Array(points.length).fill(false);
-  keep[0] = keep[points.length - 1] = true;
-  const stack = [[0, points.length - 1]];
-  while (stack.length) {
-    const [a, b] = stack.pop();
-    let maxD = -1, idx = -1;
-    const pa = points[a], pb = points[b];
-    const df = pb.f - pa.f;
-    for (let i = a + 1; i < b; i++) {
-      const t = df === 0 ? 0 : (points[i].f - pa.f) / df;
-      const interp = pa.v + (pb.v - pa.v) * t;
-      const d = Math.abs(points[i].v - interp);
-      if (d > maxD) { maxD = d; idx = i; }
-    }
-    if (maxD > tol && idx > 0) { keep[idx] = true; stack.push([a, idx], [idx, b]); }
-  }
-  return points.filter((_, i) => keep[i]);
-}
+// 키 줄이기는 core/anim/reduce-keys.js 로 옮겼다(core·worker 재사용). 기존 import 호환을 위해 다시 내보낸다.
+export { reduceKeys };
 
 // 녹화한 샘플 [{f,x,y}] → 레이어의 x/y 키프레임으로(줄인 뒤) 적용. 기록 1건.
 export function applyRecordedPath(store, layerId, samples, tol = 2) {

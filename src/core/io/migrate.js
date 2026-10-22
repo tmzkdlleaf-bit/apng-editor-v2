@@ -1,8 +1,13 @@
 // 문서 버전 마이그레이션 — version을 보고 최신으로 올린다.
 // 뒤 버전이 생기면 MIGRATIONS[n] = (doc) => doc(n+1) 을 추가한다.
 import { evalProp } from '../anim/prop.js';
+import { reduceKeys } from '../anim/reduce-keys.js';
 
 export const CURRENT_VERSION = 3;
+
+// 변환한 새 X/Y 키를 줄일 때 허용 오차(px). 렌더는 정수 프레임에서만 하므로
+// 직선 보간 오차가 이 값 이하인 중간 키는 뺀다(R11-2).
+const CAMERA_REDUCE_TOL = 0.5;
 
 function _easeAt(prop, f) {
   const k = (prop?.keys ?? []).find((kk) => kk.f === f);
@@ -30,38 +35,49 @@ const MIGRATIONS = {
 
   // v2 → v3 (R8-1): 카메라 의미 변경. 예전 "점 (X0,Y0) 기준 줌" → 새 "가운데 기준 줌 + 화면 이동".
   //   같은 프레임의 화면 결과가 같도록: X = (cx − X0)(1 − z)/z, Y = (cy − Y0)(1 − z)/z (z=0 이면 0).
-  //   키프레임이 있으면 x·y·zoom 의 키 프레임을 모두 모아 그 프레임마다 새 X/Y 키를 넣는다(줌은 그대로).
-  //   키 사이 구간은 근사(옛 식은 z 에 따라 비선형).
+  //   옛 식은 줌(z)에 따라 비선형이라, 키프레임에만 새 키를 넣으면 키 사이가 크게 어긋났다(R11-2).
+  //   렌더는 정수 프레임에서만 하므로 0..frameCount 모든 정수에 새 X/Y 키를 넣으면 모든 프레임에서 정확하다.
+  //   그 뒤 직선 보간 오차 0.5px 이하인 중간 키는 뺀다(줌 키는 그대로 둔다).
   2: (doc) => {
     const meta = doc.meta ?? {};
     const cx = (Number(meta.width)  || 768) / 2;
     const cy = (Number(meta.height) || 768) / 2;
+    const frameCount = Math.max(1, Math.round(Number(meta.frameCount) || 24));
     const cam = doc.camera ?? {};
     const xP = cam.x, yP = cam.y, zP = cam.zoom ?? { value: 1 };
     const conv = (c0, z, center) => (z === 0 ? 0 : (center - c0) * (1 - z) / z);
     const hasKeys = (p) => Array.isArray(p?.keys) && p.keys.length > 0;
 
     let newX, newY;
+    const zeroZoomFrames = [];
     if (hasKeys(xP) || hasKeys(yP) || hasKeys(zP)) {
-      const frames = new Set();
-      for (const p of [xP, yP, zP]) for (const k of (p?.keys ?? [])) frames.add(k.f);
-      const sorted = [...frames].sort((a, b) => a - b);
-      const xKeys = [], yKeys = [];
-      for (const f of sorted) {
+      const xPts = [], yPts = [];
+      let zMax = 1;
+      for (let f = 0; f <= frameCount; f++) {
         const z  = evalProp(zP, f);
-        const x0 = evalProp(xP, f);
-        const y0 = evalProp(yP, f);
-        xKeys.push({ f, v: conv(x0, z, cx), ease: _easeAt(xP, f) });
-        yKeys.push({ f, v: conv(y0, z, cy), ease: _easeAt(yP, f) });
+        if (z === 0) zeroZoomFrames.push(f);
+        if (z > zMax) zMax = z;
+        xPts.push({ f, v: conv(evalProp(xP, f), z, cx) });
+        yPts.push({ f, v: conv(evalProp(yP, f), z, cy) });
       }
+      // 키 X 를 δ 만큼 근사하면 화면 이동 오차는 z·δ 가 된다(렌더가 z 를 곱함). 모든 프레임에서
+      // 화면 오차를 0.5px 이하로 두려면 키 허용치를 최대 줌으로 나눈다(R11-2).
+      const tol = CAMERA_REDUCE_TOL / Math.max(1, zMax);
+      // 새 키의 이징은 linear(정수 프레임마다 정확하므로 보간은 직선으로 충분).
+      const xKeys = reduceKeys(xPts, tol).map((k) => ({ f: k.f, v: k.v, ease: 'linear' }));
+      const yKeys = reduceKeys(yPts, tol).map((k) => ({ f: k.f, v: k.v, ease: 'linear' }));
       newX = { value: xKeys[0]?.v ?? 0, keys: xKeys };
       newY = { value: yKeys[0]?.v ?? 0, keys: yKeys };
     } else {
       const z  = zP?.value ?? 1;
+      if (z === 0) zeroZoomFrames.push(0);
       newX = { value: conv(xP?.value ?? 0, z, cx) };
       newY = { value: conv(yP?.value ?? 0, z, cy) };
     }
-    return { ...doc, version: 3, camera: { x: newX, y: newY, zoom: zP } };
+    // 예전 카메라 값을 남겨 둔다(렌더는 쓰지 않음 — 나중에 복원·디버깅용).
+    const camera = { x: newX, y: newY, zoom: zP, _v2: { x: xP ?? null, y: yP ?? null, zoom: zP ?? null } };
+    if (zeroZoomFrames.length) camera._v2.zeroZoomFrames = zeroZoomFrames;
+    return { ...doc, version: 3, camera };
   },
 };
 
@@ -119,6 +135,7 @@ export function normalizeDoc(doc) {
 
   const cam = (doc.camera && typeof doc.camera === 'object') ? doc.camera : {};
   const ncam = { x: _prop(cam.x, 0), y: _prop(cam.y, 0), zoom: _prop(cam.zoom, 1) };
+  if (cam._v2 && typeof cam._v2 === 'object') ncam._v2 = cam._v2; // 변환 때 남긴 예전 카메라 값 보존(렌더 미사용)
 
   const layersIn = (doc.layers && typeof doc.layers === 'object') ? doc.layers : {};
   const layers = {};
