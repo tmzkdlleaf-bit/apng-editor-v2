@@ -73,5 +73,15 @@ UI(`src/ui/update-banner.js`) · 경계(`platform/checkUpdate`) · 플러그인(
 리브랜딩하려면 그 파일의 색/모양을 고치고 `node src-tauri/icons/make-icons.mjs`를 다시 실행한다.
 빌드가 아이콘을 거부하면 표준 생성기로 다시 만든다: `npx @tauri-apps/cli@2 icon src-tauri/icons/icon.png`.
 
-> 주의: 개발 환경에 Rust가 없어 Tauri 빌드는 이 저장소에서 아직 실행·검증되지 않았다.
-> 스키마·설정은 Tauri 2 문서 기준으로 작성했다. 첫 빌드 전 위 툴체인을 설치해야 한다.
+> 빌드 검증 완료(R15, 2026-10-24, 윈도우 11 · Rust 1.99.1 · VS Build Tools 2022 · WebView2 155 · Node 24):
+> `npx @tauri-apps/cli@2 build` 성공(약 6분 45초). 산출물 2개 —
+> `APNG Editor_0.1.1_x64_en-US.msi`(16.7 MiB) · `APNG Editor_0.1.1_x64-setup.exe`(15.5 MiB),
+> 각 `.sig` 서명 포함. 빌드된 `apng-editor.exe` 를 실행하면 창(제목 "코코포리아 APNG 에디터")이 뜨고
+> WebView2 가 `dist/` 를 로드하는 것을 확인했다(즉시 종료·크래시 없음). `npm test` 426개 전부 통과(웹 무영향).
+>
+> 남은 것:
+> - **로컬 빌드엔 서명 키가 필요하다.** `createUpdaterArtifacts: true` 라서 `TAURI_SIGNING_PRIVATE_KEY`
+>   환경변수가 없으면 로컬 `tauri build` 는 멈춘다(위 검증은 검증용 임시 키로 돌렸다). docs/release.md 참고.
+> - **자동 업데이트가 실제로 적용되려면** `tauri.conf.json` 의 `pubkey` 와 짝이 맞는 개인 키로 서명해야 한다.
+>   임시 키로 서명하면 런타임이 거부한다(빌드 중 경고로 확인됨). 짝 맞는 키는 저장소 시크릿에만 둔다.
+> - 메뉴 조작·네이티브 저장/열기 대화상자·설치/제거 등 사람이 눌러 보는 확인은 나비가 직접 한다.
