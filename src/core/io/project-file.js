@@ -6,6 +6,8 @@ import { migrate } from './migrate.js';
 
 export const PROJECT_FORMAT  = 'apng-editor-project';
 export const PROJECT_VERSION = 1;
+export const LIBRARY_FORMAT  = 'apng-editor-library';
+export const LIBRARY_VERSION = 1;
 
 function _abToBase64(ab) {
   const u8 = new Uint8Array(ab);
@@ -53,4 +55,35 @@ export async function importProjectFile(payload) {
     await putAssetById(id, blob); // 내부에서 중복 검사
   }
   return { doc };
+}
+
+// ── 내 부품 파일(.apnglib, R14-3) — 부품 여러 개 + 에셋을 한 파일로. 다른 컴퓨터로 옮길 때. ──
+// 파일 = { format, version, parts:[부품 레코드], assets:{ id:{ meta, data(base64) } } }
+export async function buildLibraryFile(parts) {
+  const assets = {};
+  for (const part of parts) {
+    for (const id of (part.assetIds ?? [])) {
+      if (assets[id]) continue;
+      const blob = await getAsset(id);
+      if (!blob) continue;
+      const ab = await blob.arrayBuffer();
+      const meta = part.assets?.[id] ?? { type: blob.type };
+      assets[id] = { meta, data: _abToBase64(ab) };
+    }
+  }
+  return { format: LIBRARY_FORMAT, version: LIBRARY_VERSION, parts, assets };
+}
+
+// 부품 파일을 읽어 에셋 복원 + { parts } 반환(호출 측이 라이브러리 저장소에 새 id 로 넣는다).
+export async function importLibraryFile(payload) {
+  if (!payload || payload.format !== LIBRARY_FORMAT) {
+    throw new Error('알 수 없는 부품 파일 형식입니다.');
+  }
+  const assets = payload.assets ?? {};
+  for (const id of Object.keys(assets)) {
+    const entry = assets[id];
+    if (!entry?.data) continue;
+    await putAssetById(id, _base64ToBlob(entry.data, entry.meta?.type));
+  }
+  return { parts: Array.isArray(payload.parts) ? payload.parts : [] };
 }

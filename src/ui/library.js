@@ -1,5 +1,28 @@
 // 프로젝트 목록(F5-2) + 새 프로젝트 템플릿 고르기(F5-3) — 전체 화면 패널.
-import { TEMPLATES, CANVAS_PRESETS } from './templates.js';
+import { TEMPLATES, CANVAS_PRESETS, createProjectFromTemplate } from './templates.js';
+import { createRenderEngine } from '../core/render/frame.js';
+import { effects as effectsRegistry } from '../effects/registry.js';
+import motionRegistry from '../motions/registry.js';
+
+// 템플릿 미리보기 썸네일(0번 프레임만 — 움직이는 미리보기는 기본값 끔). 작은 캔버스에 렌더.
+let _tplEngine = null;
+function _renderTemplateThumb(canvas, templateKey, presetKey) {
+  try {
+    if (!_tplEngine) _tplEngine = createRenderEngine({
+      createCanvas: (w, h) => { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; },
+      effects: effectsRegistry, motions: motionRegistry,
+    });
+    const doc = createProjectFromTemplate(templateKey, presetKey);
+    const dw = doc.meta.width, dh = doc.meta.height;
+    const scale = Math.min(canvas.width / dw, canvas.height / dh);
+    const off = document.createElement('canvas');
+    off.width = Math.max(1, Math.round(dw * scale)); off.height = Math.max(1, Math.round(dh * scale));
+    _tplEngine.renderFrame(off.getContext('2d', { willReadFrequently: true }), doc, 0, { scale });
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(off, (canvas.width - off.width) / 2, (canvas.height - off.height) / 2);
+  } catch { /* 미리보기 실패는 조용히 — 라벨만 보인다 */ }
+}
 
 let _open = null;
 
@@ -70,9 +93,13 @@ export function openLibrary(projectApi, { currentId = null } = {}) {
     tplWrap.innerHTML = '<div class="newproj-label">템플릿</div>';
     const tplGrid = document.createElement('div'); tplGrid.className = 'newproj-grid';
     for (const t of TEMPLATES) {
-      const b = document.createElement('button'); b.className = 'newproj-opt' + (t.key === _tpl ? ' is-on' : ''); b.dataset.tpl = t.key; b.textContent = t.label;
-      b.addEventListener('click', () => { _tpl = t.key; tplGrid.querySelectorAll('.newproj-opt').forEach((x) => x.classList.toggle('is-on', x.dataset.tpl === _tpl)); });
+      const b = document.createElement('button'); b.className = 'newproj-opt newproj-opt-tpl' + (t.key === _tpl ? ' is-on' : ''); b.dataset.tpl = t.key;
+      const cv = document.createElement('canvas'); cv.width = 96; cv.height = 72; cv.className = 'newproj-thumb';
+      const lbl = document.createElement('span'); lbl.className = 'newproj-opt-label'; lbl.textContent = t.label;
+      b.append(cv, lbl);
+      b.addEventListener('click', () => { _tpl = t.key; tplGrid.querySelectorAll('.newproj-opt-tpl').forEach((x) => x.classList.toggle('is-on', x.dataset.tpl === _tpl)); });
       tplGrid.appendChild(b);
+      _renderTemplateThumb(cv, t.key, _preset);
     }
     tplWrap.appendChild(tplGrid);
     const pWrap = document.createElement('div'); pWrap.className = 'newproj-section';
@@ -80,7 +107,12 @@ export function openLibrary(projectApi, { currentId = null } = {}) {
     const pGrid = document.createElement('div'); pGrid.className = 'newproj-grid';
     for (const p of CANVAS_PRESETS) {
       const b = document.createElement('button'); b.className = 'newproj-opt' + (p.key === _preset ? ' is-on' : ''); b.dataset.preset = p.key; b.textContent = `${p.label} (${p.w}×${p.h})`;
-      b.addEventListener('click', () => { _preset = p.key; pGrid.querySelectorAll('.newproj-opt').forEach((x) => x.classList.toggle('is-on', x.dataset.preset === _preset)); });
+      b.addEventListener('click', () => {
+        _preset = p.key;
+        pGrid.querySelectorAll('.newproj-opt[data-preset]').forEach((x) => x.classList.toggle('is-on', x.dataset.preset === _preset));
+        // 크기 바뀌면 템플릿 썸네일 다시 그린다(비율 반영).
+        tplGrid.querySelectorAll('.newproj-opt-tpl').forEach((x) => { const cv = x.querySelector('.newproj-thumb'); if (cv) _renderTemplateThumb(cv, x.dataset.tpl, _preset); });
+      });
       pGrid.appendChild(b);
     }
     pWrap.appendChild(pGrid);

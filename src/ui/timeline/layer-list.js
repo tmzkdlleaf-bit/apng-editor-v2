@@ -378,6 +378,11 @@ export function initLayerList(containerEl, store, editorState, deps = {}) {
     if (layer.type === 'group') {
       items.push([layer.isComponent ? '컴포넌트 (설정됨)' : '컴포넌트로 만들기', '', () => { makeComponent(store, editorState); }, layer.isComponent]);
       items.push(['인스턴스 추가', '', () => { addInstance(store, editorState, layerId); }]);
+      // 내 부품으로 저장(R14-3) — 선택이 아니라 이 그룹을 저장하도록 선택을 맞춘 뒤 저장.
+      items.push(['내 부품으로 저장', '', () => {
+        editorState.set({ selection: [layerId] });
+        import('../library-parts.js').then((m) => m.saveGroupAsPart(store, editorState));
+      }]);
     }
     items.push(['sep']);
     items.push([layer.locked ? '잠금 해제' : '잠금', '', () => store.apply({ type: 'setLayer', id: layerId, patch: { locked: !layer.locked } })]);

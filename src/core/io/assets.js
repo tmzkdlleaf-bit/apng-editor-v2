@@ -3,7 +3,9 @@
 // DOM을 쓰지 않는다(crypto.subtle, createImageBitmap은 워커에도 있다).
 import {
   getAssetBlob, putAssetBlob, hasAssetBlob, deleteAssetBlob, allAssetIds, listProjects, getAssetSavedAt,
+  listAllSnapshots, listLibraryParts,
 } from './idb.js';
+import { variantAssetIds } from '../doc/variants.js';
 
 // 파일 바이트의 SHA-256 앞 16자(8바이트) → 'ast_' 접두어
 export async function hashAssetId(buffer) {
@@ -63,16 +65,30 @@ export function collectAssetIds(doc, set = new Set()) {
     }
     if (l.mask?.assetId) set.add(l.mask.assetId);
   }
+  // 세트(바리에이션) 이미지 슬롯이 가리키는 에셋도 "사용 중"으로 센다(R13-1, 정리에서 지우지 않게).
+  variantAssetIds(doc.variants, set);
   return set;
 }
 
 // 어떤 프로젝트도 가리키지 않는 에셋 Blob을 지운다. 앱 시작 때만 부른다(그때는 되돌리기 기록이 없다).
 // 최근(maxAgeMs 이내)에 저장된 고아는 남긴다 — 열려 있는 문서의 되돌리기, 아직 저장 안 된 변경,
 // 다른 탭이 방금 넣은 이미지를 지우지 않기 위해서다(R7-3).
-export async function purgeOrphanAssets({ maxAgeMs = 24 * 60 * 60 * 1000, now = Date.now() } = {}) {
+export async function purgeOrphanAssets({ maxAgeMs = 24 * 60 * 60 * 1000, now = Date.now(), keepIds = [] } = {}) {
   const projects = await listProjects();
   const used = new Set();
   for (const p of projects) collectAssetIds(p.doc, used);
+  // 호출 측이 지켜 달라고 넘긴 id(코코포리아 미리보기 배경 등, R14-2) — 어떤 문서도 안 쓰지만 보존.
+  for (const id of keepIds) if (id) used.add(id);
+  // 저장 시점(snapshots)이 가리키는 이미지도 "사용 중"으로 센다 — 되돌렸을 때 이미지가 비지 않게(R12-3, R7-3).
+  try {
+    const snaps = await listAllSnapshots();
+    for (const s of (snaps ?? [])) collectAssetIds(s.doc, used);
+  } catch { /* 구버전 DB 등 — 무시 */ }
+  // 내 부품(library)이 쓰는 이미지도 "사용 중"으로 센다 — 부품 넣었을 때 이미지가 비지 않게(R14-3).
+  try {
+    const parts = await listLibraryParts();
+    for (const p of (parts ?? [])) for (const aid of (p.assetIds ?? [])) if (aid) used.add(aid);
+  } catch { /* 구버전 DB 등 — 무시 */ }
   const all = await allAssetIds();
   for (const id of all) {
     if (used.has(id)) continue;

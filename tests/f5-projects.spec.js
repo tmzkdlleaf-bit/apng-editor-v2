@@ -23,7 +23,7 @@ test('F5-3 — 템플릿: createProjectFromTemplate 가 프리셋 크기·레이
     };
   });
   expect(r.presets).toBe(4);
-  expect(r.templates).toBe(4);
+  expect(r.templates).toBe(10); // 기존 4 + R14-1 컷인 템플릿 6
   expect(r.emptyW).toBe(320); expect(r.emptyH).toBe(320); expect(r.emptyLayers).toBe(0);
   expect(r.sparkleW).toBe(768); expect(r.sparkleLayers).toBeGreaterThanOrEqual(2);
   expect(r.sparkleHasEffect).toBe(true);

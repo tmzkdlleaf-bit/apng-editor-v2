@@ -9,6 +9,7 @@ import { reduceAnim, planReduce, estAnimMemory, ANIM_MEM_LIMIT } from './anim-re
 import { openEffectGallery } from './effect-gallery.js';
 import { getEffect } from '../effects/registry.js';
 import { importPsdFile } from './psd-import.js';
+import { openMyParts } from './library-parts.js';
 
 // AddMenu 설계: 이미지 / 움직이는 이미지 / 글자 / 도형(격자) / 이펙트 / 그룹 / 조정 / PSD
 // 이번에 안 되는 항목은 disabled + "준비 중"
@@ -21,6 +22,7 @@ const _MENU = [
   { kind: 'effect',   label: '이펙트',   type: 'effect' },
   { kind: 'group',    label: '그룹',     type: 'group' },
   { kind: 'adjust',   label: '조정',     type: 'adjust' },
+  { kind: 'myparts',  label: '내 부품',  type: 'myparts' },
   { kind: 'psd',      label: 'PSD 가져오기', type: 'psd' },
 ];
 
@@ -157,6 +159,10 @@ export function createLayerAddMenu(store, editorState, containerEl) {
     }
     if (item.kind === 'psd') {
       psdInput.click();
+      return;
+    }
+    if (item.kind === 'myparts') {
+      openMyParts(store, editorState);
       return;
     }
     if (item.type === 'effect') {
