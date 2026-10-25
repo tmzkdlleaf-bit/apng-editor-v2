@@ -164,3 +164,62 @@ select.ex-ctl, input[type="number"].ex-ctl {
 }
 .ud-btns { display: flex; justify-content: flex-end; gap: var(--sp-2); }
 .ud-err { color: var(--danger); font-size: var(--fs-1); }
+
+/* ── 탭(파일/세트, R13-1) ────────────────────────────────────────────── */
+.ex-tabs { display: flex; gap: var(--sp-1); margin: 0 auto 0 var(--sp-4); }
+.ex-tab {
+  background: none; border: 1px solid transparent; border-radius: var(--r-1);
+  color: var(--text2); font: inherit; font-size: var(--fs-3); cursor: pointer;
+  padding: var(--sp-1) var(--sp-3);
+}
+.ex-tab:hover { color: var(--text); }
+.ex-tab.is-on { background: var(--acc); color: var(--onacc); font-weight: 600; }
+
+/* ── 세트 탭 ──────────────────────────────────────────────────────────── */
+.ex-set { padding: var(--sp-4); overflow: auto; }
+.set-intro { color: var(--text2); font-size: var(--fs-3); margin: 0 0 var(--sp-3); }
+.set-slotbar { display: flex; align-items: center; gap: var(--sp-2); margin-bottom: var(--sp-3); flex-wrap: wrap; }
+.set-none { color: var(--text2); font-size: var(--fs-3); }
+.set-table { width: 100%; border-collapse: collapse; font-size: var(--fs-3); }
+.set-table th, .set-table td { border: 1px solid var(--line2); padding: var(--sp-2); text-align: left; vertical-align: middle; }
+.set-table th { color: var(--text2); font-weight: 500; white-space: nowrap; }
+.set-slot-rm {
+  background: none; border: none; color: var(--text2); cursor: pointer;
+  font-size: var(--fs-4); line-height: 1; margin-left: var(--sp-1); padding: 0 var(--sp-1);
+}
+.set-slot-rm:hover { color: var(--acc); }
+.set-table tr.is-preview { outline: 2px solid var(--acc); outline-offset: -2px; }
+.set-thumb { display: block; background: var(--input); border-radius: var(--r-1); width: 64px; height: 48px; }
+.set-name { width: 110px; background: var(--input); color: var(--text); border: 1px solid var(--line); border-radius: var(--r-1); padding: var(--sp-1) var(--sp-2); font: inherit; }
+.set-cell-text { width: 130px; background: var(--input); color: var(--text); border: 1px solid var(--line); border-radius: var(--r-1); padding: var(--sp-1) var(--sp-2); font: inherit; }
+.set-cell-color { display: inline-flex; align-items: center; gap: var(--sp-1); }
+.set-cell-image { display: inline-flex; align-items: center; gap: var(--sp-1); }
+.set-cell-tag { color: var(--text2); font-size: var(--fs-2); }
+.set-row-acts { white-space: nowrap; }
+.set-row-acts .btn, .set-foot .btn { margin-right: var(--sp-1); }
+.set-rowbar { margin-top: var(--sp-3); }
+.set-foot { display: flex; align-items: center; gap: var(--sp-2); margin-top: var(--sp-4); padding-top: var(--sp-3); border-top: 1px solid var(--line2); }
+.set-status { color: var(--text2); font-size: var(--fs-3); }
+
+/* ── 화면에서 미리보기(R14-2) ────────────────────────────────────────── */
+.ex-ccfolia { margin-top: var(--sp-2); width: 100%; }
+.ccf-modal {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.6);
+  display: flex; align-items: center; justify-content: center; z-index: 1100;
+}
+.ccf-panel {
+  background: var(--panel); color: var(--text); border: 1px solid var(--line);
+  border-radius: var(--r-3); width: min(1000px, 96vw); height: min(760px, 92vh);
+  display: flex; flex-direction: column; box-shadow: 0 12px 48px rgba(0,0,0,0.4);
+}
+.ccf-head { display: flex; align-items: center; justify-content: space-between; padding: var(--sp-3) var(--sp-4); border-bottom: 1px solid var(--line); }
+.ccf-title { font-size: var(--fs-4); font-weight: 600; }
+.ccf-head-right { display: flex; align-items: center; gap: var(--sp-2); }
+.ccf-close { background: none; border: none; color: var(--text2); font-size: var(--fs-5); cursor: pointer; line-height: 1; padding: 0 var(--sp-2); }
+.ccf-close:hover { color: var(--text); }
+.ccf-stage { position: relative; flex: 1; margin: var(--sp-3); overflow: hidden; background: #26282c; border-radius: var(--r-2); }
+.ccf-bg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; display: none; }
+.ccf-bg-hint { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: var(--text2); font-size: var(--fs-3); }
+.ccf-overlay { position: absolute; cursor: move; user-select: none; -webkit-user-drag: none; image-rendering: auto; }
+.ccf-bar { display: flex; align-items: center; gap: var(--sp-2); padding: 0 var(--sp-4) var(--sp-3); }
+.ccf-scale-label { color: var(--text2); font-size: var(--fs-3); min-width: 48px; }

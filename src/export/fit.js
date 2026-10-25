@@ -87,6 +87,8 @@ export async function fitToTarget(doc, preset, deps = {}, ctx = {}) {
   const format   = preset.format;
   const info     = FORMAT_INFO[format];
   if (!info) throw new Error('알 수 없는 형식: ' + format);
+  // PNG 묶음·스프라이트(zip)는 목표 용량 맞추기 경로를 쓰지 않는다(exportPngSequence/exportSpriteSheet 전용).
+  if (format === 'png-seq' || format === 'sprite') throw new Error('이 형식은 목표 맞추기를 지원하지 않습니다: ' + format);
   const target   = preset.targetBytes ?? null;
   const trim     = !!preset.trim;
   const playback = doc.meta.playback ?? 'loop';

@@ -44,6 +44,16 @@ export const DEFAULT_PRESETS = [
     source: '무손실 APNG — 원본 화질 보관용',
     checked: '2026-10-06',
   },
+  {
+    id: 'png-seq', name: 'PNG 묶음(한 장씩)', format: 'png-seq',
+    source: '프레임마다 PNG 한 장 + timing.json 을 zip 으로. 다른 도구로 가져가 편집·재인코딩용(R13-2)',
+    checked: '2026-10-23',
+  },
+  {
+    id: 'sprite-sheet', name: '스프라이트 시트', format: 'sprite',
+    source: '모든 프레임을 한 장 PNG 격자로 + 좌표 sheet.json 을 zip 으로. 게임 엔진·CSS 스프라이트용(R13-2)',
+    checked: '2026-10-23',
+  },
 ];
 
 const USER_KEY   = 'apng2.userPresets';

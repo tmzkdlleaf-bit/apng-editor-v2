@@ -90,6 +90,7 @@ export async function bakeFrames(engine, doc, opts = {}) {
     onProgress = () => {},
     signal = null,
     maxMemoryMB = DEFAULT_MAX_MEMORY_MB,
+    noMerge = false,  // PNG 묶음·스프라이트 시트: 같은 프레임도 합치지 않고 문서 프레임 수 그대로(R13-2)
   } = opts;
 
   if (typeof createCanvas !== 'function') throw new Error('createCanvas 함수가 필요합니다.');
@@ -151,16 +152,19 @@ export async function bakeFrames(engine, doc, opts = {}) {
   }));
 
   // 연속으로 완전히 같은 프레임은 하나로 합치고 지연을 더한다.
-  const merged = [];
-  for (const fr of frames) {
-    const last = merged[merged.length - 1];
-    if (last && bytesEqual(last.rgba, fr.rgba)) {
-      last.delayMs += fr.delayMs;
-    } else {
-      merged.push({ rgba: fr.rgba, delayMs: fr.delayMs });
+  // noMerge: PNG 묶음·스프라이트 시트는 프레임 수를 문서 그대로 둬야 하므로 합치지 않는다.
+  if (!noMerge) {
+    const merged = [];
+    for (const fr of frames) {
+      const last = merged[merged.length - 1];
+      if (last && bytesEqual(last.rgba, fr.rgba)) {
+        last.delayMs += fr.delayMs;
+      } else {
+        merged.push({ rgba: fr.rgba, delayMs: fr.delayMs });
+      }
     }
+    frames = merged;
   }
-  frames = merged;
 
   let width = outW, height = outH;
   let trimRect = { x: 0, y: 0, w: outW, h: outH };

@@ -5,16 +5,23 @@ import motionRegistry from '../../motions/registry.js';
 import { getAsset } from '../../core/io/assets.js';
 import { decodeAnim } from '../../core/io/anim-decode.js';
 import { getPresets, getPreset, isDefaultPreset, saveUserPreset } from '../../export/presets.js';
-import { exportAnimation, getExportWarnings } from '../../export/index.js';
+import { exportAnimation, getExportWarnings, exportPngSequence, exportSpriteSheet } from '../../export/index.js';
 import { fitToTarget, exportMany } from '../../export/fit.js';
+import { variantAssetIds } from '../../core/doc/variants.js';
 import { showToast } from '../shell/status.js';
 import { saveFile } from '../../platform/index.js';
 import { createDropdown } from '../controls/dropdown.js';
 import { ensureDocFonts } from '../fonts.js';
+import { initSetTab } from './set-tab.js';
+import { openCcfoliaPreview } from './ccfolia-preview.js';
 
 const SETTINGS_KEY = 'apng2.exportSettings';
 const SCALE_MULS = [1, 0.75, 0.5, 0.25];
 const APNG_COLORS = [{ v: 0, label: '무손실' }, { v: 256, label: '256색' }, { v: 128, label: '128색' }, { v: 64, label: '64색' }, { v: 32, label: '32색' }];
+// 형식 세그먼트(R13-2: PNG 묶음·스프라이트 추가). zip 형식은 목표 용량·함께 만들기·맞추기 방식을 쓰지 않는다.
+const FORMAT_SEG = [['apng', 'APNG'], ['webp', 'WebP'], ['gif', 'GIF'], ['png-seq', 'PNG 묶음'], ['sprite', '스프라이트']];
+const ZIP_FORMATS = new Set(['png-seq', 'sprite']);
+const isZipFormat = (f) => ZIP_FORMATS.has(f);
 
 function createCanvas(w, h) { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; }
 
@@ -81,8 +88,13 @@ export function initExport(store, editorState, projectApi = null) {
     <div class="export-dialog" role="dialog" aria-label="내보내기">
       <div class="ex-head">
         <span class="ex-title">내보내기</span>
+        <div class="ex-tabs" role="tablist">
+          <button class="ex-tab is-on" data-tab="export" role="tab">파일</button>
+          <button class="ex-tab" data-tab="set" role="tab">세트</button>
+        </div>
         <button class="ex-close" aria-label="닫기">×</button>
       </div>
+      <div class="ex-set" id="ex-set" style="display:none;"></div>
       <div class="ex-body">
         <div class="ex-left">
           <div class="ex-preview-wrap">
@@ -99,6 +111,7 @@ export function initExport(store, editorState, projectApi = null) {
             <div class="ex-size" id="ex-size">-</div>
             <div class="ex-target" id="ex-target"></div>
             <button class="ex-fit" id="ex-fit">목표에 맞추기</button>
+            <button class="ex-ccfolia" id="ex-ccfolia" style="display:none;">화면에서 미리보기</button>
           </div>
           <div class="ex-settings" id="ex-settings"></div>
           <div class="ex-warn" id="ex-warn" style="display:none;"></div>
@@ -140,6 +153,11 @@ export function initExport(store, editorState, projectApi = null) {
   const resultsEl = $('#ex-results');
   const memEl = $('#ex-mem');
   const runBtn = $('#ex-run');
+  const ccfBtn = $('#ex-ccfolia');
+  ccfBtn.addEventListener('click', () => {
+    if (!lastResult?.blob) return;
+    openCcfoliaPreview({ blob: lastResult.blob, filename: lastResult.settings?.filename ?? projectName(), mime: lastResult.format, width: lastResult.width, height: lastResult.height });
+  });
 
   // 메모리 경고 → "○○% 크기로 내보내기" 버튼. 배율 = √(한도÷예상)을 0.05 단위로 내림.
   function suggestShrinkMul(warning, curMul) {
@@ -170,7 +188,9 @@ export function initExport(store, editorState, projectApi = null) {
     const presets = getPresets();
     const preset = getPreset(settings.presetId);
     const modifiedTag = settings.modified ? ' <span class="ex-modified">(수정됨)</span>' : '';
-    const colorField = settings.format === 'apng'
+    const zip = isZipFormat(settings.format);
+    // png-seq·sprite 는 PNG 색상 수 선택(apng 과 같은 드롭다운).
+    const colorField = (settings.format === 'apng' || zip)
       ? `<label>색상 수</label><span class="ex-dd" data-dd="colors"></span>`
       : settings.format === 'webp'
       ? `<label>품질</label><span class="ex-quality-row"><input class="ex-ctl" data-k="lossless" type="checkbox" ${settings.lossless ? 'checked' : ''} id="ex-ll"><label for="ex-ll" class="ex-inline">무손실</label><input class="ex-ctl" data-k="quality" type="range" min="30" max="100" value="${settings.quality}" ${settings.lossless ? 'disabled' : ''}><span id="ex-qval">${settings.quality}</span></span>`
@@ -185,7 +205,7 @@ export function initExport(store, editorState, projectApi = null) {
       </div>
       <div class="ex-row"><label>형식</label>
         <div class="ex-seg" role="group" aria-label="형식">
-          ${['apng', 'webp', 'gif'].map((f) => `<button type="button" class="ex-seg-btn${settings.format === f ? ' is-on' : ''}" data-format="${f}">${f.toUpperCase()}</button>`).join('')}
+          ${FORMAT_SEG.map(([f, l]) => `<button type="button" class="ex-seg-btn${settings.format === f ? ' is-on' : ''}" data-format="${f}">${l}</button>`).join('')}
         </div>
       </div>
       <div class="ex-row"><label>크기</label>
@@ -193,19 +213,20 @@ export function initExport(store, editorState, projectApi = null) {
       </div>
       <div class="ex-row">${colorField}</div>
       <div class="ex-row"><label>투명 여백</label><label class="ex-inline"><input type="checkbox" class="ex-ctl" data-k="trim" ${settings.trim ? 'checked' : ''}>잘라내기</label></div>
-      <div class="ex-row"><label>반복</label>
+      <div class="ex-row"${zip ? ' style="display:none;"' : ''}><label>반복</label>
         <span class="ex-loops">
           <label class="ex-inline"><input type="radio" name="ex-loop" class="ex-ctl" data-k="loopMode" value="infinite" ${settings.loopMode === 'infinite' ? 'checked' : ''}>무한</label>
           <label class="ex-inline"><input type="radio" name="ex-loop" class="ex-ctl" data-k="loopMode" value="count" ${settings.loopMode === 'count' ? 'checked' : ''}>횟수</label>
           <input type="number" class="ex-ctl" data-k="loopCount" min="1" max="1000" value="${settings.loopCount}" ${settings.loopMode === 'count' ? '' : 'disabled'} style="width:64px;">
         </span>
       </div>
-      <div class="ex-row"><label>프레임 줄이기</label><label class="ex-inline"><input type="checkbox" class="ex-ctl" data-k="allowFrameReduction" ${settings.allowFrameReduction ? 'checked' : ''}>목표 못 맞출 때 허용</label></div>
-      <div class="ex-row"><label>맞추기 방식</label>
+      <div class="ex-row"${zip ? ' style="display:none;"' : ''}><label>프레임 줄이기</label><label class="ex-inline"><input type="checkbox" class="ex-ctl" data-k="allowFrameReduction" ${settings.allowFrameReduction ? 'checked' : ''}>목표 못 맞출 때 허용</label></div>
+      <div class="ex-row"${zip ? ' style="display:none;"' : ''}><label>맞추기 방식</label>
         <div class="ex-seg" role="group" aria-label="맞추기 방식">
           ${[['quality', '화질 우선'], ['keepSize', '크기 유지'], ['keepColor', '색 유지']].map(([v, l]) => `<button type="button" class="ex-mode-btn${settings.fitMode === v ? ' is-on' : ''}" data-mode="${v}">${l}</button>`).join('')}
         </div>
       </div>
+      ${zip ? `<div class="ex-row"><span class="ex-note">${settings.format === 'png-seq' ? '프레임마다 PNG 한 장 + timing.json 을 zip 으로 저장합니다.' : '모든 프레임을 한 장 PNG 격자로 + sheet.json 을 zip 으로 저장합니다.'}</span></div>` : ''}
     `;
     // 컨트롤 이벤트
     settingsEl.querySelectorAll('.ex-ctl').forEach((el) => {
@@ -242,7 +263,7 @@ export function initExport(store, editorState, projectApi = null) {
     // 메모리 버튼 등으로 들어온 비표준 배율도 목록에 넣어 표시한다.
     const scaleVals = [...new Set([...SCALE_MULS, settings.scaleMul])].sort((a, b) => b - a);
     _mountDropdown('scaleMul', scaleVals.map((s) => ({ value: String(s), label: `${Math.round(s * 100)}%` })), String(settings.scaleMul), (v) => _setSetting('scaleMul', parseFloat(v)));
-    if (settings.format === 'apng') {
+    if (settings.format === 'apng' || isZipFormat(settings.format)) {
       _mountDropdown('colors', APNG_COLORS.map((c) => ({ value: String(c.v), label: c.label })), String(settings.colors), (v) => _setSetting('colors', parseFloat(v)));
     }
 
@@ -363,7 +384,9 @@ export function initExport(store, editorState, projectApi = null) {
   }
 
   function renderTogether() {
-    const presets = getPresets().filter((p) => p.id !== settings.presetId);
+    // zip 형식(PNG 묶음·스프라이트)은 함께 만들기(목표 맞추기 경로)와 섞지 않는다(R13-2).
+    if (isZipFormat(settings.format)) { togetherEl.textContent = ''; return; }
+    const presets = getPresets().filter((p) => p.id !== settings.presetId && !isZipFormat(p.format));
     // 용도 이름은 사용자·localStorage 에서 온 글자다 — textContent 로 넣어 HTML 해석을 막는다(R7-7).
     togetherEl.textContent = '';
     const title = document.createElement('div'); title.className = 'ex-together-title'; title.textContent = '함께 만들기';
@@ -399,6 +422,8 @@ export function initExport(store, editorState, projectApi = null) {
     previewEmpty.style.display = 'none';
     infoEl.textContent = `${result.width} × ${result.height} · ${result.frameCount}프레임 · ${fmtDuration(result.durationMs)}`;
     sizeEl.textContent = fmtBytes(result.bytes);
+    // 애니메이션 형식(APNG·WebP·GIF)만 "화면에서 미리보기"를 쓴다(zip 형식은 숨김, R14-2).
+    ccfBtn.style.display = isZipFormat(settings.format) ? 'none' : '';
     renderTarget();
   }
 
@@ -419,7 +444,7 @@ export function initExport(store, editorState, projectApi = null) {
       createCanvas, assets: deps.assets, effects: effectsRegistry, motions: motionRegistry,
       name: projectName(), ...extra,
     };
-    if (settings.format === 'apng') o.colors = settings.colors;
+    if (settings.format === 'apng' || isZipFormat(settings.format)) o.colors = settings.colors;
     if (settings.format === 'webp') { o.lossless = settings.lossless ? 1 : 0; o.quality = settings.quality; }
     return o;
   }
@@ -427,6 +452,23 @@ export function initExport(store, editorState, projectApi = null) {
   function scheduleEstimate() {
     if (!open || !deps) return;
     clearTimeout(estTimer);
+    // zip 형식은 용량 예상 대신 첫 프레임만 APNG 로 미리보기(zip 전체를 미리 만들지는 않는다).
+    if (isZipFormat(settings.format)) {
+      sizeEl.textContent = 'zip 으로 저장';
+      estTimer = setTimeout(async () => {
+        if (estCtrl) estCtrl.abort();
+        estCtrl = new AbortController();
+        const doc = store.get();
+        try {
+          const o = buildOpts({ signal: estCtrl.signal });
+          o.format = 'apng'; o.colors = settings.colors; o.range = { start: 0, end: 0 };
+          const res = await exportAnimation(doc, o);
+          setPreview(res);
+          sizeEl.textContent = 'zip 으로 저장';
+        } catch (err) { if (err?.name !== 'AbortError') showPreviewPending(); }
+      }, 500);
+      return;
+    }
     sizeEl.textContent = '계산 중…';
     if (!lastResult) showPreviewPending();   // 아직 결과 없으면 "만드는 중…" 유지
     estTimer = setTimeout(async () => {
@@ -470,6 +512,8 @@ export function initExport(store, editorState, projectApi = null) {
   // 오류 안내 문구. 메모리 초과는 한국어로 크기를 줄이라고 안내한다.
   function errText(err) {
     if (err?.code === 'memory') return '캔버스·프레임 수가 커서 메모리가 부족합니다. 크기를 줄여 보세요.';
+    if (err?.code === 'sheet-too-large') return '스프라이트 시트가 캔버스 한계(16384px)를 넘습니다. 크기를 줄이거나 프레임을 나누세요.';
+    if (err?.code === 'zip-too-large') return '묶음 파일이 4GB 를 넘습니다. 크기를 줄이거나 나눠서 내보내세요.';
     return err?.message ?? String(err);
   }
 
@@ -527,9 +571,29 @@ export function initExport(store, editorState, projectApi = null) {
     setBusy(true); showProgress(true); resultsEl.style.display = 'none'; resultsEl.innerHTML = '';
     multiResults.length = 0;
     // 굽기 전에 문서가 쓰는 글꼴이 실제로 로드됐는지 기다린다(결과물 글자가 폴백으로 달라지지 않게).
-    try { const { ok } = await ensureDocFonts(doc); if (!ok) showToast('일부 글꼴을 불러오지 못했습니다. 결과 글자가 다르게 보일 수 있습니다.'); } catch {}
     try {
-      if (together.size === 0) {
+      const { ok } = await ensureDocFonts(doc);
+      if (!ok) {
+        // 오프라인이면 아직 안 받은 글꼴일 수 있다 — 인터넷이 연결되면 받는다고 안내(R13-3).
+        const offline = (typeof navigator !== 'undefined') && navigator.onLine === false;
+        showToast(offline
+          ? '일부 글꼴을 아직 받지 못했습니다. 인터넷이 연결되면 글꼴을 받습니다. 지금은 결과 글자가 다르게 보일 수 있습니다.'
+          : '일부 글꼴을 불러오지 못했습니다. 결과 글자가 다르게 보일 수 있습니다.');
+      }
+    } catch {}
+    try {
+      if (isZipFormat(settings.format)) {
+        // PNG 묶음 / 스프라이트 시트 → zip 하나(R13-2).
+        setStep('만드는 중…');
+        const fn = settings.format === 'png-seq' ? exportPngSequence : exportSpriteSheet;
+        const res = await fn(doc, buildOpts({
+          signal: abortCtrl.signal,
+          onProgress: (p) => { setStep(p.phase === 'bake' ? `굽는 중 ${p.done}/${p.total}` : (p.phase === 'encode' ? `PNG 만드는 중 ${p.done}/${p.total}` : '묶는 중…')); setBar(p.done, p.total); },
+        }));
+        download(res.blob, res.settings.filename);
+        window.__lastExport = { filename: res.settings.filename, mime: res.settings.mime, bytes: res.bytes };
+        setStep(`저장 완료: ${fmtBytes(res.bytes)} (${settings.format === 'png-seq' ? res.frameCount + '장' : res.width + '×' + res.height})`);
+      } else if (together.size === 0) {
         // 단일: 현재 설정 그대로 인코딩해서 저장
         setStep('내보내는 중…');
         const res = await exportAnimation(doc, buildOpts({
@@ -558,7 +622,7 @@ export function initExport(store, editorState, projectApi = null) {
       }
     } catch (err) {
       if (err?.name === 'AbortError') setStep('취소됨');
-      else { const t = errText(err); setStep('오류: ' + t); showToast('내보내기 실패: ' + t); if (err?.code === 'memory') showMemButton(err.warning, runExport); }
+      else { const t = errText(err); setStep('오류: ' + t); showToast('내보내기 실패: ' + t); if (err?.code === 'memory' || err?.code === 'sheet-too-large') showMemButton(err.warning, runExport); }
     } finally {
       setBusy(false); abortCtrl = null;
       // 재열기로 deps 가 교체됐으면 이 작업이 쓰던 비트맵을 닫는다. 아니고 창이 닫혔으면 현재 deps 를 닫는다.
@@ -640,6 +704,8 @@ export function initExport(store, editorState, projectApi = null) {
       if (l.type === 'anim') animIds.add(l.assetId);
       else if (l.type === 'image') imgIds.add(l.assetId);
     }
+    // 세트 이미지 슬롯이 가리키는 에셋도 준비(세트 내보내기·미리보기용, R13-1). 정지 이미지로 로드.
+    for (const aid of variantAssetIds(doc.variants)) if (aid) imgIds.add(aid);
 
     const bmps = {};   // assetId → ImageBitmap (정지 이미지)
     const anims = {};  // assetId → { frames, delays } (움직이는 이미지)
@@ -697,6 +763,11 @@ export function initExport(store, editorState, projectApi = null) {
     modal.style.display = 'flex';
     showProgress(false);
     resultsEl.style.display = 'none';
+    // 항상 "파일" 탭에서 시작(세트 미리보기 끔).
+    _tab = 'export';
+    modal.querySelectorAll('.ex-tab').forEach((b) => b.classList.toggle('is-on', b.dataset.tab === 'export'));
+    setPanel.style.display = 'none'; bodyEl.style.display = ''; footEl.style.display = '';
+    editorState.set({ previewVariantId: null });
     renderSettings();
     updateRunLabel();
     const myToken = ++_openToken;
@@ -722,6 +793,7 @@ export function initExport(store, editorState, projectApi = null) {
     // 굽는 중이면 실제로 멈춘 뒤(run 의 finally) 비트맵을 닫는다. 아니면 지금 닫는다.
     if (!running) _disposeDeps();
     _destroyDropdowns();
+    editorState.set({ previewVariantId: null }); // 세트 미리보기 끔
   }
 
   // 이벤트 배선
@@ -732,6 +804,41 @@ export function initExport(store, editorState, projectApi = null) {
   $('#ex-cancel').addEventListener('click', cancel);
   $('#ex-save-preset').addEventListener('click', saveAsPreset);
   modal.addEventListener('click', (e) => { if (e.target === modal && !running) doClose(); });
+
+  // ── 세트 탭(R13-1) ─────────────────────────────────────────────────────
+  const setPanel = $('#ex-set');
+  const bodyEl = modal.querySelector('.ex-body');
+  const footEl = modal.querySelector('.ex-foot');
+  let _tab = 'export';
+  // 세트 내보내기가 쓸 현재 파일 설정(형식·크기·색·목표 용도).
+  function getContext() {
+    const preset = getPreset(settings.presetId);
+    return {
+      preset, format: settings.format,
+      scale: baseScaleOf(preset) * settings.scaleMul,
+      name: projectName(),
+      colors: settings.colors,
+      lossless: settings.format === 'webp' ? (settings.lossless ? 1 : 0) : undefined,
+      quality: settings.format === 'webp' ? settings.quality : undefined,
+      allowFrameReduction: settings.allowFrameReduction,
+      mode: settings.fitMode,
+      loops: settings.loopMode === 'infinite' ? 0 : Math.max(1, settings.loopCount),
+    };
+  }
+  const setTab = initSetTab({ container: setPanel, store, editorState, getContext });
+
+  function switchTab(tab) {
+    if (tab === _tab) return;
+    _tab = tab;
+    modal.querySelectorAll('.ex-tab').forEach((b) => b.classList.toggle('is-on', b.dataset.tab === tab));
+    const onSet = tab === 'set';
+    setPanel.style.display = onSet ? '' : 'none';
+    bodyEl.style.display = onSet ? 'none' : '';
+    footEl.style.display = onSet ? 'none' : '';
+    if (onSet) setTab.render();
+    else editorState.set({ previewVariantId: null }); // 파일 탭으로 오면 미리보기 끔
+  }
+  modal.querySelectorAll('.ex-tab').forEach((b) => b.addEventListener('click', () => switchTab(b.dataset.tab)));
 
   // Ctrl+E 열기 / Esc 닫기
   document.addEventListener('keydown', (e) => {

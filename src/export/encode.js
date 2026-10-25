@@ -101,6 +101,54 @@ export function encode(baked, format, options = {}, ctx = {}) {
   });
 }
 
+// PNG 묶음 인코딩 — 고유 프레임마다 PNG 한 장. 워커가 'result-seq' 로 pngs 배열을 돌려준다(R13-2).
+// 반환: { pngs:[ArrayBuffer](고유), order:[번호…](프레임별), delays:[ms…](프레임별), bytes }
+export function encodePngSeq(baked, options = {}, ctx = {}) {
+  const { onProgress, signal } = ctx;
+  const invalid = _validate(baked);
+  if (invalid) return Promise.reject(new Error(invalid));
+
+  return new Promise((resolve, reject) => {
+    const worker = _spawnWorker();
+    let settled = false;
+    const finish = (fn) => (val) => {
+      if (settled) return;
+      settled = true;
+      if (signal) signal.removeEventListener('abort', onAbort);
+      worker.terminate();
+      fn(val);
+    };
+    const done = finish(resolve);
+    const fail = finish(reject);
+    function onAbort() {
+      try { worker.postMessage({ type: 'cancel' }); } catch {}
+      fail(new DOMException('취소됨', 'AbortError'));
+    }
+    if (signal) {
+      if (signal.aborted) { worker.terminate(); reject(new DOMException('취소됨', 'AbortError')); return; }
+      signal.addEventListener('abort', onAbort, { once: true });
+    }
+    function postEncode() {
+      try {
+        // move=false: 원본 baked 보존. 고유 프레임만 넘긴다.
+        const { frames, order, delays, transfer } = _framesForTransfer(baked, false);
+        worker.postMessage(
+          { type: 'encode', format: 'png-seq', width: baked.width, height: baked.height, frames, order, delays, options },
+          transfer,
+        );
+      } catch (err) { fail(err); }
+    }
+    worker.onmessage = ({ data: m }) => {
+      if (m.type === 'ready')      { postEncode(); return; }
+      if (m.type === 'progress')   { onProgress?.(m.done, m.total); return; }
+      if (m.type === 'result-seq') { done({ pngs: m.pngs, order: m.order, delays: m.delays, bytes: m.bytes }); return; }
+      if (m.type === 'cancelled')  { fail(new DOMException('취소됨', 'AbortError')); return; }
+      if (m.type === 'error')      { fail(new Error(m.message)); return; }
+    };
+    worker.onerror = (err) => fail(new Error('인코더 워커 오류: ' + (err.message ?? '(알 수 없음)')));
+  });
+}
+
 // 워커 하나를 재사용하는 인코더. 용량 맞추기/여러 형식처럼 encode 를 여러 번 부를 때
 // 매번 워커+WebP wasm 를 다시 읽지 않도록 한다. 한 번에 하나씩만 인코딩한다(순차 호출 전제).
 // 준비(워커+WebP wasm 로딩) 대기 한도. 느린 환경에서도 영원히 대기하지 않도록.

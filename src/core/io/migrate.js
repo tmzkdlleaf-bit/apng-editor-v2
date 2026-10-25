@@ -2,6 +2,7 @@
 // 뒤 버전이 생기면 MIGRATIONS[n] = (doc) => doc(n+1) 을 추가한다.
 import { evalProp } from '../anim/prop.js';
 import { reduceKeys } from '../anim/reduce-keys.js';
+import { normalizeVariants } from '../doc/variants.js';
 
 export const CURRENT_VERSION = 3;
 
@@ -164,5 +165,9 @@ export function normalizeDoc(doc) {
     if (!inOrder.has(id) && !inChild && !l.parentId) order.push(id);
   }
 
-  return { ...doc, version: CURRENT_VERSION, meta: nmeta, camera: ncam, order, layers, assets: doc.assets ?? {} };
+  // 세트(바리에이션, R13-1)는 선택 필드 — 있으면 보존하되 없는 레이어·잘못된 슬롯은 정리.
+  const out = { ...doc, version: CURRENT_VERSION, meta: nmeta, camera: ncam, order, layers, assets: doc.assets ?? {} };
+  const variants = normalizeVariants(doc.variants, layers);
+  if (variants) out.variants = variants; else delete out.variants;
+  return out;
 }

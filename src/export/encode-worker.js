@@ -12,26 +12,14 @@ import './webp-env-shim.js'; // vendor/webp(emscripten) 로드 전에 워커 환
 import UPNG from '../../vendor/upng/index.js';
 import { GifWriter } from '../../vendor/omggif/index.js';
 import { encodeAnimation } from '../../vendor/webp/index.js';
+import { crc32 } from '../core/export/crc32.js';
 
 let _cancel = false;
 
 // ── APNG acTL num_plays 패치 (UPNG 기본값 0=무한) ──────────────────────
-const _crcTable = (() => {
-  const t = new Uint32Array(256);
-  for (let n = 0; n < 256; n++) {
-    let c = n;
-    for (let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
-    t[n] = c;
-  }
-  return t;
-})();
-function _crc32(dv, offset, len) {
-  let crc = 0xFFFFFFFF;
-  for (let i = 0; i < len; i++) crc = _crcTable[(crc ^ dv.getUint8(offset + i)) & 0xFF] ^ (crc >>> 8);
-  return (crc ^ 0xFFFFFFFF) >>> 0;
-}
 function _patchApngLoops(buf, loops) {
   const dv = new DataView(buf);
+  const u8 = new Uint8Array(buf);
   let offset = 8;
   while (offset + 12 <= dv.byteLength) {
     const len = dv.getUint32(offset);
@@ -40,7 +28,7 @@ function _patchApngLoops(buf, loops) {
     if (type === 'acTL') {
       if (offset + 20 <= dv.byteLength) {
         dv.setUint32(offset + 12, loops);                      // num_plays
-        const crc = _crc32(dv, offset + 4, 4 + len);
+        const crc = crc32(u8, offset + 4, 4 + len);            // 공용 CRC32 (R13-2)
         dv.setUint32(offset + 4 + len + 4, crc);
       }
       return;
@@ -77,6 +65,27 @@ function encodeApng(frames, w, h, loops, options) {
   if (!buf || buf.byteLength === 0) throw new Error('APNG 인코딩 결과가 비어 있습니다.');
   if (loops !== 0 && bufs.length > 1) _patchApngLoops(buf, loops);
   return buf;
+}
+
+// ── 한 장짜리 PNG(스프라이트 시트·단일 프레임) ──────────────────────────
+// UPNG 는 프레임이 1개면 애니메이션 청크(acTL/fcTL) 없이 보통 PNG 를 만든다.
+function encodePng(buf, w, h, options) {
+  const colors = options?.colors ?? 0;
+  const out = UPNG.encode([buf], w, h, colors, [0]);
+  if (!out || out.byteLength === 0) throw new Error('PNG 인코딩 결과가 비어 있습니다.');
+  return out;
+}
+
+// ── PNG 묶음(프레임마다 PNG 한 장) ──────────────────────────────────────
+// 고유 프레임만 각각 PNG 로 인코딩해 배열로 돌려준다. 재생 순서(order)는 메인이 파일 이름에 쓴다.
+function encodePngSeq(uniq, w, h, options) {
+  const pngs = [];
+  for (let i = 0; i < uniq.length; i++) {
+    if (_cancel) throw new Error('취소됨');
+    pngs.push(encodePng(uniq[i].buf, w, h, options));
+    self.postMessage({ type: 'progress', done: i + 1, total: uniq.length });
+  }
+  return pngs;
 }
 
 // ── WebP ────────────────────────────────────────────────────────────────
@@ -163,11 +172,30 @@ self.onmessage = async (e) => {
 
   _cancel = false;
   const { format, width, height, frames: uniq, order = null, delays = null, loops = 0, options = {} } = msg;
-  // order 로 고유 프레임을 재생 순서대로 펼친다(핑퐁은 같은 버퍼가 여러 번 나온다 — 읽기만 하므로 안전).
-  const frames = order
-    ? order.map((i, k) => ({ buf: uniq[i].buf, delayMs: delays ? delays[k] : uniq[i].delayMs }))
-    : uniq;
   try {
+    // 한 장짜리 PNG(스프라이트 시트 등): 고유 프레임 1개를 보통 PNG 로.
+    if (format === 'png') {
+      self.postMessage({ type: 'progress', done: 0, total: 1 });
+      const buf = encodePng(uniq[0].buf, width, height, options);
+      if (_cancel) { self.postMessage({ type: 'cancelled' }); return; }
+      self.postMessage({ type: 'progress', done: 1, total: 1 });
+      self.postMessage({ type: 'result', buf, bytes: buf.byteLength }, [buf]);
+      return;
+    }
+    // PNG 묶음: 고유 프레임마다 PNG 한 장. order/delays 는 메인이 파일 이름·timing 에 쓴다.
+    if (format === 'png-seq') {
+      self.postMessage({ type: 'progress', done: 0, total: uniq.length });
+      const pngs = encodePngSeq(uniq, width, height, options);
+      if (_cancel) { self.postMessage({ type: 'cancelled' }); return; }
+      const bytes = pngs.reduce((a, b) => a + b.byteLength, 0);
+      self.postMessage({ type: 'result-seq', pngs, order, delays, bytes }, pngs);
+      return;
+    }
+
+    // order 로 고유 프레임을 재생 순서대로 펼친다(핑퐁은 같은 버퍼가 여러 번 나온다 — 읽기만 하므로 안전).
+    const frames = order
+      ? order.map((i, k) => ({ buf: uniq[i].buf, delayMs: delays ? delays[k] : uniq[i].delayMs }))
+      : uniq;
     self.postMessage({ type: 'progress', done: 0, total: frames.length });
     let buf;
     if (format === 'apng')      buf = encodeApng(frames, width, height, loops, options);

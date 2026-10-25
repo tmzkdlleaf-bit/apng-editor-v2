@@ -205,7 +205,7 @@ test.describe('E2 — 용량 맞추기', () => {
     expect(r.delUser).toBe(true);
     expect(r.goneUser).toBe(true);
     expect(r.last).toBe('discord-emoji');
-    expect(r.count).toBe(6);
+    expect(r.count).toBe(8); // 기본 6 + R13-2 PNG 묶음·스프라이트 시트 2
   });
 
   // ── 보고용: demo=1 기준 프리셋별 결과 표 ──────────────────────────────────
@@ -220,7 +220,8 @@ test.describe('E2 — 용량 맞추기', () => {
       const { getPresets } = await import('/src/export/presets.js');
       const { doc, deps } = await H.demoDeps();
       const rows = [];
-      for (const preset of getPresets()) {
+      // zip 형식(PNG 묶음·스프라이트)은 목표 맞추기 경로를 쓰지 않으므로 이 표에서 제외.
+      for (const preset of getPresets().filter((p) => p.format !== 'png-seq' && p.format !== 'sprite')) {
         const t0 = performance.now();
         const res = await fitToTarget(doc, preset, deps, {});
         const ms = Math.round(performance.now() - t0);

@@ -5,6 +5,10 @@
 
 const VERSION = '__SW_VERSION__';          // 빌드가 교체(없으면 dev 기본값 사용)
 const CACHE = 'apng2-' + (VERSION === '__SW_VERSION__' ? 'dev' : VERSION);
+// 글꼴은 버전과 무관한 별도 캐시에 둔다(R13-3). 새 버전 activate 때 지우지 않으므로,
+// 글자 레이어용 글꼴을 한 번 받아 두면 업데이트 후에도 다시 받지 않는다.
+const FONT_CACHE = 'apng2-fonts';
+const _isFont = (url) => /\/vendor\/fonts\/.+\.woff2$/i.test(url.pathname);
 
 self.addEventListener('install', (e) => {
   // skipWaiting 하지 않는다 — 새 워커는 대기(waiting) 상태로 두고, "새로고침" 버튼이 보내는
@@ -30,7 +34,8 @@ self.addEventListener('install', (e) => {
 self.addEventListener('activate', (e) => {
   e.waitUntil((async () => {
     const keys = await caches.keys();
-    await Promise.all(keys.filter((k) => k.startsWith('apng2-') && k !== CACHE).map((k) => caches.delete(k)));
+    // 이전 버전 캐시만 지운다 — 현재 버전 캐시와 글꼴 캐시(apng2-fonts)는 보존(R13-3).
+    await Promise.all(keys.filter((k) => k.startsWith('apng2-') && k !== CACHE && k !== FONT_CACHE).map((k) => caches.delete(k)));
     await self.clients.claim();
     // 새 버전 활성화를 알림(상단 "새로고침" 안내용)
     const clients = await self.clients.matchAll();
@@ -43,6 +48,26 @@ self.addEventListener('fetch', (e) => {
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return; // 외부(구글 폰트 등)는 건드리지 않음
+
+  // 글꼴(woff2, R13-3):
+  //   화면용 글꼴은 설치 때 미리 받아 버전 캐시에 있다 → 거기서 바로 준다(글꼴 캐시를 만들지 않음).
+  //   글자 레이어용 글꼴은 미리 받지 않으므로, 처음 쓸 때 받아 버전과 무관한 글꼴 캐시(apng2-fonts)에
+  //   남긴다 → 업데이트(activate)로 지워지지 않아 오프라인·새 버전에서도 다시 받지 않는다.
+  if (_isFont(url)) {
+    e.respondWith((async () => {
+      const cache = await caches.open(CACHE);
+      const pre = await cache.match(req);
+      if (pre) return pre;                       // 미리 받은 화면용 글꼴
+      const fc = await caches.open(FONT_CACHE);
+      const hit = await fc.match(req);
+      if (hit) return hit;
+      const res = await fetch(req);
+      if (res.ok && res.type === 'basic') fc.put(req, res.clone());
+      return res;
+    })());
+    return;
+  }
+
   e.respondWith((async () => {
     const cache = await caches.open(CACHE);
     const cached = await cache.match(req);
