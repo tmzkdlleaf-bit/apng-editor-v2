@@ -1,0 +1,24 @@
+# 줄바꿈 통일: 모든 텍스트는 저장소·작업트리 모두 LF.
+# (core.autocrlf 설정과 무관하게 이 규칙이 이긴다 — 오프라인·데스크톱·CI 결과 동일)
+* text=auto eol=lf
+
+# 이미지 (바이너리 — 변환 금지)
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.webp binary
+*.bmp  binary
+*.ico  binary
+*.icns binary
+
+# 글꼴 (바이너리)
+*.woff  binary
+*.woff2 binary
+*.ttf   binary
+*.otf   binary
+*.eot   binary
+
+# wasm·압축 (바이너리)
+*.wasm binary
+*.zip  binary

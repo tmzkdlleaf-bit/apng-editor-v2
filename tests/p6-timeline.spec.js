@@ -21,8 +21,14 @@ test.describe('P6 — 재생 / 타임라인 / 레이어 추가 / 인스펙터', 
 
   test('[재생] 정지 → 프레임 고정', async ({ page }) => {
     await page.click('[data-action="play"]');
+    await page.waitForFunction(() => window.__editorState.get().playing === true);
     await page.waitForTimeout(400);
     await page.click('[data-action="play"]');
+
+    // 정지가 실제로 반영될 때까지 기다린다(정지 직후 값을 읽는 타이밍 의존 제거).
+    // stop() 은 playing=false 설정과 같은 동기 호출에서 rAF 를 취소하므로,
+    // playing===false 가 보이는 시점엔 더 진행될 프레임이 없다.
+    await page.waitForFunction(() => window.__editorState.get().playing === false);
 
     const fPaused = await page.evaluate(() => window.__editorState.get().f);
     await page.waitForTimeout(300);
