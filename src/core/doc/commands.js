@@ -578,6 +578,45 @@ export function applyCommand(doc, cmd) {
       break;
     }
 
+    case 'replaceDoc': {
+      // 문서 전체 교체(저장 시점 되돌리기, R12-3) — 되돌리기 기록 1건.
+      // 최상위 키(meta·camera·order·layers·assets)를 통째로 바꾼다. version 등 나머지도 반영.
+      const nd = cmd.doc;
+      if (!nd || typeof nd !== 'object') break;
+      const keys = new Set([...Object.keys(doc), ...Object.keys(nd)]);
+      keys.delete('layers'); // layers 는 아래에서 키별로 처리(없어진 레이어 삭제 포함)
+      for (const k of keys) _pa(doc, patches, [k], nd[k]);
+      const oldLayers = doc.layers ?? {};
+      const newLayers = nd.layers ?? {};
+      for (const id of new Set([...Object.keys(oldLayers), ...Object.keys(newLayers)])) {
+        _pa(doc, patches, ['layers', id], newLayers[id]); // 새로 없으면 undefined → 삭제
+      }
+      break;
+    }
+
+    case 'insertPart': {
+      // 내 부품(library) 넣기(R14-3) — 이미 새 id 로 remap 된 레이어 묶음을 넣는다. 되돌리기 기록 1건.
+      //   cmd.layers: { id → layer }(remap 완료), cmd.rootId: 최상위로 넣을 레이어, cmd.assets: { id → meta }.
+      for (const [id, layer] of Object.entries(cmd.layers ?? {})) {
+        _pa(doc, patches, ['layers', id], layer);
+      }
+      if (cmd.assets) {
+        if (!doc.assets) doc.assets = {};
+        for (const [aid, meta] of Object.entries(cmd.assets)) {
+          if (!doc.assets[aid]) _pa(doc, patches, ['assets', aid], meta);
+        }
+      }
+      if (cmd.rootId) _pa(doc, patches, ['order'], [...doc.order, cmd.rootId]);
+      break;
+    }
+
+    case 'setVariants': {
+      // 세트(바리에이션) 정의 전체 교체 — 되돌리기 기록 1건(R13-1).
+      // value 가 null/undefined 면 세트를 지운다. 슬롯·행을 통째로 바꾼다.
+      _pa(doc, patches, ['variants'], cmd.variants ?? undefined);
+      break;
+    }
+
     case 'batch': {
       for (const subCmd of cmd.cmds) {
         patches.push(...applyCommand(doc, subCmd));

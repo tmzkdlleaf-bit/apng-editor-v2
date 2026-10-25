@@ -119,7 +119,8 @@ export function getLayerBounds(layer, assets) {
   };
 }
 
-function _worldToLocal(worldX, worldY, worldTr) {
+// 월드(doc, 카메라 포함) 좌표 → worldTr 로컬 콘텐츠 좌표(±hw, ±hh). 회전·전체 scale·가로세로 보정을 되돌린다.
+export function worldToLocal(worldX, worldY, worldTr) {
   const dx = worldX - (worldTr.x ?? 0);
   const dy = worldY - (worldTr.y ?? 0);
   const rad = -(worldTr.rotation ?? 0) * Math.PI / 180;
@@ -133,6 +134,7 @@ function _worldToLocal(worldX, worldY, worldTr) {
     y: (dx * sin + dy * cos) / sy,
   };
 }
+const _worldToLocal = worldToLocal;
 
 function _hitGroupChildren(doc, groupId, docX, docY, f, assets) {
   const group = doc.layers[groupId];

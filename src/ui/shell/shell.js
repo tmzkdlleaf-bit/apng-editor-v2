@@ -274,6 +274,7 @@ export function init(store, editorState, projectApi = null) {
     menu.style.display = 'none';
     menu.innerHTML = `
       <button data-act="library">프로젝트 목록 · 새 프로젝트</button>
+      <button data-act="snapshots">저장 시점</button>
       <button data-act="export">파일로 내보내기</button>
       <button data-act="import">파일 불러오기</button>
     `;
@@ -294,6 +295,7 @@ export function init(store, editorState, projectApi = null) {
       if (!act) return;
       _closeProjMenu();
       if (act === 'library') openLibrary(projectApi, { currentId: projectApi.getId?.() });
+      else if (act === 'snapshots') import('../snapshots.js').then((m) => m.openSnapshots(projectApi));
       else if (act === 'export') projectApi.exportFile?.();
       else if (act === 'import') { if (isDesktop()) projectApi.openProject?.(); else projFile.click(); }
     });

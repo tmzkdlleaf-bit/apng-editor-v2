@@ -3,8 +3,10 @@ import { init as initShell } from './ui/shell/shell.js';
 import { createStore } from './core/doc/store.js';
 import { createDoc } from './core/doc/schema.js';
 import { createEditorState } from './ui/editor-state.js';
-import { getProject, putProject, listProjects, deleteProject as idbDeleteProject } from './core/io/idb.js';
+import { getProject, putProject, listProjects, deleteProject as idbDeleteProject,
+  putSnapshot, getSnapshot, deleteSnapshot, listSnapshots as idbListSnapshots, deleteSnapshotsByProject } from './core/io/idb.js';
 import { purgeOrphanAssets } from './core/io/assets.js';
+import { makeSnapshot, pruneSnapshots, shouldAutoSnapshot } from './core/io/snapshots.js';
 import { createProjectFromTemplate } from './ui/templates.js';
 import { migrate } from './core/io/migrate.js';
 import { buildProjectFile, importProjectFile } from './core/io/project-file.js';
@@ -55,7 +57,10 @@ if (demoParam === '1') {
     await putProject({ id: projectId, name: projectName, doc: initialDoc, updatedAt: Date.now() });
     _setCurrentId(projectId);
   }
-  try { await purgeOrphanAssets(); } catch {}
+  // 코코포리아 미리보기 배경(R14-2)은 어떤 문서도 안 쓰지만 보존한다.
+  let _keepIds = [];
+  try { const bg = localStorage.getItem('apng2.ccfoliaBg'); if (bg) _keepIds.push(bg); } catch {}
+  try { await purgeOrphanAssets({ keepIds: _keepIds }); } catch {}
 }
 
 const store       = createStore(initialDoc);
@@ -63,6 +68,31 @@ const editorState = createEditorState();
 
 // ── 프로젝트 조작(메뉴에서 호출) — 전환은 새 id 저장 후 새로고침 ───────────
 let autosave = null;
+let _lastSnapAt = 0; // 마지막 저장 시점 시각(자동 시점 간격 판단)
+
+// 한 프로젝트의 시점 보관 정책 적용(오래된 자동 시점 삭제).
+async function _pruneSnaps(id) {
+  try {
+    const list = await idbListSnapshots(id);
+    const { removeIds } = pruneSnapshots(list);
+    for (const rid of removeIds) await deleteSnapshot(rid);
+  } catch {}
+}
+
+// 자동 저장 후 — 5분 이상 지났고 문서가 바뀌었으면 자동 시점을 남긴다.
+async function _maybeAutoSnapshot(rec) {
+  if (!shouldAutoSnapshot({ lastAt: _lastSnapAt, now: Date.now(), changed: true })) return;
+  try {
+    const existing = await idbListSnapshots(rec.id);
+    const newest = existing.sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0))[0];
+    const curJson = JSON.stringify(rec.doc);
+    if (newest && JSON.stringify(newest.doc) === curJson) { _lastSnapAt = Date.now(); return; } // 안 바뀜
+    const snap = makeSnapshot({ projectId: rec.id, doc: rec.doc, thumb: rec.thumb ?? null, auto: true });
+    await putSnapshot(snap);
+    _lastSnapAt = snap.createdAt;
+    await _pruneSnaps(rec.id);
+  } catch {}
+}
 
 const projectApi = {
   getName: () => projectName,
@@ -143,8 +173,63 @@ const projectApi = {
     await putProject({ ...rec, name, updatedAt: Date.now() });
     if (id === projectId) { projectName = name; shell?.setProjectName?.(name); } // 내보내기 파일 이름도 따라감(exportFile 이 projectName 사용)
   },
+  // ── 저장 시점(R12-3) ─────────────────────────────────────────────────
+  async listSnapshots(id = projectId) {
+    try {
+      const list = await idbListSnapshots(id);
+      return list
+        .map((s) => ({ id: s.id, createdAt: s.createdAt ?? 0, label: s.label ?? '', auto: !!s.auto, bytes: s.bytes ?? 0, thumb: s.thumb ?? null }))
+        .sort((a, b) => b.createdAt - a.createdAt);
+    } catch { return []; }
+  },
+  // 지금 상태를 직접 시점으로 남긴다(이름 입력 가능). 직접 남긴 것은 자동으로 지우지 않는다.
+  async createSnapshot(label = '') {
+    if (!projectId) return;
+    if (autosave) { try { await autosave.flush({ withThumb: false }); } catch {} }
+    const doc = structuredClone(store.get());
+    let thumb = null;
+    try { thumb = await stage.renderThumbnail(256); } catch {}
+    const snap = makeSnapshot({ projectId, doc, label, thumb, auto: false });
+    await putSnapshot(snap);
+    _lastSnapAt = snap.createdAt;
+    await _pruneSnaps(projectId);
+    return snap.id;
+  },
+  async deleteSnapshot(id) { try { await deleteSnapshot(id); } catch {} },
+  // 이 시점으로 되돌리기 — 현재 상태를 먼저 시점으로 남긴 뒤 문서를 바꾼다(되돌린 것을 다시 되돌릴 수 있게).
+  async revertToSnapshot(id) {
+    const snap = await getSnapshot(id);
+    if (!snap?.doc) { showToast('저장 시점을 찾을 수 없습니다.'); return false; }
+    // 먼저 현재 상태를 자동 시점으로 보관.
+    try {
+      const curDoc = structuredClone(store.get());
+      let thumb = null; try { thumb = await stage.renderThumbnail(256); } catch {}
+      await putSnapshot(makeSnapshot({ projectId, doc: curDoc, label: '되돌리기 전', thumb, auto: true }));
+      _lastSnapAt = Date.now();
+    } catch {}
+    // 문서 교체 = 되돌리기 기록 1건.
+    let nextDoc;
+    try { nextDoc = migrate(structuredClone(snap.doc)); } catch { nextDoc = structuredClone(snap.doc); }
+    store.apply({ type: 'replaceDoc', doc: nextDoc });
+    editorState.set({ selection: [], kfSelection: [], f: 0 });
+    await _pruneSnaps(projectId);
+    return true;
+  },
+  // 시점을 새 프로젝트로 연다(현재 프로젝트는 그대로).
+  async openSnapshotAsNewProject(id) {
+    const snap = await getSnapshot(id);
+    if (!snap?.doc) { showToast('저장 시점을 찾을 수 없습니다.'); return; }
+    if (autosave) { try { await autosave.flush({ withThumb: false }); } catch {} }
+    const nid = _genId();
+    let doc; try { doc = migrate(structuredClone(snap.doc)); } catch { doc = structuredClone(snap.doc); }
+    await putProject({ id: nid, name: (projectName || '프로젝트') + ' (시점)', doc, updatedAt: Date.now(), thumb: snap.thumb ?? null });
+    _setCurrentId(nid);
+    projectApi.reload();
+  },
+
   async deleteProject(id) {
     await idbDeleteProject(id);
+    try { await deleteSnapshotsByProject(id); } catch {} // 프로젝트를 지우면 그 시점도 지운다(R12-3).
     // 여기서는 에셋을 정리하지 않는다 — 열려 있는 문서의 되돌리기로 살릴 수 있는 이미지나
     // 다른 탭/미저장 변경의 이미지를 지울 수 있다(R7-3). 정리는 앱 시작 때만 한다.
     if (id === projectId) {
@@ -175,11 +260,13 @@ const { stage, playback, setSaveStatus } = shell;
 
 // ── 자동 저장(데모 모드 제외) ──────────────────────────────────────────
 if (!isDemo) {
+  // 방금 연 상태를 바로 시점으로 남기지 않도록, 가장 최근 시점 시각으로 초기화(없으면 0 → 첫 변경에서 기준 시점).
+  try { const snaps = await idbListSnapshots(projectId); if (snaps?.length) _lastSnapAt = Math.max(...snaps.map((s) => s.createdAt ?? 0)); } catch {}
   autosave = createAutosave({
     store,
     getProjectId:   () => projectId,
     getProjectName: () => projectName,
-    saveRecord:     (rec) => putProject(rec),
+    saveRecord:     async (rec) => { await putProject(rec); await _maybeAutoSnapshot(rec); },
     renderThumbnail: () => stage.renderThumbnail(256),
     onStatus: (s) => setSaveStatus?.(s),
     onQuota:  () => showToast('브라우저 저장 공간이 부족합니다. 사용하지 않는 프로젝트를 정리하거나 이미지 크기를 줄여 보세요.'),

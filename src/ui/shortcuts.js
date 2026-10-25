@@ -17,6 +17,7 @@ export const SHORTCUTS = [
   { cat: '도구', keys: ['H'], label: '손 (화면 이동)' },
 
   { cat: '보기', keys: ['G'], label: '그리드 표시/숨김' },
+  { cat: '보기', keys: ['O'], label: '앞뒤 프레임 겹쳐 보기' },
 
   { cat: '재생', keys: ['Space'], label: '재생 / 멈춤' },
   { cat: '재생', keys: [','], label: '이전 프레임' },

@@ -128,6 +128,12 @@ export function initKeys(store, editorState, getDragging = () => false) {
       return;
     }
 
+    // ── 앞뒤 프레임 겹쳐 보기 토글 (R12-2) ──────────────────────────────
+    if (!ctrl && e.key.toLowerCase() === 'o') {
+      editorState.set({ onion: !es.onion });
+      return;
+    }
+
     // ── 프레임 이동 ────────────────────────────────────────────────────
     if (!ctrl && e.key === ',') {
       editorState.set({ f: Math.max(0, f - 1) });

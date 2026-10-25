@@ -62,13 +62,43 @@ export function initView(containerEl, overlayCanvas, store, editorState) {
   const snapInput = document.createElement('input'); snapInput.type = 'checkbox';
   snapCheck.append(snapInput, document.createTextNode('스냅 (격자·가장자리·레이어)'));
 
-  viewMenu.append(gridCheck, stepRow, snapCheck);
+  // R12-2 앞뒤 프레임 겹쳐 보기(온니언) — 미리보기 전용.
+  const onionCheck = document.createElement('label'); onionCheck.className = 'view-check';
+  const onionInput = document.createElement('input'); onionInput.type = 'checkbox';
+  onionCheck.append(onionInput, document.createTextNode('앞뒤 프레임 겹쳐 보기 (O)'));
+
+  const onionBeforeRow = document.createElement('div'); onionBeforeRow.className = 'view-row';
+  const onionBeforeLabel = document.createElement('span'); onionBeforeLabel.className = 'view-row-label'; onionBeforeLabel.textContent = '앞 장수';
+  const onionBeforeDd = createDropdown({
+    ariaLabel: '앞 프레임 수',
+    options: [0, 1, 2, 3].map((v) => ({ value: String(v), label: `${v}장` })),
+    value: String(editorState.get().onionBefore ?? 1),
+    onChange: (v) => editorState.set({ onionBefore: parseInt(v, 10) }),
+  });
+  onionBeforeRow.append(onionBeforeLabel, onionBeforeDd.el);
+
+  const onionAfterRow = document.createElement('div'); onionAfterRow.className = 'view-row';
+  const onionAfterLabel = document.createElement('span'); onionAfterLabel.className = 'view-row-label'; onionAfterLabel.textContent = '뒤 장수';
+  const onionAfterDd = createDropdown({
+    ariaLabel: '뒤 프레임 수',
+    options: [0, 1, 2, 3].map((v) => ({ value: String(v), label: `${v}장` })),
+    value: String(editorState.get().onionAfter ?? 1),
+    onChange: (v) => editorState.set({ onionAfter: parseInt(v, 10) }),
+  });
+  onionAfterRow.append(onionAfterLabel, onionAfterDd.el);
+
+  viewMenu.append(gridCheck, stepRow, snapCheck, onionCheck, onionBeforeRow, onionAfterRow);
   containerEl.appendChild(viewMenu);
+
+  onionInput.addEventListener('change', () => editorState.set({ onion: onionInput.checked }));
 
   function _syncViewMenu() {
     const es = editorState.get();
     gridInput.checked = !!es.grid;
     snapInput.checked = !!es.snap;
+    onionInput.checked = !!es.onion;
+    onionBeforeDd.setValue?.(String(es.onionBefore ?? 1));
+    onionAfterDd.setValue?.(String(es.onionAfter ?? 1));
   }
   gridInput.addEventListener('change', () => editorState.set({ grid: gridInput.checked }));
   snapInput.addEventListener('change', () => editorState.set({ snap: snapInput.checked }));
@@ -234,6 +264,9 @@ export function initView(containerEl, overlayCanvas, store, editorState) {
     if ('grid' in patch) gridInput.checked = !!editorState.get().grid;
     if ('snap' in patch) snapInput.checked = !!editorState.get().snap;
     if ('gridStep' in patch) stepDd.setValue?.(String(editorState.get().gridStep ?? 32));
+    if ('onion' in patch) onionInput.checked = !!editorState.get().onion;
+    if ('onionBefore' in patch) onionBeforeDd.setValue?.(String(editorState.get().onionBefore ?? 1));
+    if ('onionAfter' in patch) onionAfterDd.setValue?.(String(editorState.get().onionAfter ?? 1));
     if ('tool' in patch) {
       toolWrap.querySelectorAll('[data-tool]').forEach(b => {
         b.classList.toggle('active', b.dataset.tool === patch.tool);
@@ -260,5 +293,7 @@ export function initView(containerEl, overlayCanvas, store, editorState) {
     document.removeEventListener('keyup', _onKeyUpView);
     document.removeEventListener('pointerdown', _onViewOutside, true);
     stepDd.destroy?.();
+    onionBeforeDd.destroy?.();
+    onionAfterDd.destroy?.();
   };
 }

@@ -20,6 +20,12 @@ export function createEditorState(initial = {}) {
     focusRegion: 'canvas', // 'canvas' | 'timeline' — 복사/삭제 대상 결정
     tlSnap: true,       // item 7: 타임라인 머리줄 스냅 (키·클립 → 프레임·재생선·다른 키)
     cameraActive: false, // F2-6: 카메라 행 선택(인스펙터 카메라 섹션·캔버스 영역 표시)
+    // R12-2 앞뒤 프레임 겹쳐 보기(미리보기 전용 — 내보내기에는 안 들어감). 문서에 저장하지 않는다.
+    onion: false,
+    onionBefore: 1,     // 앞(이전) 프레임 수 0~3
+    onionAfter: 1,      // 뒤(다음) 프레임 수 0~3
+    // R13-1 세트 변형 미리보기(문서는 안 바꾸고 렌더에만 적용). null 이면 원본 그대로.
+    previewVariantId: null,
   };
 
   for (const k of Object.keys(initial)) {

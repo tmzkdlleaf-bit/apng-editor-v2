@@ -5,10 +5,12 @@ import { initDrag } from './drag.js';
 import { initView } from './view.js';
 import { initTextEdit } from './text-edit.js';
 import { initPathEdit } from './path-edit.js';
+import { initEffectCoordEdit } from './effect-coord.js';
 import { createAssets } from '../assets.js';
 import { effects as effectsRegistry } from '../../effects/registry.js';
 import motionRegistry from '../../motions/registry.js';
 import { clearTextLayoutCache } from '../../core/render/layers/text.js';
+import { applyVariant } from '../../core/doc/variants.js';
 import { ensureDocFonts } from '../fonts.js';
 
 export function initStage(containerEl, store, editorState) {
@@ -51,6 +53,14 @@ export function initStage(containerEl, store, editorState) {
   let _snapLines = [];
   let _offscreen  = null;
   let _cssW = 1, _cssH = 1;
+
+  // R12-2 앞뒤 프레임 겹쳐 보기: 문서가 바뀔 때마다 epoch 를 올려 온니언 캐시를 무효화한다.
+  let _docEpoch = 0;
+  let _onionCanvases = [];   // 재사용 캔버스(슬롯별) — 렌더 경로에서 매번 새로 만들지 않기 위해
+  let _onion = null;         // { key, items:[{ slot, alpha }] }
+  const ONION_ALPHAS = [0.30, 0.15, 0.08]; // 가까운 것부터(멀수록 흐리게)
+  const ONION_COLOR_BEFORE = '#ff4030'; // 앞(이전) = 빨강 계열
+  const ONION_COLOR_AFTER  = '#3a9dff'; // 뒤(다음) = 파랑 계열
 
   // A2: 체커보드 패턴 캐시
   let _checkerPattern = null;
@@ -100,6 +110,19 @@ export function initStage(containerEl, store, editorState) {
     requestAnimationFrame(_doOverlay);
   }
 
+  // 세트 변형 미리보기용 복사본 캐시 — 같은 (변형 id · 문서 epoch)면 다시 복제하지 않는다.
+  let _variantCache = null; // { id, epoch, doc }
+  function _effectiveDoc(doc, es) {
+    const id = es.previewVariantId;
+    if (!id || !doc.variants) { _variantCache = null; return doc; }
+    const row = (doc.variants.rows ?? []).find((r) => r && r.id === id);
+    if (!row) { _variantCache = null; return doc; }
+    if (_variantCache && _variantCache.id === id && _variantCache.epoch === _docEpoch) return _variantCache.doc;
+    const applied = applyVariant(doc, row);
+    _variantCache = { id, epoch: _docEpoch, doc: applied };
+    return applied;
+  }
+
   function _doScene() {
     _sceneReq = false;
     _sceneRenderCount++;
@@ -141,7 +164,10 @@ export function initStage(containerEl, store, editorState) {
     const quality = (_draftMode || _autoDraft) ? 'draft' : 'final';
     const t0 = performance.now();
 
-    engine.renderFrame(offCtx, doc, f, {
+    // 세트 변형 미리보기(R13-1) — 문서는 바꾸지 않고 렌더에만 변형 값을 적용한 복사본을 쓴다.
+    const rdoc = _effectiveDoc(doc, es);
+
+    engine.renderFrame(offCtx, rdoc, f, {
       scale: zoom * dpr,
       quality,
       view: { x: visDocX0, y: visDocY0, w: visDocX1 - visDocX0, h: visDocY1 - visDocY0 },
@@ -163,6 +189,14 @@ export function initStage(containerEl, store, editorState) {
 
     const blitX = Math.max(0, ox) * dpr;
     const blitY = Math.max(0, oy) * dpr;
+
+    // 온니언(앞뒤 프레임)은 장면 아래에 깐다 — 장면보다 먼저 그린다(변형 미리보기도 반영).
+    _drawOnion(ctx, rdoc, es, f, {
+      scale: zoom * dpr, quality,
+      view: { x: visDocX0, y: visDocY0, w: visDocX1 - visDocX0, h: visDocY1 - visDocY0 },
+      offW, offH, blitX, blitY,
+    });
+
     ctx.drawImage(offscreen, blitX, blitY);
 
     // 자동 절반 해상도일 때: 드래그·재생이 계속되면 매 프레임 타이머가 리셋돼 흐린 상태 유지.
@@ -178,6 +212,81 @@ export function initStage(containerEl, store, editorState) {
 
     _sceneMsSamples.push(performance.now() - _sceneT0);
     if (_sceneMsSamples.length > 240) _sceneMsSamples.shift();
+  }
+
+  // 겹칠 프레임 목록 [{ idx, color, alpha }] — 앞(빨강)·뒤(파랑), 멀수록 흐리게. 루프면 0의 앞은 마지막 프레임.
+  function _onionList(doc, es, f) {
+    const fc = doc.meta.frameCount ?? 1;
+    if (fc <= 1) return [];
+    const before = Math.max(0, Math.min(3, es.onionBefore ?? 1));
+    const after  = Math.max(0, Math.min(3, es.onionAfter ?? 1));
+    const wrap = (es.loopMode ?? doc.meta.playback ?? 'loop') !== 'once';
+    const list = [];
+    for (let i = 1; i <= before; i++) {
+      let fi = f - i;
+      if (fi < 0) { if (!wrap) continue; fi = ((fi % fc) + fc) % fc; }
+      if (fi !== f) list.push({ idx: fi, color: ONION_COLOR_BEFORE, alpha: ONION_ALPHAS[i - 1] });
+    }
+    for (let i = 1; i <= after; i++) {
+      let fi = f + i;
+      if (fi > fc - 1) { if (!wrap) continue; fi = fi % fc; }
+      if (fi !== f) list.push({ idx: fi, color: ONION_COLOR_AFTER, alpha: ONION_ALPHAS[i - 1] });
+    }
+    return list;
+  }
+
+  function _onionCanvas(slot, w, h) {
+    let c = _onionCanvases[slot];
+    if (!c) { c = document.createElement('canvas'); _onionCanvases[slot] = c; }
+    if (c.width !== w || c.height !== h) { c.width = w; c.height = h; }
+    return c;
+  }
+
+  // 온니언 그리기 — 재생 중엔 숨김. 끌기 중엔 절반 해상도. 같은 프레임·문서·보기면 다시 렌더하지 않고 다시 깐다.
+  function _drawOnion(ctx, doc, es, f, p) {
+    if (!es.onion || es.playing) { _onion = null; return; }
+    const list = _onionList(doc, es, f);
+    if (!list.length) { _onion = null; return; }
+
+    const half = drag.isDragging();
+    const rw = half ? Math.max(1, Math.ceil(p.offW / 2)) : p.offW;
+    const rh = half ? Math.max(1, Math.ceil(p.offH / 2)) : p.offH;
+    const rscale = half ? p.scale / 2 : p.scale;
+    const key = [_docEpoch, f, p.offW, p.offH, Math.round(p.view.x), Math.round(p.view.y),
+      es.onionBefore, es.onionAfter, (es.loopMode ?? doc.meta.playback), p.quality, half ? 1 : 0].join('|');
+
+    if (!_onion || _onion.key !== key) {
+      // 다시 렌더(프레임·보기·문서가 바뀜).
+      const items = [];
+      list.forEach((entry, slot) => {
+        const c = _onionCanvas(slot, rw, rh);
+        const oc = c.getContext('2d');
+        oc.setTransform(1, 0, 0, 1, 0, 0);
+        oc.clearRect(0, 0, rw, rh);
+        engine.renderFrame(oc, doc, entry.idx, { scale: rscale, quality: p.quality, view: p.view });
+        // 물들이기 — 불투명 픽셀만 색 쪽으로(실루엣·투명도 보존).
+        oc.save();
+        oc.globalCompositeOperation = 'source-atop';
+        oc.globalAlpha = 0.55;
+        oc.fillStyle = entry.color;
+        oc.fillRect(0, 0, rw, rh);
+        oc.restore();
+        items.push({ slot, alpha: entry.alpha });
+      });
+      _onion = { key, items };
+    }
+
+    // 장면 아래에 깐다.
+    for (let i = 0; i < _onion.items.length; i++) {
+      const { slot, alpha } = _onion.items[i];
+      const c = _onionCanvases[slot];
+      if (!c) continue;
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.imageSmoothingEnabled = true;
+      ctx.drawImage(c, 0, 0, c.width, c.height, p.blitX, p.blitY, p.offW, p.offH);
+      ctx.restore();
+    }
   }
 
   function _doOverlay() {
@@ -275,14 +384,18 @@ export function initStage(containerEl, store, editorState) {
   const cleanupView = initView(containerEl, overlayCanvas, store, editorState);
   const textEdit = initTextEdit(overlayCanvas, containerEl, store, editorState, assets);
   const pathEdit = initPathEdit(overlayCanvas, store, editorState);
+  const effectCoordEdit = initEffectCoordEdit(overlayCanvas, store, editorState);
 
   store.subscribe({ any: true }, () => {
+    _docEpoch++;            // 온니언 캐시 무효화
     requestScene();
     requestOverlay();
   });
 
   editorState.subscribe((patch) => {
-    const needsScene = 'zoom' in patch || 'panX' in patch || 'panY' in patch || 'f' in patch;
+    const needsScene = 'zoom' in patch || 'panX' in patch || 'panY' in patch || 'f' in patch
+      || 'onion' in patch || 'onionBefore' in patch || 'onionAfter' in patch
+      || 'playing' in patch || 'loopMode' in patch || 'previewVariantId' in patch;
     if (needsScene) requestScene();
     requestOverlay();
   });
@@ -364,6 +477,9 @@ export function initStage(containerEl, store, editorState) {
       ro.disconnect();
       drag.cleanup();
       cleanupView();
+      textEdit?.destroy?.();
+      pathEdit?.destroy?.();
+      effectCoordEdit?.destroy?.();
       clearTimeout(_settleTimer);
     },
   };

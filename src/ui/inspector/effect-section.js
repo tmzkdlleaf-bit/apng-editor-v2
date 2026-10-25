@@ -182,10 +182,11 @@ export function createEffectSection(store, editorState) {
     }
     if (pd.type === 'coord') {
       const cv = (typeof val === 'object' && val) ? val : { x: 0.5, y: 0.5 };
-      const fx = createNumberField({ label: 'X', min: 0, max: 1, step: 0.01, defaultValue: 0.5,
+      // 캔버스에서 끌 때 화면 밖(0~1 바깥)도 허용하므로 숫자 칸도 -1~2 로 넓힌다(R12-1).
+      const fx = createNumberField({ label: 'X', min: -1, max: 2, step: 0.01, defaultValue: 0.5,
         onBegin() { store.begin('좌표'); }, onChange(v) { _setParam(pd.key, { ...(store.get().layers[ids()[0]].params?.[pd.key] ?? cv), x: v }, true); },
         onCommit() { store.commit(); }, onCancel() { store.cancel(); } });
-      const fy = createNumberField({ label: 'Y', min: 0, max: 1, step: 0.01, defaultValue: 0.5,
+      const fy = createNumberField({ label: 'Y', min: -1, max: 2, step: 0.01, defaultValue: 0.5,
         onBegin() { store.begin('좌표'); }, onChange(v) { _setParam(pd.key, { ...(store.get().layers[ids()[0]].params?.[pd.key] ?? cv), y: v }, true); },
         onCommit() { store.commit(); }, onCancel() { store.cancel(); } });
       fx.setValue(cv.x ?? 0.5); fy.setValue(cv.y ?? 0.5);

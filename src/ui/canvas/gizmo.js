@@ -2,6 +2,7 @@ import { getDocWorldTr, getLayerBounds } from './hit.js';
 import { docToScreen, localToScreen } from './transform.js';
 import { evalCamera } from '../../core/anim/evaluate.js';
 import { evalProp } from '../../core/anim/prop.js';
+import { effectCoordParams, coordToScreen } from './effect-coord.js';
 
 // 선택 레이어의 위치 경로 점(키 있는 x 또는 y) — 보조 캔버스에 그린다. 장면 재렌더와 무관.
 export function motionPathKeyFrames(layer) {
@@ -105,6 +106,32 @@ export function drawOverlay(ctx, doc, es, snapLines = [], W, H) {
       const cur = toScr(f);
       ctx.fillStyle = acc; ctx.beginPath(); ctx.arc(cur.x, cur.y, 5, 0, Math.PI * 2); ctx.fill();
       ctx.restore();
+    }
+  }
+
+  // 이펙트 coord 점(R12-1) — 편집 도구에서 단일 이펙트 선택 시. 끌어서 위치를 정한다.
+  if (es.tool === 'edit' && selection.length === 1) {
+    const layer = doc.layers[selection[0]];
+    if (layer && layer.type === 'effect') {
+      const acc = getComputedStyle(document.documentElement).getPropertyValue('--acc').trim() || '#f0a35e';
+      for (const c of effectCoordParams(doc, layer.id)) {
+        const s = coordToScreen(c.value, layer, doc, f, zoom, panX, panY, W, H);
+        if (!s) continue;
+        ctx.save();
+        // 바깥 흰 테두리 + 안쪽 accent 점(어느 배경에서도 보이게)
+        ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(0,0,0,0.5)';
+        ctx.beginPath(); ctx.arc(s.x, s.y, 5, 0, Math.PI * 2); ctx.stroke();
+        ctx.fillStyle = acc; ctx.beginPath(); ctx.arc(s.x, s.y, 5, 0, Math.PI * 2); ctx.fill();
+        ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.arc(s.x, s.y, 5, 0, Math.PI * 2); ctx.stroke();
+        // 이름 라벨(점 오른쪽 위)
+        ctx.font = '11px system-ui, sans-serif';
+        ctx.textBaseline = 'bottom';
+        const tx = s.x + 8, ty = s.y - 6;
+        ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,0.55)'; ctx.strokeText(c.label, tx, ty);
+        ctx.fillStyle = '#ffffff'; ctx.fillText(c.label, tx, ty);
+        ctx.restore();
+      }
     }
   }
 

@@ -1,8 +1,10 @@
-// IndexedDB 저수준 래퍼 — 저장소: projects(id→레코드), assets(id→{id,blob})
+// IndexedDB 저수준 래퍼 — 저장소: projects(id→레코드), assets(id→{id,blob}),
+//   snapshots(id→{id,projectId,createdAt,label,doc,thumb,auto,bytes}) — 저장 시점(R12-3),
+//   library(id→{id,name,createdAt,layers,rootId,assetIds,assets,thumb}) — 내 부품(R14-3).
 // DOM을 쓰지 않는다(워커/테스트에서 그대로 사용 가능). indexedDB는 워커에도 있다.
 
 const DB_NAME = 'apng-editor-v2';
-const DB_VER  = 1;
+const DB_VER  = 3; // v2(R12-3): snapshots · v3(R14-3): library 저장소 추가
 
 let _dbPromise = null;
 
@@ -15,6 +17,11 @@ export function openDB() {
       const db = e.target.result;
       if (!db.objectStoreNames.contains('projects')) db.createObjectStore('projects', { keyPath: 'id' });
       if (!db.objectStoreNames.contains('assets'))   db.createObjectStore('assets',   { keyPath: 'id' });
+      if (!db.objectStoreNames.contains('snapshots')) {
+        const ss = db.createObjectStore('snapshots', { keyPath: 'id' });
+        ss.createIndex('byProject', 'projectId', { unique: false });
+      }
+      if (!db.objectStoreNames.contains('library')) db.createObjectStore('library', { keyPath: 'id' });
     };
     // 다른 탭이 더 높은 버전으로 열려고 하면(onblocked) 우리가 먼저 닫아 길을 비운다.
     req.onblocked = () => { try { _dbPromise = null; } catch {} };
@@ -78,10 +85,44 @@ export async function hasAssetBlob(id) {
   return key !== undefined;
 }
 
+// ── 저장 시점(snapshots, R12-3) ──────────────────────────────────────────
+export async function putSnapshot(rec)   { return _write('snapshots', os => os.put(rec)); }
+export async function getSnapshot(id)    { return _read('snapshots', os => _req(os.get(id))); }
+export async function deleteSnapshot(id) { return _write('snapshots', os => os.delete(id)); }
+export async function listAllSnapshots() { return _read('snapshots', os => _req(os.getAll())); }
+// 한 프로젝트의 시점만(byProject 인덱스).
+export async function listSnapshots(projectId) {
+  return _read('snapshots', os => _req(os.index('byProject').getAll(projectId)));
+}
+export async function deleteSnapshotsByProject(projectId) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('snapshots', 'readwrite');
+    const idx = tx.objectStore('snapshots').index('byProject');
+    const req = idx.openKeyCursor(projectId);
+    req.onsuccess = () => {
+      const cur = req.result;
+      if (cur) { tx.objectStore('snapshots').delete(cur.primaryKey); cur.continue(); }
+    };
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+    tx.onabort = () => reject(tx.error);
+  });
+}
+
+// ── 내 부품(library, R14-3) ──────────────────────────────────────────────
+export async function putLibraryPart(rec)   { return _write('library', os => os.put(rec)); }
+export async function getLibraryPart(id)     { return _read('library', os => _req(os.get(id))); }
+export async function deleteLibraryPart(id)  { return _write('library', os => os.delete(id)); }
+export async function listLibraryParts()     { return _read('library', os => _req(os.getAll())); }
+
 // 테스트/정리용 — 전체 비우기
 export async function clearAll() {
   await _write('projects', os => os.clear());
   await _write('assets',   os => os.clear());
+  const db = await openDB();
+  if (db.objectStoreNames.contains('snapshots')) await _write('snapshots', os => os.clear());
+  if (db.objectStoreNames.contains('library'))   await _write('library',   os => os.clear());
 }
 
 export { DB_NAME };
