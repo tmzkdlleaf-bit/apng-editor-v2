@@ -3,6 +3,8 @@ import { applyTransform } from '../matrix.js';
 import { blendToComposite } from '../blend.js';
 import { renderExit } from '../exit.js';
 import { hasChannels, drawWithChannels } from '../channels.js';
+import { hasActiveFx, drawLeafWithFx } from '../fx-stack.js';
+import { hasActiveMasks } from '../shape-mask.js';
 
 function _drawOutline(ctx, sil, steps, ow) {
   for (let i = 0; i < steps; i++) {
@@ -77,6 +79,15 @@ export function renderImageLayer(outputCtx, layer, worldTr, totalAlpha, rctx) {
 
     contentCanvas = cc;
     cache.set(cacheKey, contentCanvas);
+  }
+
+  // R17: 쌓은 효과가 있으면 레이어 자체 좌표에서 효과를 적용한 뒤 변형·블렌드.
+  //   (fx + 외곽선/흐림/마스크 동시 사용은 R17a 범위 밖 — fx 경로가 우선한다.)
+  if (hasActiveFx(layer, rctx.effects) || hasActiveMasks(layer)) {
+    drawLeafWithFx(outputCtx, () => ({ canvas: contentCanvas, srcCw: bW, srcCh: bH }),
+      { dW: bW, dH: bH, ox: bW * ax, oy: bH * ay },
+      layer, worldTr, totalAlpha, rctx);
+    return;
   }
 
   const hasOutline = (layer.outline?.width ?? 0) > 0;

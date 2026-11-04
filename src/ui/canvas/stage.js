@@ -6,6 +6,7 @@ import { initView } from './view.js';
 import { initTextEdit } from './text-edit.js';
 import { initPathEdit } from './path-edit.js';
 import { initEffectCoordEdit } from './effect-coord.js';
+import { initMaskEdit } from './mask-edit.js';
 import { createAssets } from '../assets.js';
 import { effects as effectsRegistry } from '../../effects/registry.js';
 import motionRegistry from '../../motions/registry.js';
@@ -298,7 +299,7 @@ export function initStage(containerEl, store, editorState) {
     const ctx = overlayCanvas.getContext('2d');
     ctx.save();
     ctx.scale(dpr, dpr);
-    drawOverlay(ctx, doc, es, _snapLines, _cssW, _cssH);
+    drawOverlay(ctx, doc, es, _snapLines, _cssW, _cssH, assets);
     ctx.restore();
   }
 
@@ -385,6 +386,7 @@ export function initStage(containerEl, store, editorState) {
   const textEdit = initTextEdit(overlayCanvas, containerEl, store, editorState, assets);
   const pathEdit = initPathEdit(overlayCanvas, store, editorState);
   const effectCoordEdit = initEffectCoordEdit(overlayCanvas, store, editorState);
+  const maskEdit = initMaskEdit(overlayCanvas, store, editorState, () => assets);
 
   store.subscribe({ any: true }, () => {
     _docEpoch++;            // 온니언 캐시 무효화
@@ -480,6 +482,7 @@ export function initStage(containerEl, store, editorState) {
       textEdit?.destroy?.();
       pathEdit?.destroy?.();
       effectCoordEdit?.destroy?.();
+      maskEdit?.destroy?.();
       clearTimeout(_settleTimer);
     },
   };

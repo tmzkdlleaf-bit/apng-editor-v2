@@ -4,7 +4,7 @@ import { evalProp } from '../anim/prop.js';
 import { reduceKeys } from '../anim/reduce-keys.js';
 import { normalizeVariants } from '../doc/variants.js';
 
-export const CURRENT_VERSION = 3;
+export const CURRENT_VERSION = 9;
 
 // 변환한 새 X/Y 키를 줄일 때 허용 오차(px). 렌더는 정수 프레임에서만 하므로
 // 직선 보간 오차가 이 값 이하인 중간 키는 뺀다(R11-2).
@@ -79,6 +79,38 @@ const MIGRATIONS = {
     const camera = { x: newX, y: newY, zoom: zP, _v2: { x: xP ?? null, y: yP ?? null, zoom: zP ?? null } };
     if (zeroZoomFrames.length) camera._v2.zeroZoomFrames = zeroZoomFrames;
     return { ...doc, version: 3, camera };
+  },
+
+  // v3 → v4 (R16): 효과 수치 키프레임(paramAnim) 추가. 예전 문서는 paramAnim 이 없을 뿐이며
+  //   렌더 결과는 그대로다(effect.js 는 paramAnim 없으면 정적 params 를 그대로 쓴다). 올림만 한다.
+  3: (doc) => ({ ...doc, version: 4 }),
+
+  // v4 → v5 (R17): 레이어에 효과 쌓기(fx·fxOrder) 추가. 예전 문서는 fx 가 없을 뿐이며
+  //   fx 가 없거나 비어 있으면 렌더 경로는 기존과 같다. 올림만 한다.
+  4: (doc) => ({ ...doc, version: 5 }),
+
+  // v5 → v6 (R18): 곡선 경로(키의 sp)·autoOrient 추가. sp 가 없으면 직선 보간 그대로라 결과 동일. 올림만.
+  5: (doc) => ({ ...doc, version: 6 }),
+
+  // v6 → v7 (R20): 따라가기(followId)·움직임 번짐(doc.meta.motionBlur·layer.motionBlur) 추가.
+  //   followId 없음·번짐 스위치 꺼짐이 기본이라 렌더 경로·결과는 기존과 같다(픽셀 동일). 올림만.
+  6: (doc) => ({ ...doc, version: 7 }),
+
+  // v7 → v8 (R21): 펜 가리기(layer.masks) 추가. masks 없으면 기존 렌더 경로 그대로(픽셀 동일). 올림만.
+  7: (doc) => ({ ...doc, version: 8 }),
+
+  // v8 → v9 (R22b): 그룹/인스턴스 시간(layer.time) 추가. time=null 이면 기존 렌더 경로 그대로(픽셀 동일).
+  //   예전 문서의 그룹·인스턴스에 time:null 을 채워 모양을 맞춘다.
+  8: (doc) => {
+    const layers = {};
+    for (const [id, l] of Object.entries(doc.layers ?? {})) {
+      if (l && (l.type === 'group' || l.type === 'instance') && l.time === undefined) {
+        layers[id] = { ...l, time: null };
+      } else {
+        layers[id] = l;
+      }
+    }
+    return { ...doc, version: 9, layers };
   },
 };
 

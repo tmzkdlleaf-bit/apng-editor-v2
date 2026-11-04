@@ -58,3 +58,16 @@
 - `npm run dev` → http://localhost:5173
 - `npm test` → Playwright 테스트 전체
 - `npm run perf` → 성능 측정(P4 이후)
+
+## 전문가판 규칙 (R16~)
+
+- 움직일 수 있는 값은 모두 같은 모양: { value, keys: [{ f, v, ease, bezier? , ...}] }.
+  v 의 종류: 숫자 / 좌표 {x,y} / 색 '#rrggbb' / 경로(R21) / 그 밖(문자열·참거짓 = 계단).
+- 값 읽기는 src/core/anim/ 의 공용 함수 한 곳으로만 한다(evalProp, getProp, evalEffectParams, R20 이후 world.js).
+  UI·렌더에서 layer.transform[key] 처럼 경로를 직접 파고드는 코드를 새로 쓰지 않는다.
+- 새로 저장되는 필드는 schema.js 기본값 + migrate.js 버전 올림 + 프로젝트 파일 왕복 테스트를 같이 한다.
+  예전 파일은 열었을 때 픽셀 단위로 같은 결과여야 한다.
+- 새 기능이 꺼져 있으면(키 없음, 효과 쌓기 없음, 가리기 없음 등) 렌더 경로는 기존과 같아야 한다.
+  기존 스냅샷·픽셀 테스트가 그대로 통과하는 것으로 확인한다.
+- 복제·부품(part.js)·템플릿·변형(variants.js)이 새 필드를 잃지 않는지, 안에 든 id를 새로 바꾸는지 확인한다.
+- R23 전까지 새 UI는 지금 속성 패널·타임라인에 넣되, 화면 위치와 분리된 조각으로 만든다.

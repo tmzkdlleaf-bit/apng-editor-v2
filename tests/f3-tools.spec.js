@@ -18,10 +18,10 @@ test('F3-7 — E·P 키로 편집·움직이기 모드 전환', async ({ page })
   expect(await page.evaluate(() => window.__editorState.get().tool)).toBe('select');
 });
 
-test('F3-7 — 도구 버튼 4개(옮기기·편집·움직이기·손)', async ({ page }) => {
+test('F3-7 — 도구 버튼(옮기기·편집·움직이기·손 + R21b 가리기 3종)', async ({ page }) => {
   await openApp(page);
   const tools = await page.locator('.stage-tools [data-tool]').evaluateAll((els) => els.map((e) => e.dataset.tool));
-  expect(tools).toEqual(['select', 'edit', 'motion', 'hand']);
+  expect(tools).toEqual(['select', 'edit', 'motion', 'hand', 'maskRect', 'maskEllipse', 'pen']);
   // 편집 버튼 클릭 → tool edit + active
   await page.click('.stage-tools [data-tool="edit"]');
   expect(await page.evaluate(() => window.__editorState.get().tool)).toBe('edit');

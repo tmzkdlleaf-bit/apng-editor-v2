@@ -35,6 +35,7 @@ export function cubicBezierEval(x1, y1, x2, y2, progress) {
 
 const _EASINGS = {
   linear:         t => t,
+  hold:           t => (t >= 1 ? 1 : 0),   // 정지 키: 다음 키에 닿기 전까지 앞 값 유지(그래프는 계단)
   easeIn:         t => t * t,
   easeOut:        t => t * (2 - t),
   easeInOut:      t => t < 0.5 ? 2*t*t : -1+(4-2*t)*t,
@@ -65,9 +66,40 @@ export function ease(name, t, bezier) {
   return (_EASINGS[name] ?? _EASINGS.linear)(t);
 }
 
+// R19: 이름 붙은 이징 → 근사 3차 베지어 [x1,y1,x2,y2]. 그래프 편집기에서 손잡이를 처음 끌 때
+//   이 값으로 바꾼다. css* 는 정의가 이미 베지어라 정확하다(오차 0). 거듭제곱·백 계열은 easings.net
+//   의 표준 근사값을 쓴다(최대 오차는 tests/r19-graph 에서 측정·보고). linear 는 직선.
+//   탄성(easeOutElastic)·바운스(easeOutBounce)·정지(hold)는 베지어로 못 바꾸므로 없음(null).
+export const EASE_TO_BEZIER = {
+  linear:         [0, 0, 1, 1],
+  easeIn:         [0.3333, 0, 0.6667, 0.3333],   // t^2 를 3차 베지어로 정확 표현(오차 0)
+  easeOut:        [0.3333, 0.6667, 0.6667, 1],   // 2t-t^2 정확(오차 0)
+  easeInOut:      [0.42, 0, 0.58, 1],
+  easeInCubic:    [0.55, 0.055, 0.675, 0.19],
+  easeOutCubic:   [0.215, 0.61, 0.355, 1],
+  easeInOutCubic: [0.645, 0.045, 0.355, 1],
+  easeOutQuint:   [0.22, 1, 0.36, 1],
+  easeInOutQuint: [0.83, 0, 0.17, 1],
+  easeInOutSine:  [0.445, 0.05, 0.55, 0.95],
+  easeOutBack:    [0.34, 1.56, 0.64, 1],
+  easeInOutBack:  [0.68, -0.6, 0.32, 1.6],
+  cssEase:        [0.25, 0.1, 0.25, 1.0],
+  cssEaseIn:      [0.42, 0, 1.0, 1.0],
+  cssEaseOut:     [0, 0, 0.58, 1.0],
+  cssEaseInOut:   [0.42, 0, 0.58, 1.0],
+};
+
+// 이름 이징을 베지어 제어점으로. 바꿀 수 없으면(탄성·바운스·정지) null.
+export function easeToBezier(name) {
+  if (name === 'cubicBezier') return [0.25, 0.1, 0.25, 1.0];
+  const bz = EASE_TO_BEZIER[name];
+  return bz ? bz.slice() : null;
+}
+
 // sections.js:159의 감각적 이름 14종 + animator.js:69의 나머지 4종
 export const EASE_LABELS = {
   linear:         '일정하게',
+  hold:           '정지',
   easeIn:         '천천히 시작',
   easeOut:        '천천히 끝나며',
   easeInOut:      '부드럽게 시작·끝',

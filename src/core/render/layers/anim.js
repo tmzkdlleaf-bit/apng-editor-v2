@@ -2,6 +2,8 @@ import { applyAdjust, hasAdjust, applyBlur } from '../adjust.js';
 import { applyTransform } from '../matrix.js';
 import { blendToComposite } from '../blend.js';
 import { frameIndexAtTime } from '../../io/anim-decode.js';
+import { hasActiveFx, drawLeafWithFx } from '../fx-stack.js';
+import { hasActiveMasks } from '../shape-mask.js';
 
 // 시간 기준 소스 프레임 선택 — 프레임 번호가 아니라 "누적 지연(ms)"으로 고른다.
 // 지연이 제각각인 GIF 도 문서 시각 t 에서 원본과 같은 프레임을 보인다.
@@ -74,6 +76,14 @@ export function renderAnimLayer(outputCtx, layer, worldTr, totalAlpha, rctx) {
 
     contentCanvas = cc;
     cache.set(cacheKey, contentCanvas);
+  }
+
+  // R17: 쌓은 효과가 있으면 레이어 자체 좌표에서 적용한 뒤 변형·블렌드. R21: 가리기도 같은 경로.
+  if (hasActiveFx(layer, rctx.effects) || hasActiveMasks(layer)) {
+    drawLeafWithFx(outputCtx, () => ({ canvas: contentCanvas, srcCw: bW, srcCh: bH }),
+      { dW: bW, dH: bH, ox: bW * ax, oy: bH * ay },
+      layer, worldTr, totalAlpha, rctx);
+    return;
   }
 
   const blur = layer.adjust?.blur ?? 0;

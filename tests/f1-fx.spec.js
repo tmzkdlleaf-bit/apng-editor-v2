@@ -68,7 +68,7 @@ test.describe('F1 — 효과 섹션', () => {
   test('[트랙 매트] 자기 자신은 소스 후보에 없음', async ({ page }) => {
     await openApp(page);
     const id = await selectImage(page);
-    const sec = section(page, '트랙 매트');
+    const sec = section(page, '다른 레이어로 가리기');
     await sec.locator('.inspector-section-header').first().click();
     await sec.locator('.fx-check input').first().check();  // '매트 사용'(반전 체크박스와 구분)
     // 소스 드롭다운 열기

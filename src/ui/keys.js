@@ -3,6 +3,8 @@
 import { buildPropCmd, getStartValue } from './canvas/edit-prop.js';
 import { groupSelection, ungroupSelection } from './group-ops.js';
 import { openLoopCheck } from './loop-check.js';
+import { getProp } from '../core/anim/props.js';
+import { easyEaseCommands, holdToggleCommands } from './timeline/graph-canvas.js';
 
 function _isInputFocused() {
   const el = document.activeElement;
@@ -14,9 +16,10 @@ const _MOVE_STEP_LARGE = 10;
 
 // 키프레임 ref에서 현재 v/ease 읽기
 function _readKey(doc, ref) {
-  const prop = doc.layers[ref.id]?.[ref.path.split('.')[0]]?.[ref.path.split('.')[1]];
+  const prop = getProp(doc.layers[ref.id], ref.path);
   const kf = (prop?.keys ?? []).find(k => k.f === ref.f);
-  return kf ? { id: ref.id, path: ref.path, f: ref.f, v: kf.v, ease: kf.ease ?? 'linear' } : null;
+  // R18: 곡선 손잡이(sp)·커스텀 베지어(bezier)도 복사/붙여넣기에서 함께 보존.
+  return kf ? { id: ref.id, path: ref.path, f: ref.f, v: kf.v, ease: kf.ease ?? 'linear', sp: kf.sp, bezier: kf.bezier } : null;
 }
 
 export function initKeys(store, editorState, getDragging = () => false) {
@@ -61,6 +64,32 @@ export function initKeys(store, editorState, getDragging = () => false) {
       return;
     }
 
+    // ── 그래프 편집기 전환 (R19) Shift+F3 ───────────────────────────────
+    if (e.shiftKey && e.key === 'F3') {
+      e.preventDefault();
+      editorState.set({ graphMode: !es.graphMode });
+      return;
+    }
+
+    // ── 키 보간 단축 (R19-3) — 타임라인·그래프 공통, 키 선택 대상 ────────
+    // F9 "부드럽게"(both), Shift+F9(들어오는 쪽), Ctrl+Shift+F9(나가는 쪽)
+    if (e.key === 'F9') {
+      e.preventDefault();
+      if (!kfSel.length) return;
+      const mode = (ctrl && e.shiftKey) ? 'out' : (e.shiftKey ? 'in' : 'both');
+      const cmds = easyEaseCommands(doc, kfSel, mode);
+      if (cmds.length) store.apply(cmds.length === 1 ? cmds[0] : { type: 'batch', cmds });
+      return;
+    }
+    // Ctrl+Alt+H: 정지 키(hold) 켜기/끄기
+    if (ctrl && e.altKey && e.key.toLowerCase() === 'h') {
+      e.preventDefault();
+      if (!kfSel.length) return;
+      const cmds = holdToggleCommands(doc, kfSel);
+      if (cmds.length) store.apply(cmds.length === 1 ? cmds[0] : { type: 'batch', cmds });
+      return;
+    }
+
     // ── 그룹 만들기 / 풀기 (G3) ───────────────────────────────────────
     if (ctrl && e.shiftKey && e.key.toLowerCase() === 'g') {
       e.preventDefault();
@@ -88,7 +117,7 @@ export function initKeys(store, editorState, getDragging = () => false) {
       const newSel = [];
       for (const k of _kfClipboard) {
         const nf = Math.max(0, Math.min(fc - 1, f + (k.f - minF)));
-        cmds.push({ type: 'setKey', id: k.id, path: k.path, f: nf, v: k.v, ease: k.ease });
+        cmds.push({ type: 'setKey', id: k.id, path: k.path, f: nf, v: k.v, ease: k.ease, sp: k.sp, bezier: k.bezier });
         newSel.push({ id: k.id, path: k.path, f: nf });
       }
       if (cmds.length) store.apply(cmds.length === 1 ? cmds[0] : { type: 'batch', cmds });

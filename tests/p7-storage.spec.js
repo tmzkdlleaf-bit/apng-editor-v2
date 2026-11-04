@@ -223,7 +223,7 @@ test.describe('P7 — 저장', () => {
       return { okVersion: ok.version, CURRENT_VERSION, threwFuture, threwNoVer };
     });
     expect(r.okVersion).toBe(r.CURRENT_VERSION);
-    expect(r.CURRENT_VERSION).toBe(3); // R8-1: 카메라 의미 변경으로 v3
+    expect(r.CURRENT_VERSION).toBe(9); // R22b: 그룹 시간으로 v9
     expect(r.threwFuture).toBe(true);
     expect(r.threwNoVer).toBe(true);
   });

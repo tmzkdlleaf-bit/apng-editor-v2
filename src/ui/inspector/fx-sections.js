@@ -94,7 +94,7 @@ export function createTintSection(store, editorState) {
 
 // ── 트랙 매트 ─────────────────────────────────────────────────────────────
 export function createMatteSection(store, editorState, getStageDeps) {
-  const { section, body } = makeSectionShell('트랙 매트', true);
+  const { section, body } = makeSectionShell('다른 레이어로 가리기', true);
   let _batch = false, _picking = false, _pickCleanup = null;
   const ids = () => _idsOfType(store, editorState, MATTE_TYPES);
 

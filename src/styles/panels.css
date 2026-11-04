@@ -1,0 +1,84 @@
+/* R23 — 도킹 패널 프레임(경계 끌기·접기·탭). 색·간격은 tokens.css 변수만 사용. */
+
+.panel-dock {
+  position: relative;
+  background: var(--panel);
+  overflow: hidden;
+  display: grid;
+  grid-template-rows: auto 1fr;
+  min-width: 28px;
+}
+.panel-dock-right { border-left: 1px solid var(--line); }
+.panel-dock-left  { border-right: 1px solid var(--line); }
+
+/* 경계 끌기 손잡이 — 바깥 변에 얇게. */
+.panel-splitter {
+  position: absolute;
+  top: 0; bottom: 0;
+  width: 6px;
+  cursor: ew-resize;
+  z-index: 15;
+  background: transparent;
+}
+.panel-splitter-right { left: -3px; }
+.panel-splitter-left  { right: -3px; }
+.panel-splitter:hover,
+.panel-splitter.dragging { background: color-mix(in srgb, var(--acc) 50%, transparent); }
+
+/* 패널 머리: 탭 + 접기 */
+.panel-head {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  height: 28px;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel);
+}
+.panel-tabs {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+.panel-tab {
+  appearance: none;
+  background: transparent;
+  border: none;
+  border-right: 1px solid var(--line2);
+  color: var(--dim);
+  font-size: var(--fs-2);
+  font-family: inherit;
+  padding: 0 var(--sp-3);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.panel-tab:hover { color: var(--text2); }
+.panel-tab.is-on {
+  color: var(--text);
+  background: var(--panel2, var(--panel));
+  box-shadow: inset 0 -2px 0 var(--acc);
+}
+
+.panel-collapse {
+  appearance: none;
+  background: transparent;
+  border: none;
+  border-left: 1px solid var(--line2);
+  color: var(--dim);
+  cursor: pointer;
+  width: 26px;
+  flex-shrink: 0;
+}
+.panel-collapse:hover { color: var(--text); }
+.panel-collapse::before { content: '‹'; font-size: 14px; }
+.panel-dock-left .panel-collapse::before { content: '›'; }
+.panel-collapse.is-collapsed::before { content: '›'; }
+.panel-dock-left .panel-collapse.is-collapsed::before { content: '‹'; }
+
+.panel-bodies { overflow: hidden; position: relative; min-height: 0; }
+.panel-tab-body { height: 100%; overflow-y: auto; }
+
+/* 접힌 상태 — 머리만 세로로 남기고 내용은 숨긴다. */
+.panel-dock.is-collapsed .panel-tabs,
+.panel-dock.is-collapsed .panel-bodies { display: none; }
+.panel-dock.is-collapsed .panel-head { justify-content: center; }

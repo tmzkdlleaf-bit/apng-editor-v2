@@ -10,6 +10,7 @@ import { isDesktop }      from '../../platform/index.js';
 import { iconMarkup } from '../icons.js';
 import { openLibrary } from '../library.js';
 import { openHelp, startOnboarding, maybeStartOnboarding } from '../help.js';
+import { createPanelDock, resetWorkspace } from './panels.js';
 
 const TL_KEY     = 'apng2.timelineHeight';
 const TL_DEFAULT = 340;
@@ -72,9 +73,19 @@ export function init(store, editorState, projectApi = null) {
         </div>
       </div>
     </div>
-
-    <div data-region="inspector"></div>
   `;
+
+  // R23: 오른쪽 도킹 패널(경계 끌기·접기·탭 + localStorage 저장). "속성" 탭 본문이 인스펙터 영역.
+  //   정보·효과 컨트롤 탭은 뒤 단계에서 추가한다(지금은 속성 하나).
+  const inspectorBody = document.createElement('div');
+  inspectorBody.setAttribute('data-region', 'inspector');
+  const rightDock = createPanelDock({
+    side: 'right', key: 'right', widthVar: '--inspector-width',
+    defaultWidth: 320, minWidth: 220, maxWidth: 560,
+    tabs: [{ id: 'props', label: '속성', el: inspectorBody }],
+  });
+  rightDock.el.style.gridArea = 'inspector';
+  app.appendChild(rightDock.el);
 
   document.body.appendChild(app);
 
@@ -204,6 +215,7 @@ export function init(store, editorState, projectApi = null) {
     if (document.querySelector('.canvas-settings-dialog')) return;
     const doc  = store.get();
     const { width, height, frameCount, fps } = doc.meta;
+    const mb = doc.meta.motionBlur ?? { on: false, shutter: 180, phase: -90, samples: 8 };
 
     const dlg = document.createElement('div');
     dlg.className = 'canvas-settings-dialog';
@@ -214,6 +226,11 @@ export function init(store, editorState, projectApi = null) {
         <div class="cs-row"><label>높이 (px)</label><input class="cs-input" id="cs-h" type="number" min="1" max="4096" value="${height}"></div>
         <div class="cs-row"><label>프레임 수</label><input class="cs-input" id="cs-fc" type="number" min="1" max="9999" value="${frameCount}"></div>
         <div class="cs-row"><label>FPS</label><input class="cs-input" id="cs-fps" type="number" min="1" max="120" value="${fps}"></div>
+        <div class="cs-title cs-subtitle">움직임 번짐</div>
+        <div class="cs-row"><label>켜기</label><input class="cs-check" id="cs-mb-on" type="checkbox" ${mb.on ? 'checked' : ''}></div>
+        <div class="cs-row"><label>셔터 각도</label><input class="cs-input" id="cs-mb-shutter" type="number" min="0" max="360" value="${mb.shutter ?? 180}"></div>
+        <div class="cs-row"><label>시작 위치</label><input class="cs-input" id="cs-mb-phase" type="number" min="-360" max="360" value="${mb.phase ?? -90}"></div>
+        <div class="cs-row"><label>쪼개기 수</label><input class="cs-input" id="cs-mb-samples" type="number" min="2" max="64" value="${mb.samples ?? 8}"></div>
         <div class="cs-btns">
           <button id="cs-cancel">취소</button>
           <button id="cs-ok" class="accent">확인</button>
@@ -234,6 +251,14 @@ export function init(store, editorState, projectApi = null) {
       if (nh !== height)       patch.height     = Math.max(1, nh);
       if (nfc !== frameCount)  patch.frameCount = Math.max(1, nfc);
       if (nfps !== fps)        patch.fps        = Math.max(1, nfps);
+      // R20-C: 움직임 번짐 설정
+      const newMb = {
+        on: dlg.querySelector('#cs-mb-on').checked,
+        shutter: Math.max(0, Math.min(360, parseInt(dlg.querySelector('#cs-mb-shutter').value, 10) || 180)),
+        phase: Math.max(-360, Math.min(360, parseInt(dlg.querySelector('#cs-mb-phase').value, 10) || -90)),
+        samples: Math.max(2, Math.min(64, parseInt(dlg.querySelector('#cs-mb-samples').value, 10) || 8)),
+      };
+      if (JSON.stringify(newMb) !== JSON.stringify(mb)) patch.motionBlur = newMb;
       if (Object.keys(patch).length) store.apply({ type: 'setMeta', patch });
       dlg.remove();
     });
@@ -329,5 +354,13 @@ export function init(store, editorState, projectApi = null) {
     });
   }
 
-  return { stage, playback, setSaveStatus, setProjectName };
+  // 작업 공간 초기화(배치 저장값 비우고 새로고침) — 메뉴 "보기 › 작업 공간 초기화"에서 호출(R23 뒤 단계에 메뉴 연결).
+  function resetWorkspaceAndReload() {
+    resetWorkspace();
+    if (typeof window !== 'undefined' && window.__noReload) return;
+    location.reload();
+  }
+  if (typeof window !== 'undefined') window.__resetWorkspace = resetWorkspaceAndReload;
+
+  return { stage, playback, setSaveStatus, setProjectName, rightDock, resetWorkspace: resetWorkspaceAndReload };
 }

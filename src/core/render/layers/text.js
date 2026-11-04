@@ -1,6 +1,8 @@
 // 텍스트 레이어 렌더러 — ctx.filter 미사용
 import { applyTransform } from '../matrix.js';
 import { blendToComposite } from '../blend.js';
+import { hasActiveFx, drawLeafWithFx } from '../fx-stack.js';
+import { hasActiveMasks } from '../shape-mask.js';
 
 function _cssFont(size, weight, font) {
   return `${weight ?? 400} ${size ?? 48}px ${font ?? 'sans-serif'}`;
@@ -273,6 +275,25 @@ export function renderTextLayer(outputCtx, layer, worldTr, totalAlpha, rctx) {
 
   const isStatic = !layer.reveal && !layer.charAnim;
   const hasMask  = !!(layer.mask && rctx.renderMask);
+
+  // R17: 쌓은 효과 — 글자를 레이어 자체 좌표에 해상도 k 로 구워(확대해도 선명) 효과 적용 뒤 변형·블렌드. R21: 가리기도.
+  if (hasActiveFx(layer, rctx.effects) || hasActiveMasks(layer)) {
+    const layout = _textLayout(layer);
+    drawLeafWithFx(outputCtx, (k) => {
+      const cw = Math.max(1, Math.ceil(layout.cw * k));
+      const ch = Math.max(1, Math.ceil(layout.ch * k));
+      const cc = pool.borrow(cw, ch);
+      const ccx = cc.getContext('2d');
+      ccx.save();
+      ccx.scale(k, k);
+      ccx.translate(layout.anchorX, layout.anchorY);
+      _drawLines(ccx, layer, f, frameCount);
+      ccx.restore();
+      return { canvas: cc, srcCw: cw, srcCh: ch, release: () => pool.release(cc) };
+    }, { dW: layout.cw, dH: layout.ch, ox: layout.anchorX, oy: layout.anchorY },
+      layer, worldTr, totalAlpha, rctx);
+    return;
+  }
 
   if (isStatic && !hasMask) {
     // R8-2: 화면 배율(worldTr.scale = renderScale×카메라줌×레이어scale)을 단계로 맞춰 그 단계로 굽는다.

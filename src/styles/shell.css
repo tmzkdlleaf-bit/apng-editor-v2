@@ -1,7 +1,7 @@
 #app {
   display: grid;
   grid-template-rows: 48px 1fr;
-  grid-template-columns: 1fr 320px;
+  grid-template-columns: 1fr var(--inspector-width, 320px);
   grid-template-areas:
     "topbar topbar"
     "main   inspector";
@@ -344,10 +344,10 @@
   overflow: auto;
 }
 
+/* R23: 인스펙터는 오른쪽 도킹 패널의 "속성" 탭 본문. 패널이 테두리·크기를 맡는다. */
 [data-region="inspector"] {
-  grid-area: inspector;
   background: var(--panel);
-  border-left: 1px solid var(--line);
+  height: 100%;
   overflow-y: auto;
 }
 

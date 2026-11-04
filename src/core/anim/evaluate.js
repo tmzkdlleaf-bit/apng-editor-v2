@@ -1,4 +1,5 @@
 import { evalProp } from './prop.js';
+import { evalPosition } from './position.js';
 import { evalClips } from './clip.js';
 
 // 레이어 자신의 변환값만 반환. 부모→자식 행렬 합성은 P4 렌더에서 처리.
@@ -27,13 +28,15 @@ export function evalTransform(doc, layerId, f, motions, opts = {}) {
     motions,
   };
 
+  // R18: x·y 는 곡선 경로를 아는 evalPosition 으로. autoOrient 면 진행 방향을 회전에 더한다.
+  const pos = evalPosition(transform, f);
   const base = {
-    x:        evalProp(transform.x,        f),
-    y:        evalProp(transform.y,        f),
+    x:        pos.x,
+    y:        pos.y,
     scale:    evalProp(transform.scale,    f),
     scaleX:   transform.scaleX ? evalProp(transform.scaleX, f) : 1,
     scaleY:   transform.scaleY ? evalProp(transform.scaleY, f) : 1,
-    rotation: evalProp(transform.rotation, f),
+    rotation: evalProp(transform.rotation, f) + (layer.autoOrient ? pos.angle : 0),
     alpha:    evalProp(transform.alpha,    f),
   };
 

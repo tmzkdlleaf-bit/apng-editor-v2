@@ -26,6 +26,11 @@ export function createEditorState(initial = {}) {
     onionAfter: 1,      // 뒤(다음) 프레임 수 0~3
     // R13-1 세트 변형 미리보기(문서는 안 바꾸고 렌더에만 적용). null 이면 원본 그대로.
     previewVariantId: null,
+    // R19 그래프 편집기(트랙 자리에 겹침). graphView: 'value'(값) | 'speed'(속도).
+    graphMode: false,
+    graphView: 'value',
+    // R21b 가리기 그리는 중 미리보기(문서 미변경). { layerId, path, cursor? } 또는 null.
+    maskDraft: null,
   };
 
   for (const k of Object.keys(initial)) {

@@ -337,6 +337,58 @@
   overflow: hidden;
 }
 
+/* R19 그래프 편집기 — 트랙 자리에 겹침 */
+.timeline-tracks.graph-on .track-header-wrap,
+.timeline-tracks.graph-on .track-body-wrap { display: none; }
+
+.graph-canvas-root {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+.graph-canvas-root[hidden] { display: none; }   /* [hidden] 이 display:flex 를 이기게(.cf-pop 사례) */
+
+.graph-header-wrap {
+  height: 24px;
+  background: var(--tl);
+  border-bottom: 1px solid var(--line2);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.graph-header-canvas { display: block; }
+.graph-body-wrap { flex: 1; min-height: 0; overflow: auto; }
+.graph-body-canvas { display: block; cursor: crosshair; }
+
+.graph-footer {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+  padding: 4px var(--sp-2);
+  border-top: 1px solid var(--line2);
+  background: var(--tl);
+  font-size: var(--fs-2);
+  color: var(--dim);
+  flex-shrink: 0;
+}
+.graph-nums { display: inline-flex; gap: var(--sp-3); }
+.graph-num { display: inline-flex; align-items: center; gap: 4px; }
+.graph-num-input { width: 52px; }
+
+.tl-graph-btn {
+  height: 24px;
+  padding: 0 var(--sp-2);
+  background: transparent;
+  border: 1px solid var(--line2);
+  border-radius: var(--r-1);
+  color: var(--dim);
+  cursor: pointer;
+}
+.tl-graph-btn:hover { border-color: var(--line); }
+.tl-graph-btn.is-on { border-color: var(--acc); color: var(--acc); }
+
 /* frame info */
 .tl-frame-info {
   font-size: var(--fs-2);

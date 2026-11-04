@@ -3,6 +3,7 @@
 //   [+ 레이어]는 레이어 목록 머리 칸으로 옮겼다(layer-list.js).
 import { initLayerList }   from './layer-list.js';
 import { initTrackCanvas } from './track-canvas.js';
+import { initGraphCanvas } from './graph-canvas.js';
 import { iconButton } from '../icons.js';
 import { createMotionRecorder } from '../motion-record.js';
 import { showToast } from '../shell/status.js';
@@ -59,6 +60,20 @@ export function initTimeline(timelineEl, store, editorState, playback, deps = {}
   const snapTlBtn     = iconButton('snap-timeline', { label: '타임라인 스냅', title: '타임라인 스냅 (키·클립을 프레임·재생선에 붙임)', className: 'tl-snap-btn' });
   // item 5: 트랙 폭 맞춤 — 전체 프레임을 트랙 폭에 맞게 되돌림.
   const fitBtn = iconButton('zoom-fit', { label: '트랙 폭 맞춤', title: '트랙 폭 맞춤 — 전체 프레임을 트랙 폭에 맞게' });
+  // R19: 그래프 편집기 전환 — 트랙 자리를 그래프로 바꾼다(Shift+F3).
+  const graphBtn = document.createElement('button');
+  graphBtn.className = 'tl-graph-btn'; graphBtn.textContent = '그래프';
+  graphBtn.title = '그래프 편집기 (Shift+F3)'; graphBtn.setAttribute('aria-label', '그래프 편집기');
+  graphBtn.addEventListener('click', () => editorState.set({ graphMode: !editorState.get().graphMode }));
+  // R20-C: 움직임 번짐 문서 스위치(레이어 스위치와 둘 다 켜야 번진다).
+  const blurBtn = document.createElement('button');
+  blurBtn.className = 'tl-graph-btn tl-blur-btn'; blurBtn.textContent = '번짐';
+  blurBtn.title = '움직임 번짐 문서 스위치 (레이어 스위치도 켜야 번짐. 설정은 캔버스 설정)';
+  blurBtn.setAttribute('aria-label', '움직임 번짐');
+  blurBtn.addEventListener('click', () => {
+    const mb = store.get().meta.motionBlur ?? { on: false, shutter: 180, phase: -90, samples: 8 };
+    store.apply({ type: 'setMeta', patch: { motionBlur: { ...mb, on: !mb.on } } });
+  });
 
   // ── 모션 기록(F3-5) ─────────────────────────────────────────────────
   const recBtn = document.createElement('button');
@@ -84,12 +99,23 @@ export function initTimeline(timelineEl, store, editorState, playback, deps = {}
   });
 
   const sep = () => { const s = document.createElement('span'); s.className = 'tl-sep'; return s; };
-  head.append(transport, sep(), frameWrap, sep(), loopGroup, sep(), autoKeyBtn, snapCanvasBtn, snapTlBtn, fitBtn, sep(), recBtn);
+  head.append(transport, sep(), frameWrap, sep(), loopGroup, sep(), autoKeyBtn, snapCanvasBtn, snapTlBtn, fitBtn, graphBtn, blurBtn, sep(), recBtn);
 
-  // 레이어 목록(머리 칸에 [+ 레이어] 포함) · 트랙 캔버스
+  // 레이어 목록(머리 칸에 [+ 레이어] 포함) · 트랙 캔버스 · 그래프 캔버스(겹침)
   const layerList   = initLayerList(layersEl, store, editorState, deps);
   const trackCanvas = initTrackCanvas(tracksEl, layersEl, store, editorState, playback);
+  const graphCanvas = initGraphCanvas(tracksEl, store, editorState, playback, { getPxPerF: () => trackCanvas.PX_PER_F });
   fitBtn.addEventListener('click', () => trackCanvas.fitWidth());
+
+  // 트랙 ↔ 그래프 전환: tracksEl 에 클래스를 걸어 트랙 캔버스를 숨기고 그래프를 띄운다.
+  function _syncGraphMode() {
+    const on = !!editorState.get().graphMode;
+    tracksEl.classList.toggle('graph-on', on);
+    graphBtn.classList.toggle('is-on', on);
+    graphCanvas.setVisible(on);
+  }
+  const _unsubGraph = editorState.subscribe((patch) => { if (patch && ('graphMode' in patch)) _syncGraphMode(); });
+  _syncGraphMode();
 
   // ── 동작 ────────────────────────────────────────────────────────────
   const _fc = () => Math.max(1, store.get().meta.frameCount ?? 1);
@@ -153,6 +179,7 @@ export function initTimeline(timelineEl, store, editorState, playback, deps = {}
     autoKeyBtn.classList.toggle('is-on', !!es.autoKey);
     snapCanvasBtn.classList.toggle('is-on', !!es.snap);
     snapTlBtn.classList.toggle('is-on', !!es.tlSnap);
+    blurBtn.classList.toggle('is-on', !!doc.meta.motionBlur?.on);
   }
 
   const unsubES = editorState.subscribe(_updateHead);
@@ -164,8 +191,10 @@ export function initTimeline(timelineEl, store, editorState, playback, deps = {}
     recorder.destroy();
     unsubES();
     unsubSt();
+    _unsubGraph();
     layerList.destroy();
     trackCanvas.destroy();
+    graphCanvas.destroy();
   }
 
   return { destroy };

@@ -30,7 +30,7 @@ test('S5-0-1 — v1 문서 → migrate v2, 렌더 픽셀 동일', async ({ page 
     const a = render(v1);
     const v2 = migrate(JSON.parse(JSON.stringify(v1)));
     const b = render(v2);
-    if (v2.version !== 3) return false; // R8-1: 최신 버전 3
+    if (v2.version !== 9) return false; // R22b: 최신 버전 9
     for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
     return true;
   });

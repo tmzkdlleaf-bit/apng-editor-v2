@@ -1,8 +1,9 @@
 // 이펙트 레이어 — registry에서 render를 찾아 호출
 // A3: 이펙트는 문서 단위(doc px) w/h를 받고, ctx에 renderScale이 적용된 상태에서 그림
-import { createRng } from '../rng.js';
 import { applyTransform } from '../matrix.js';
 import { blendToComposite } from '../blend.js';
+import { evalEffectParams } from '../../anim/params.js';
+import { runEffect } from '../fx-run.js';
 
 export function renderEffectLayer(outputCtx, layer, worldTr, totalAlpha, rctx) {
   const {
@@ -30,7 +31,6 @@ export function renderEffectLayer(outputCtx, layer, worldTr, totalAlpha, rctx) {
   const eh = (scope === 'box' && box) ? Math.max(1, Math.round(box.h ?? 100)) : docH;
 
   const seed = (layer.seed ?? 1) >>> 0;
-  const rng  = createRng(seed);
 
   // contentCanvas 크기: 항상 렌더 픽셀(canvas pixels)
   // scope=full: view 크기 + 블리드 여유; scope=box: ew * renderScale
@@ -78,24 +78,16 @@ export function renderEffectLayer(outputCtx, layer, worldTr, totalAlpha, rctx) {
     }
   }
 
-  // 스크래치 캔버스(채널 분리·휨 등): 풀에서 빌려 쓰고 반드시 돌려준다(렌더 중 새 캔버스 생성 금지).
-  const _borrowed = [];
-  const _borrow = (bw, bh) => { const c = pool.borrow(Math.max(1, bw | 0), Math.max(1, bh | 0)); _borrowed.push(c); return c; };
-  const _release = (c) => { const i = _borrowed.indexOf(c); if (i >= 0) { _borrowed.splice(i, 1); pool.release(c); } };
-
-  effect.render(contentCtx, {
-    f,
-    frameCount,
-    w: ew,    // 문서 단위
-    h: eh,    // 문서 단위
-    rng,
+  // 효과 호출(공용 fx-run): rng·임시 캔버스 빌림/반납을 한곳에서 처리.
+  runEffect(effect, contentCtx, {
+    f, frameCount,
+    w: ew, h: eh,          // 문서 단위
+    seed,
     sources: sourcesForRender,
     scale: renderScale,
-    pad: PAD_PX, // 소스 캔버스 정렬용(물리 px, scope=full): 소스 doc(0,0)=effect 물리(pad,pad)
-    borrow: _borrow,   // (w,h)->canvas  풀 임시 캔버스
-    release: _release, // (canvas)->void
-  }, layer.params ?? {});
-  for (const c of _borrowed) pool.release(c); // 효과가 안 돌려준 것 정리
+    pad: PAD_PX,           // 소스 캔버스 정렬용(물리 px, scope=full): 소스 doc(0,0)=effect 물리(pad,pad)
+    pool,
+  }, evalEffectParams(layer, effect, f));
   for (const c of _sourceCanvases) pool.release(c);
 
   const hasMask = !!(layer.mask && rctx.renderMask);

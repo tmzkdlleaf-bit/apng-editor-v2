@@ -1,6 +1,8 @@
 // 도형 레이어 렌더러 — rect / ellipse / polygon / line
 import { applyTransform } from '../matrix.js';
 import { blendToComposite } from '../blend.js';
+import { hasActiveFx, drawLeafWithFx } from '../fx-stack.js';
+import { hasActiveMasks } from '../shape-mask.js';
 
 // fill 을 canvas fillStyle 로 해석. 문자열이면 단색, 객체면 그라디언트.
 //   fill = '#rrggbb'  또는  { type:'linear'|'radial', angle, stops:[{offset,color}, ...] }
@@ -134,6 +136,17 @@ export function renderShapeLayer(outputCtx, layer, worldTr, totalAlpha, rctx) {
 
   const cw = contentCanvas.width;
   const ch = contentCanvas.height;
+
+  // R17: 쌓은 효과 — 도형 중심(cw/2,ch/2)이 앵커. 벡터 도형을 해상도 k 로 구워 확대해도 선명. R21: 가리기도 같은 경로.
+  if (hasActiveFx(layer, rctx.effects) || hasActiveMasks(layer)) {
+    drawLeafWithFx(outputCtx, (k) => {
+      const bw = Math.max(1, Math.round(cw * k)), bh = Math.max(1, Math.round(ch * k));
+      const c = pool.borrow(bw, bh); const cx = c.getContext('2d');
+      cx.save(); cx.scale(k, k); cx.translate(cw / 2, ch / 2); _drawShape(cx, shape); cx.restore();
+      return { canvas: c, srcCw: bw, srcCh: bh, release: () => pool.release(c) };
+    }, { dW: cw, dH: ch, ox: cw / 2, oy: ch / 2 }, layer, worldTr, totalAlpha, rctx);
+    return;
+  }
 
   const hasMask = !!(layer.mask && rctx.renderMask);
 

@@ -1,5 +1,30 @@
 import { evalTransform, evalCamera } from './evaluate.js';
+import { evalProp } from './prop.js';
+import { localFrame } from './time.js';
 import { frameIndexAtTime } from '../io/anim-decode.js';
+
+// 효과 수치 키 값이 frame 0 과 frame N 에서 다른지(종류 무관). 다르면 반복 때 튐(R16-6).
+function _paramValDiffers(a, b) {
+  if (typeof a === 'number' && typeof b === 'number') return Math.abs(a - b) > 1e-6;
+  if (a && b && typeof a === 'object' && typeof b === 'object') {
+    return Math.abs((a.x ?? 0) - (b.x ?? 0)) > 1e-6 || Math.abs((a.y ?? 0) - (b.y ?? 0)) > 1e-6;
+  }
+  return a !== b;
+}
+
+function _paramSeam(doc, layer, frameCount) {
+  const out = [];
+  const anim = layer.paramAnim;
+  if (!anim || typeof anim !== 'object') return out;
+  for (const key of Object.keys(anim)) {
+    const prop = anim[key];
+    if (!prop?.keys?.length) continue;
+    if (_paramValDiffers(evalProp(prop, 0), evalProp(prop, frameCount))) {
+      out.push({ layerId: layer.id, kind: 'param', key });
+    }
+  }
+  return out;
+}
 
 // 타자기/글자 애니 진행도(text.js 의 _progress 와 같은 식). 여기서는 0과 N 비교에만 쓴다.
 function _progress(f, startF, endF, loop) {
@@ -65,8 +90,12 @@ export function checkLoopSeam(doc, motions) {
     const layer = doc.layers[layerId];
     if (!layer) continue;
 
-    const t0 = evalTransform(doc, layerId, 0, motions);
-    const tN = evalTransform(doc, layerId, frameCount, motions, seamOpts);
+    // R22b: 그룹 시간이 걸린 레이어는 바깥 0·frameCount 에 해당하는 안쪽 로컬 프레임으로 비교한다.
+    //   시간 그룹 밖이면 localFrame 이 그대로라 기존 검사와 같다.
+    const lf0 = localFrame(doc, layerId, 0);
+    const lfN = localFrame(doc, layerId, frameCount);
+    const t0 = evalTransform(doc, layerId, lf0, motions);
+    const tN = evalTransform(doc, layerId, lfN, motions, seamOpts);
     for (const prop of ['x', 'y', 'scale', 'scaleX', 'scaleY', 'rotation', 'alpha']) {
       if (Math.abs(t0[prop] - tN[prop]) > 1e-6) {
         issues.push({ layerId, prop, at0: t0[prop], atEnd: tN[prop] });
@@ -75,6 +104,7 @@ export function checkLoopSeam(doc, motions) {
 
     if (layer.type === 'anim') { const a = _animSeam(doc, layer, frameCount); if (a) issues.push(a); }
     if (layer.type === 'text') { for (const t of _textSeam(doc, layer, frameCount)) issues.push(t); }
+    if (layer.type === 'effect') { for (const p of _paramSeam(doc, layer, frameCount)) issues.push(p); }
   }
 
   // 카메라: Prop만 있으므로 seamProbe 불필요

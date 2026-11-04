@@ -43,9 +43,9 @@ export function createMotionSection(store, editorState) {
   });
   body.appendChild(addBtn);
 
-  // 경로 직선화(F3-4) — 단일 레이어에 경로 키가 3개 이상일 때
+  // 중간 점을 직선 위로(F3-4) — 단일 레이어에 경로 키가 3개 이상일 때
   const straightenBtn = document.createElement('button');
-  straightenBtn.className = 'quiet sm'; straightenBtn.textContent = '경로 직선화';
+  straightenBtn.className = 'quiet sm'; straightenBtn.textContent = '중간 점을 직선 위로';
   straightenBtn.style.marginLeft = 'var(--sp-2)';
   straightenBtn.addEventListener('click', () => { const l = ids(); if (l.length === 1) { straightenPath(store, l[0]); } });
   body.appendChild(straightenBtn);

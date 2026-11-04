@@ -1,6 +1,7 @@
 // 루프 검사 도구(F4-7) — Ctrl+Shift+L. 문서 전체 루프 이음새(checkLoopSeam) 결과 창.
 // 문제 레이어 목록 + 차이. 클릭하면 그 레이어 선택. 움직이는 이미지 이음새는 "문서 길이 맞추기" 버튼 제공.
 import { checkLoopSeam, animSeamFix } from '../core/anim/seam.js';
+import { getEffect } from '../effects/registry.js';
 import motionRegistry from '../motions/registry.js';
 
 const PROP_KO = { x: 'X', y: 'Y', scale: '크기', scaleX: '가로', scaleY: '세로', rotation: '회전', alpha: '투명도', zoom: '줌' };
@@ -42,6 +43,7 @@ export function openLoopCheck(store, editorState) {
       const transformIssues = list.filter((i) => i.prop);
       const animIssue = list.find((i) => i.kind === 'anim');
       const textIssues = list.filter((i) => i.kind === 'text');
+      const paramIssues = list.filter((i) => i.kind === 'param');
 
       const row = document.createElement('div');
       row.className = 'loopcheck-row';
@@ -61,6 +63,14 @@ export function openLoopCheck(store, editorState) {
       for (const t of textIssues) {
         const d = document.createElement('span'); d.className = 'lc-diff';
         d.textContent = `${TEXT_KO[t.which] ?? '글자'}: 반복될 때 처음으로 돌아감`;
+        detail.appendChild(d);
+      }
+      if (paramIssues.length) {
+        const eff = getEffect(doc.layers[layerId]?.effectId);
+        const labelOf = (k) => (eff?.params ?? []).find((pd) => pd.key === k)?.label ?? k;
+        const names = paramIssues.map((i) => labelOf(i.key)).join(', ');
+        const d = document.createElement('span'); d.className = 'lc-diff';
+        d.textContent = `${names}: 효과 수치가 처음과 끝에서 달라 반복할 때 튑니다`;
         detail.appendChild(d);
       }
       if (animIssue) {

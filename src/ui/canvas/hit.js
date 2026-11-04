@@ -1,4 +1,6 @@
-import { evalTransform, evalCamera } from '../../core/anim/evaluate.js';
+import { evalCamera } from '../../core/anim/evaluate.js';
+import { localWithFollow, worldTr as worldTrOf } from '../../core/anim/world.js';
+import { localFrame } from '../../core/anim/time.js';
 import { composeTransforms, applyCamera, cameraScreenTr } from '../../core/render/matrix.js';
 import { measureTextBounds } from '../../core/render/layers/text.js';
 import motionRegistry from '../../motions/registry.js';
@@ -19,19 +21,8 @@ export function getDocWorldTr(doc, layerId, f, opts = {}) {
   const layer = doc.layers[layerId];
   if (!layer) return null;
 
-  const chain = [];
-  let cur = layer;
-  while (cur) {
-    chain.unshift(cur.id);
-    if (!cur.parentId) break;
-    cur = doc.layers[cur.parentId];
-  }
-
-  let tr = _IDENTITY;
-  for (const id of chain) {
-    const localTr = evalTransform(doc, id, f, motionRegistry);
-    tr = composeTransforms(tr, localTr);
-  }
+  // R20-A: 월드 변환은 world.js 한 곳에서(그룹 부모 체인 + 따라가기 체인 + 자기 변형).
+  let tr = worldTrOf(doc, layerId, f, motionRegistry);
   if (opts.camera !== false) {
     tr = applyCamera(tr, cameraScreenTr(evalCamera(doc, f), doc.meta.width, doc.meta.height));
   }
@@ -40,11 +31,36 @@ export function getDocWorldTr(doc, layerId, f, opts = {}) {
 
 // 레이어의 '부모' 월드 변환. 자식은 부모 체인(카메라 포함), 최상위는 카메라 아핀을 부모로 본다.
 // 화면/_toDoc 좌표(카메라 월드)를 레이어 로컬 값(transform.x/y)으로 역변환할 때 공통으로 쓴다.
+// R20-B: 따라가기(followId)가 있으면 대상 로컬을 부모 프레임에 얹는다(같은 그룹 제약).
 export function getParentWorldTr(doc, layerId, f) {
   const layer = doc.layers[layerId];
   if (!layer) return null;
-  if (layer.parentId) return getDocWorldTr(doc, layer.parentId, f);
-  return _cameraParentTr(doc, f);
+  const fid = layer.followId;
+  if (!layer.parentId && !fid) return _cameraParentTr(doc, f);
+  let base = layer.parentId ? getDocWorldTr(doc, layer.parentId, f) : _cameraParentTr(doc, f);
+  if (fid && fid !== layerId && doc.layers[fid]) {
+    // R22b: 따라갈 대상은 이 레이어의 안쪽 로컬 프레임으로 평가(시간 그룹 밖이면 f 그대로).
+    base = composeTransforms(base, localWithFollow(doc, fid, localFrame(doc, layerId, f), motionRegistry));
+  }
+  return base;
+}
+
+// parentTr 안의 로컬 좌표 → 월드 좌표(worldToLocalInParent 의 정변환). R18 손잡이 위치 계산.
+export function localToWorldInParent(localX, localY, parentTr) {
+  if (!parentTr) return { x: localX, y: localY };
+  if (parentTr._cam) {
+    const s = parentTr.scale ?? 1;
+    return { x: localX * s + (parentTr.x ?? 0), y: localY * s + (parentTr.y ?? 0) };
+  }
+  const rad = (parentTr.rotation ?? 0) * Math.PI / 180;
+  const cos = Math.cos(rad), sin = Math.sin(rad);
+  const s = parentTr.scale ?? 1;
+  const lx = (localX - (parentTr.x ?? 0)) * s;
+  const ly = (localY - (parentTr.y ?? 0)) * s;
+  return {
+    x: (parentTr.x ?? 0) + (lx * cos - ly * sin),
+    y: (parentTr.y ?? 0) + (lx * sin + ly * cos),
+  };
 }
 
 // 월드 좌표 → parentTr 안의 로컬 transform 값으로 역변환.

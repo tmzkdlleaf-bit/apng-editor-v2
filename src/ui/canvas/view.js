@@ -121,6 +121,9 @@ export function initView(containerEl, overlayCanvas, store, editorState) {
     <button data-tool="edit"   title="편집 — 경로·기준점 고치기 (E)" aria-label="편집">${iconMarkup('tool-edit')}</button>
     <button data-tool="motion" title="움직이기 — 레이어 옮기기·모션 기록 (P)" aria-label="움직이기">${iconMarkup('tool-motion')}</button>
     <button data-tool="hand"   title="손 — 화면 이동 (H)" aria-label="손">${iconMarkup('hand')}</button>
+    <button data-tool="maskRect"    title="사각형 가리기" aria-label="사각형 가리기"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="4" width="10" height="8" rx="1"/></svg></button>
+    <button data-tool="maskEllipse" title="타원 가리기" aria-label="타원 가리기"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><ellipse cx="8" cy="8" rx="5.5" ry="4"/></svg></button>
+    <button data-tool="pen"         title="펜 가리기" aria-label="펜 가리기"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M11 2l3 3-7 7-3.5.5.5-3.5z"/></svg></button>
   `;
   containerEl.appendChild(toolWrap);
 
@@ -128,6 +131,7 @@ export function initView(containerEl, overlayCanvas, store, editorState) {
   function _cursorFor(tool) {
     if (tool === 'hand') return 'grab';
     if (tool === 'edit') return 'crosshair';
+    if (tool === 'maskRect' || tool === 'maskEllipse' || tool === 'pen') return 'crosshair';
     if (tool === 'motion') return 'cell';
     return '';
   }

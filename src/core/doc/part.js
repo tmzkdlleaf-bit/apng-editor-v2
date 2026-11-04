@@ -23,6 +23,15 @@ export function collectPart(doc, rootId) {
   return { layers, rootId, assetIds: [...assetIds] };
 }
 
+// 쌓은 효과(fx) id 재발급 — fx 객체 키 + fxOrder. fx id 는 레이어 안에서만 쓰인다.
+function _remapFx(layer) {
+  if (!layer || !layer.fx || typeof layer.fx !== 'object') return;
+  const map = {}; const nf = {};
+  for (const oldId of Object.keys(layer.fx)) { const nid = newId('fx_'); map[oldId] = nid; nf[nid] = layer.fx[oldId]; }
+  layer.fx = nf;
+  layer.fxOrder = (Array.isArray(layer.fxOrder) ? layer.fxOrder : []).map((id) => map[id] ?? id);
+}
+
 function _val(p) { return (p && typeof p === 'object') ? (p.value ?? 0) : (p ?? 0); }
 function _shift(p, d) {
   if (!p || !d || typeof p !== 'object') return;
@@ -41,6 +50,7 @@ export function remapPart(part, { center = null, idGen = () => newId('lyr_') } =
     const dup = structuredClone(orig);
     dup.id = idMap.get(origId);
     if (dup.clips?.length) dup.clips = dup.clips.map((c) => ({ ...c, id: newId('clp_') }));
+    _remapFx(dup);  // R17: 쌓은 효과 fx id 재발급(레이어 안에서만 쓰여 참조 재배선 불필요)
     // 부모: 복제 범위 안이면 새 id, 루트는 최상위로.
     if (origId === part.rootId) dup.parentId = null;
     else if (dup.parentId && idMap.has(dup.parentId)) dup.parentId = idMap.get(dup.parentId);

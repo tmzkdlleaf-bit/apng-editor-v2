@@ -1,6 +1,8 @@
 // 렌더 엔진 — createRenderEngine() + renderFrame(ctx, doc, f, opts)
-import { evalTransform, evalCamera } from '../anim/evaluate.js';
+import { evalCamera } from '../anim/evaluate.js';
+import { localWithFollow } from '../anim/world.js';
 import { composeTransforms, applyCamera, cameraScreenTr } from './matrix.js';
+import { blendToComposite } from './blend.js';
 
 const _IDENTITY_TR = { x: 0, y: 0, scale: 1, scaleX: 1, scaleY: 1, rotation: 0, alpha: 1 };
 import { createPool }  from './pool.js';
@@ -75,7 +77,7 @@ export function createRenderEngine(opts = {}) {
       workCtx    = workCanvas.getContext('2d');
     }
 
-    _doRender(workCtx, doc, f, renderW, renderH, renderScale, view);
+    _doRender(workCtx, doc, f, renderW, renderH, renderScale, view, quality);
 
     if (workCanvas) {
       const outW = view
@@ -98,7 +100,7 @@ export function createRenderEngine(opts = {}) {
     _lastMs = (typeof performance !== 'undefined') ? performance.now() - t0 : 0;
   }
 
-  function _doRender(ctx, doc, f, width, height, renderScale = 1, view) {
+  function _doRender(ctx, doc, f, width, height, renderScale = 1, view, quality = 'final') {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, width, height);
 
@@ -155,6 +157,7 @@ export function createRenderEngine(opts = {}) {
       cache,
       createCanvas,
       renderScale,
+      quality,           // R20-C: draft(절반)·재생 중이면 번짐 samples 를 줄인다
       camScr,            // R8-1: leaf 에서 applyCamera 로 얹는 카메라(가운데 축척+이동)
       renderMask: null,
     };
@@ -190,7 +193,8 @@ export function createRenderEngine(opts = {}) {
 
   function _renderLayer(outputCtx, layer, parentTr, rctx) {
     const { doc, f, motions: mot, renderScale, camScr } = rctx;
-    const localTr   = evalTransform(doc, layer.id, f, mot);
+    // R20-A: 따라가기(follow) 포함 로컬 변형. follow 없으면 evalTransform 과 동일(결과 불변).
+    const localTr   = localWithFollow(doc, layer.id, f, mot);
     const worldTr   = composeTransforms(parentTr, localTr);  // 문서 단위(카메라 없음)
     const opacity   = layer.opacity ?? 1;
     const totalAlpha = (worldTr.alpha ?? 1) * opacity;
@@ -220,12 +224,97 @@ export function createRenderEngine(opts = {}) {
     const screenTr = isFullEffect ? worldTr : applyCamera(worldTr, camScr);
     const sTr = _scaleWorldTr(screenTr, renderScale);
 
+    // R20-C: 움직임 번짐 — 문서·레이어 스위치가 둘 다 켜진 leaf(image/anim/text/shape)만.
+    if (_blurActive(doc, layer, type) && _drawLeafBlur(outputCtx, layer, type, parentTr, totalAlpha, rctx)) return;
+
+    _drawLeafAt(outputCtx, layer, type, sTr, totalAlpha, rctx);
+  }
+
+  function _drawLeafAt(outputCtx, layer, type, sTr, totalAlpha, rctx) {
     if      (type === 'image')  renderImageLayer(outputCtx, layer, sTr, totalAlpha, rctx);
     else if (type === 'anim')   renderAnimLayer(outputCtx, layer, sTr, totalAlpha, rctx);
     else if (type === 'text')   renderTextLayer(outputCtx, layer, sTr, totalAlpha, rctx);
     else if (type === 'shape')  renderShapeLayer(outputCtx, layer, sTr, totalAlpha, rctx);
     else if (type === 'adjust') renderAdjustLayer(outputCtx, layer, sTr, totalAlpha, rctx);
     else if (type === 'effect') renderEffectLayer(outputCtx, layer, sTr, totalAlpha, rctx);
+  }
+
+  // 번짐이 실제로 동작하는가(leaf 종류 + 문서 스위치 + 레이어 스위치).
+  function _blurActive(doc, layer, type) {
+    if (!(type === 'image' || type === 'anim' || type === 'text' || type === 'shape')) return false;
+    return !!(doc.meta?.motionBlur?.on && layer.motionBlur);
+  }
+
+  // 하위 프레임 래핑(반복/핑퐁/한번). frameCount 로 접는다.
+  function _wrapSubFrame(sub, fc, playback) {
+    if (fc <= 0) return 0;
+    if (sub >= 0 && sub <= fc) return sub;
+    if (playback === 'pingpong') {
+      const m = ((sub % (2 * fc)) + 2 * fc) % (2 * fc);
+      return m > fc ? 2 * fc - m : m;
+    }
+    if (playback === 'once') return Math.max(0, Math.min(fc, sub));
+    return ((sub % fc) + fc) % fc; // loop
+  }
+
+  function _trEqual(a, b) {
+    return Math.abs((a.x ?? 0) - (b.x ?? 0)) < 1e-4 && Math.abs((a.y ?? 0) - (b.y ?? 0)) < 1e-4
+      && Math.abs((a.scale ?? 1) - (b.scale ?? 1)) < 1e-6 && Math.abs((a.rotation ?? 0) - (b.rotation ?? 0)) < 1e-4
+      && Math.abs((a.scaleX ?? 1) - (b.scaleX ?? 1)) < 1e-6 && Math.abs((a.scaleY ?? 1) - (b.scaleY ?? 1)) < 1e-6;
+  }
+
+  // 번짐 그리기: 내용(프레임 f)은 그대로, 변형만 하위 프레임으로 N번 바꿔 평균. 처리했으면 true.
+  //   R22b: 그룹 안이면 rctx.f 는 이미 안쪽 프레임이므로 worldTr(루트부터 재변환) 대신 parentTr
+  //   위에 로컬 변형만 얹는다 — 그룹 시간이 두 번 적용되는 것을 막는다(그룹 밖에서는 결과 동일).
+  function _drawLeafBlur(outputCtx, layer, type, parentTr, totalAlpha, rctx) {
+    const { doc, f, motions: mot, renderScale, camScr, pool, quality } = rctx;
+    const mb = doc.meta.motionBlur;
+    const cap = (quality === 'draft') ? 3 : 999;
+    const N = Math.max(2, Math.min((mb.samples | 0) || 8, cap));
+    const shutter = mb.shutter ?? 180, phase = mb.phase ?? -90;
+    const fc = doc.meta.frameCount || 1;
+
+    // 하위 프레임별 화면 변형(내용은 f 고정 → sTr 만 바뀜)
+    const trs = [];
+    let allSame = true;
+    for (let i = 0; i < N; i++) {
+      const sub = f + (phase + shutter * (i / (N - 1))) / 360;
+      const wf = _wrapSubFrame(sub, fc, doc.meta.playback);
+      const w = composeTransforms(parentTr, localWithFollow(doc, layer.id, wf, mot));
+      const sTr = _scaleWorldTr(applyCamera(w, camScr), renderScale);
+      trs.push(sTr);
+      if (i > 0 && !_trEqual(sTr, trs[0])) allSame = false;
+    }
+    if (allSame) return false; // 움직임 없음 → 일반 경로(픽셀 동일)
+
+    const cnv = outputCtx.canvas;
+    const W = cnv.width, H = cnv.height;
+    const base = outputCtx.getTransform();
+    const acc = pool.borrow(W, H);
+    const ac = acc.getContext('2d');
+    ac.setTransform(1, 0, 0, 1, 0, 0); ac.clearRect(0, 0, acc.width, acc.height);
+    const sub = pool.borrow(W, H);
+    const sc = sub.getContext('2d');
+    const plain = { ...layer, blend: 'normal', motionBlur: false, opacity: 1 };
+    for (let i = 0; i < N; i++) {
+      sc.setTransform(1, 0, 0, 1, 0, 0); sc.clearRect(0, 0, sub.width, sub.height);
+      sc.setTransform(base);                 // 출력과 같은 좌표계(view 오프셋 포함)
+      _drawLeafAt(sc, plain, type, trs[i], 1, rctx);
+      ac.setTransform(1, 0, 0, 1, 0, 0);
+      ac.globalCompositeOperation = 'lighter';
+      ac.globalAlpha = 1 / N;                 // 1/N 로 'lighter' 누적 = 평균
+      ac.drawImage(sub, 0, 0);
+    }
+    ac.globalAlpha = 1; ac.globalCompositeOperation = 'source-over';
+
+    outputCtx.save();
+    outputCtx.setTransform(1, 0, 0, 1, 0, 0);  // acc 는 이미 출력 픽셀 좌표계
+    outputCtx.globalAlpha = totalAlpha;
+    outputCtx.globalCompositeOperation = blendToComposite(layer.blend);
+    outputCtx.drawImage(acc, 0, 0);
+    outputCtx.restore();
+    pool.release(sub); pool.release(acc);
+    return true;
   }
 
   // 문서 단위 worldTr 에 renderScale 을 곱해 물리 픽셀 worldTr 로 만든다.

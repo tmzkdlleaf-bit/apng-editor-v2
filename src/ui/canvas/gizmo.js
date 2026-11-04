@@ -1,8 +1,10 @@
-import { getDocWorldTr, getLayerBounds } from './hit.js';
+import { getDocWorldTr, getLayerBounds, getParentWorldTr, localToWorldInParent } from './hit.js';
 import { docToScreen, localToScreen } from './transform.js';
 import { evalCamera } from '../../core/anim/evaluate.js';
 import { evalProp } from '../../core/anim/prop.js';
+import { isCurvedPath } from '../../core/anim/position.js';
 import { effectCoordParams, coordToScreen } from './effect-coord.js';
+import { maskPtToScreen } from './mask-space.js';
 
 // 선택 레이어의 위치 경로 점(키 있는 x 또는 y) — 보조 캔버스에 그린다. 장면 재렌더와 무관.
 export function motionPathKeyFrames(layer) {
@@ -18,7 +20,7 @@ function _drawHandle(ctx, sx, sy, size = 6) {
 
 // 선택 기즈모 + 그리드 + 스냅 가이드 그리기
 // W, H는 CSS 픽셀 크기 (dpr 적용 전)
-export function drawOverlay(ctx, doc, es, snapLines = [], W, H) {
+export function drawOverlay(ctx, doc, es, snapLines = [], W, H, assets = null) {
   const { selection, f, zoom, panX, panY, grid } = es;
   const { width: docW, height: docH } = doc.meta;
   if (!W) W = ctx.canvas.width;
@@ -83,22 +85,51 @@ export function drawOverlay(ctx, doc, es, snapLines = [], W, H) {
     ctx.restore();
   }
 
-  // 모션 경로(F3-4) — 단일 선택 + x/y 키가 있을 때. 보조 캔버스만(장면 재렌더 없음).
+  // 모션 경로(F3-4, R18 곡선) — 단일 선택 + x/y 키가 있을 때. 보조 캔버스만(장면 재렌더 없음).
   if (selection.length === 1) {
     const layer = doc.layers[selection[0]];
     const keyFs = layer ? motionPathKeyFrames(layer) : [];
     if (layer && keyFs.length >= 2) {
       const acc = getComputedStyle(document.documentElement).getPropertyValue('--acc').trim() || '#f0a35e';
-      const px = layer.transform.x, py = layer.transform.y;
-      const toScr = (ff) => docToScreen(evalProp(px, ff), evalProp(py, ff), zoom, panX, panY, W, H, docW, docH);
-      // 점선 경로
+      // 곡선이든 직선이든 경로 위 점은 getDocWorldTr(카메라·부모·곡선 모두 반영)로 구한다.
+      const toScr = (ff) => { const w = getDocWorldTr(doc, layer.id, ff); return docToScreen(w.x, w.y, zoom, panX, panY, W, H, docW, docH); };
+      const fc2 = doc.meta.frameCount ?? 1;
+      const curved = isCurvedPath(layer.transform);
+      // 경로 선 — 곡선이면 촘촘히 표본, 직선이면 프레임마다.
       ctx.save();
       ctx.strokeStyle = acc; ctx.globalAlpha = 0.7; ctx.lineWidth = 1.5; ctx.setLineDash([4, 4]);
       ctx.beginPath();
-      const fc2 = doc.meta.frameCount ?? 1;
-      for (let ff = 0; ff < fc2; ff++) { const s = toScr(ff); ff ? ctx.lineTo(s.x, s.y) : ctx.moveTo(s.x, s.y); }
+      const STEPS = curved ? Math.max(fc2, keyFs.length * 24) : Math.max(1, fc2 - 1);
+      const span = Math.max(1, (keyFs[keyFs.length - 1] - keyFs[0]));
+      for (let sdx = 0; sdx <= STEPS; sdx++) {
+        const ff = keyFs[0] + (sdx / STEPS) * span;
+        const s = toScr(ff); sdx ? ctx.lineTo(s.x, s.y) : ctx.moveTo(s.x, s.y);
+      }
       ctx.stroke();
       ctx.setLineDash([]); ctx.globalAlpha = 1;
+
+      // R18 손잡이 — 편집 도구 + 곡선일 때. 각 x 키의 sp 를 화면으로.
+      if (es.tool === 'edit' && curved) {
+        const pwt = (ff) => getParentWorldTr(doc, layer.id, ff);
+        const xk = layer.transform.x.keys, yk = layer.transform.y.keys;
+        ctx.strokeStyle = acc; ctx.globalAlpha = 0.9; ctx.lineWidth = 1;
+        for (let i = 0; i < xk.length; i++) {
+          const sp = xk[i].sp; if (!sp) continue;
+          const kx = xk[i].v, ky = yk[i].v;
+          const parent = pwt(xk[i].f);
+          const kw = localToWorldInParent(kx, ky, parent);
+          const ks = docToScreen(kw.x, kw.y, zoom, panX, panY, W, H, docW, docH);
+          for (const [hx, hy] of [[sp.ix ?? 0, sp.iy ?? 0], [sp.ox ?? 0, sp.oy ?? 0]]) {
+            if (hx === 0 && hy === 0) continue;
+            const hw = localToWorldInParent(kx + hx, ky + hy, parent);
+            const hs = docToScreen(hw.x, hw.y, zoom, panX, panY, W, H, docW, docH);
+            ctx.beginPath(); ctx.moveTo(ks.x, ks.y); ctx.lineTo(hs.x, hs.y); ctx.stroke();
+            ctx.fillStyle = acc; ctx.beginPath(); ctx.arc(hs.x, hs.y, 3.5, 0, Math.PI * 2); ctx.fill();
+          }
+        }
+        ctx.globalAlpha = 1;
+      }
+
       // 키프레임 점(빈 원)
       ctx.fillStyle = '#ffffff'; ctx.strokeStyle = acc; ctx.lineWidth = 1.5;
       for (const kf of keyFs) { const s = toScr(kf); ctx.beginPath(); ctx.arc(s.x, s.y, 4, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); }
@@ -134,6 +165,9 @@ export function drawOverlay(ctx, doc, es, snapLines = [], W, H) {
       }
     }
   }
+
+  // R21b 가리기 — 선택 레이어의 가리기 선·점·손잡이 + 그리는 중 미리보기(maskDraft).
+  _drawMasks(ctx, doc, es, W, H, assets);
 
   // 선택 기즈모
   if (selection.length > 0) {
@@ -264,4 +298,79 @@ function _origin(zoom, panX, panY, W, H, docW, docH) {
     ox: W / 2 - docW * zoom / 2 + panX,
     oy: H / 2 - docH * zoom / 2 + panY,
   };
+}
+
+// R21b 가리기 선·점·손잡이. path 는 레이어 자체 좌표 → maskPtToScreen 으로 화면에 옮긴다(affine 이라 제어점도 선형 변환).
+function _strokeMaskPath(ctx, path, layer, doc, f, view, assets, color, dashed) {
+  const S = (x, y) => maskPtToScreen({ x, y }, layer, doc, f, view, assets);
+  const pts = path.pts, n = pts.length;
+  const s0 = S(pts[0].x, pts[0].y); if (!s0) return;
+  ctx.save();
+  ctx.strokeStyle = color; ctx.lineWidth = 1.5; ctx.globalAlpha = 0.9;
+  if (dashed) ctx.setLineDash([5, 4]);
+  ctx.beginPath(); ctx.moveTo(s0.x, s0.y);
+  const segs = path.closed ? n : n - 1;
+  for (let i = 0; i < segs; i++) {
+    const a = pts[i], b = pts[(i + 1) % n];
+    const c1 = S(a.x + (a.ox ?? 0), a.y + (a.oy ?? 0));
+    const c2 = S(b.x + (b.ix ?? 0), b.y + (b.iy ?? 0));
+    const e = S(b.x, b.y);
+    if (c1 && c2 && e) ctx.bezierCurveTo(c1.x, c1.y, c2.x, c2.y, e.x, e.y);
+  }
+  if (path.closed) ctx.closePath();
+  ctx.stroke();
+  ctx.setLineDash([]); ctx.globalAlpha = 1;
+  ctx.restore();
+}
+
+function _drawMasks(ctx, doc, es, W, H, assets) {
+  const { selection, f, zoom, panX, panY, tool, maskDraft } = es;
+  const view = { zoom, panX, panY, W, H };
+  const acc = getComputedStyle(document.documentElement).getPropertyValue('--acc').trim() || '#f0a35e';
+
+  // 그리는 중 미리보기
+  if (maskDraft?.path?.pts?.length) {
+    const dl = doc.layers[maskDraft.layerId];
+    if (dl) {
+      _strokeMaskPath(ctx, maskDraft.path, dl, doc, f, view, assets, acc, true);
+      if (maskDraft.cursor && maskDraft.path.pts.length) {
+        const last = maskDraft.path.pts[maskDraft.path.pts.length - 1];
+        const s = maskPtToScreen(last, dl, doc, f, view, assets);
+        if (s) { ctx.save(); ctx.strokeStyle = acc; ctx.globalAlpha = 0.5; ctx.setLineDash([3, 3]); ctx.beginPath(); ctx.moveTo(s.x, s.y); ctx.lineTo(maskDraft.cursor.cx, maskDraft.cursor.cy); ctx.stroke(); ctx.setLineDash([]); ctx.restore(); }
+      }
+    }
+  }
+
+  if (selection.length !== 1) return;
+  const layer = doc.layers[selection[0]];
+  if (!layer?.masks?.order?.length) return;
+  const showPts = tool === 'edit' || tool === 'pen' || tool === 'maskRect' || tool === 'maskEllipse';
+
+  for (const mid of layer.masks.order) {
+    const item = layer.masks.items[mid]; if (!item) continue;
+    const path = evalProp(item.path, f);
+    if (!path?.pts?.length) continue;
+    _strokeMaskPath(ctx, path, layer, doc, f, view, assets, acc, false);
+    if (!showPts) continue;
+    ctx.save();
+    for (const p of path.pts) {
+      // 손잡이(편집 도구)
+      if (tool === 'edit') {
+        for (const [hx, hy] of [[p.ox ?? 0, p.oy ?? 0], [p.ix ?? 0, p.iy ?? 0]]) {
+          if (hx === 0 && hy === 0) continue;
+          const ps = maskPtToScreen(p, layer, doc, f, view, assets);
+          const hs = maskPtToScreen({ x: p.x + hx, y: p.y + hy }, layer, doc, f, view, assets);
+          if (!ps || !hs) continue;
+          ctx.strokeStyle = acc; ctx.globalAlpha = 0.8; ctx.lineWidth = 1;
+          ctx.beginPath(); ctx.moveTo(ps.x, ps.y); ctx.lineTo(hs.x, hs.y); ctx.stroke();
+          ctx.fillStyle = acc; ctx.globalAlpha = 1; ctx.beginPath(); ctx.arc(hs.x, hs.y, 3, 0, Math.PI * 2); ctx.fill();
+        }
+      }
+      const s = maskPtToScreen(p, layer, doc, f, view, assets);
+      if (!s) continue;
+      ctx.fillStyle = '#ffffff'; ctx.strokeStyle = acc; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.arc(s.x, s.y, 3.5, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    }
+    ctx.restore();
+  }
 }

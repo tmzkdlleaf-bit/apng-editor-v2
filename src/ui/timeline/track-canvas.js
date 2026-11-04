@@ -1,5 +1,7 @@
 // 타임라인 트랙 캔버스 — 키프레임, 클립, 플레이헤드, 하위 속성 행
-import { computeRows, keyedProps, TRANSFORM_PROPS } from './rows.js';
+import { computeRows, animatedProps, TRANSFORM_PROPS } from './rows.js';
+import { getProp } from '../../core/anim/props.js';
+import { outerFrame, localSpeed, hasTimedAncestor } from '../../core/anim/time.js';
 import { EASE_LABELS } from '../../core/anim/easing.js';
 import { easeCurveSvg } from '../controls/ease-preview.js';
 import { createBezierEditor } from '../controls/bezier-editor.js';
@@ -19,12 +21,12 @@ function _cssVar(name) {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 }
 
-// 레이어의 키 있는 속성 프레임 전부 (합집합)
+// 레이어의 키 있는 속성 프레임 전부 (합집합) — 변형 + 효과 수치(paramAnim)
 function _mergedKeyFrames(layer) {
   const set = new Set();
-  for (const p of keyedProps(layer)) {
-    const key = p.path.split('.')[1];
-    for (const kf of (layer.transform[key].keys ?? [])) set.add(kf.f);
+  for (const p of animatedProps(layer)) {
+    if (p.remap) continue; // 다시 매기기 키는 레이어 병합 줄에 섞지 않는다(끌 수 없음)
+    for (const kf of (getProp(layer, p.path)?.keys ?? [])) set.add(kf.f);
   }
   return set;
 }
@@ -123,6 +125,13 @@ export function initTrackCanvas(tracksEl, layersEl, store, editorState, playback
   function _xToFrame(x) { return Math.round((x - _pxPerF / 2) / _pxPerF); }
   function _frameToX(f) { return f * _pxPerF + _pxPerF / 2; }
 
+  // R22b: 그룹 안 레이어의 키는 저장은 안쪽 프레임, 표시는 바깥 위치(바깥 f = offset + 안쪽 f / speed).
+  //   시간 그룹 밖이면 그대로라 기존 동작과 같다. remap 줄은 바깥 f 로 바로 저장되므로 변환하지 않는다.
+  function _keyX(doc, layerId, f, isRemap) {
+    if (isRemap || !layerId || !hasTimedAncestor(doc, layerId)) return _frameToX(f);
+    return _frameToX(outerFrame(doc, layerId, f));
+  }
+
   // 현재 행 목록 (hit test용 — draw와 동일 계산)
   function _rows() {
     return computeRows(store.get(), editorState.get().expanded);
@@ -165,21 +174,21 @@ export function initTrackCanvas(tracksEl, layersEl, store, editorState, playback
         }
         for (const f of _mergedKeyFrames(layer)) {
           if (f < 0 || f >= fc) continue;
-          if (Math.abs(x - _frameToX(f)) <= KF_HIT) {
-            // 이 프레임의 모든 키 있는 속성 ref
-            const refs = keyedProps(layer)
-              .filter(p => (layer.transform[p.path.split('.')[1]].keys ?? []).some(k => k.f === f))
+          if (Math.abs(x - _keyX(doc, row.id, f, false)) <= KF_HIT) {
+            // 이 프레임의 모든 키 있는 속성 ref(다시 매기기 줄은 제외 — 끌 수 없음)
+            const refs = animatedProps(layer)
+              .filter(p => !p.remap && (getProp(layer, p.path)?.keys ?? []).some(k => k.f === f))
               .map(p => ({ id: row.id, path: p.path, f }));
-            return { kind: 'keyframe', refs, f, row };
+            if (refs.length) return { kind: 'keyframe', refs, f, row };
           }
         }
       }
     } else if (row.kind === 'prop') {
+      if (row.remap) return { kind: 'empty', f: _xToFrame(x), rowI, row }; // 다시 매기기 키는 끌 수 없음
       const layer = doc.layers[row.id];
-      const key   = row.path.split('.')[1];
-      for (const kf of (layer?.transform?.[key]?.keys ?? [])) {
+      for (const kf of (getProp(layer, row.path)?.keys ?? [])) {
         if (kf.f < 0 || kf.f >= fc) continue;
-        if (Math.abs(x - _frameToX(kf.f)) <= KF_HIT) {
+        if (Math.abs(x - _keyX(doc, row.id, kf.f, false)) <= KF_HIT) {
           return { kind: 'keyframe', refs: [{ id: row.id, path: row.path, f: kf.f }], f: kf.f, row };
         }
       }
@@ -429,6 +438,9 @@ export function initTrackCanvas(tracksEl, layersEl, store, editorState, playback
   function _snapKeyDelta(anchorF, delta) {
     const es = editorState.get();
     if (!es.tlSnap) return delta;
+    // 시간 그룹 안 키는 바깥↔안쪽 환산이 섞여 스냅 기준이 어긋나므로 스냅을 건너뛴다(R22b).
+    const doc0 = store.get();
+    if ((_drag?.origSel ?? es.kfSelection).some(r => hasTimedAncestor(doc0, r.id))) return delta;
     const thr = Math.max(1, Math.round(6 / _pxPerF));
     const target = anchorF + delta;
     // 스냅 후보: 재생선 + 선택 안 된 모든 키
@@ -438,9 +450,8 @@ export function initTrackCanvas(tracksEl, layersEl, store, editorState, playback
     for (const id of doc.order) {
       const layer = doc.layers[id];
       if (!layer) continue;
-      for (const p of keyedProps(layer)) {
-        const key = p.path.split('.')[1];
-        for (const kf of layer.transform[key].keys) {
+      for (const p of animatedProps(layer)) {
+        for (const kf of (getProp(layer, p.path)?.keys ?? [])) {
           if (!selSet.has(_selKey(id, p.path, kf.f))) cands.add(kf.f);
         }
       }
@@ -467,21 +478,35 @@ export function initTrackCanvas(tracksEl, layersEl, store, editorState, playback
     store.cancel(); store.begin('키 이동');
     // 항상 "원래 선택 + 이번 delta" 로 계산한다(매번 되돌린 뒤 다시 적용하므로 누적 금지).
     const orig = _drag.origSel ?? editorState.get().kfSelection;
-    const fc = store.get().meta.frameCount ?? 1;
-    // 범위 밖으로 나가면 delta 클램프 (원래 선택 기준)
-    let d = delta;
-    for (const r of orig) {
-      if (r.f + d < 0) d = Math.max(d, -r.f);
-      if (r.f + d > fc - 1) d = Math.min(d, fc - 1 - r.f);
+    const doc = store.get();
+    const fc = doc.meta.frameCount ?? 1;
+    // R22b: delta 는 바깥 프레임 단위. 그룹 안 키는 안쪽 프레임이 저장 단위라 그룹 speed 만큼 환산한다.
+    //   레이어마다 속도가 다를 수 있으므로 그룹(id)별로 안쪽 delta 를 따로 계산한다.
+    const groups = _groupByLayerPath(orig);
+    const innerDelta = new Map();
+    for (const g of groups) {
+      const sp = hasTimedAncestor(doc, g.id) ? localSpeed(doc, g.id) : 1;
+      innerDelta.set(g, Math.round(delta * sp));
     }
-    const cmds = _groupByLayerPath(orig).map(g => ({
+    // 범위 밖으로 나가면 각 그룹 delta 클램프(안쪽 프레임 기준)
+    for (const g of groups) {
+      let d = innerDelta.get(g);
+      for (const f of g.frames) {
+        if (f + d < 0) d = Math.max(d, -f);
+        if (f + d > fc - 1) d = Math.min(d, fc - 1 - f);
+      }
+      innerDelta.set(g, d);
+    }
+    const cmds = groups.map(g => ({
       type: 'moveKeys', id: g.id,
       refs: g.frames.map(f => ({ path: g.path, f })),
-      delta: d,
+      delta: innerDelta.get(g),
     }));
     if (cmds.length) store.preview(cmds.length === 1 ? cmds[0] : { type: 'batch', cmds });
-    // 선택도 원래 선택 + delta 로 갱신
-    editorState.set({ kfSelection: orig.map(r => ({ ...r, f: r.f + d })) });
+    // 선택도 원래 선택 + 그룹별 안쪽 delta 로 갱신
+    const dByKey = new Map();
+    for (const g of groups) for (const f of g.frames) dByKey.set(`${g.id}|${g.path}|${f}`, innerDelta.get(g));
+    editorState.set({ kfSelection: orig.map(r => ({ ...r, f: r.f + (dByKey.get(`${r.id}|${r.path}|${r.f}`) ?? 0) })) });
   }
 
   function _previewStretch(k) {
@@ -505,9 +530,8 @@ export function initTrackCanvas(tracksEl, layersEl, store, editorState, playback
         moves.push({ from: f, to });
       }
       // 선택 안 된 키와 겹치는지 — 현재 doc 키 중 '현재 선택 위치'가 아닌 것(움직이지 않는 키)
-      const key   = g.path.split('.')[1];
       const curSelF = new Set(curSel.filter(r => r.id === g.id && r.path === g.path).map(r => r.f));
-      const otherF = new Set((doc.layers[g.id]?.transform?.[key]?.keys ?? [])
+      const otherF = new Set((getProp(doc.layers[g.id], g.path)?.keys ?? [])
         .map(kf => kf.f).filter(ff => !curSelF.has(ff)));
       for (const m of moves) if (otherF.has(m.to)) return; // 막기
       plan.push({ g, moves });
@@ -528,9 +552,8 @@ export function initTrackCanvas(tracksEl, layersEl, store, editorState, playback
     const doc = store.get();
     const cands = new Set([es.f]);
     const layer = doc.layers[_drag.id];
-    for (const p of keyedProps(layer ?? {})) {
-      const key = p.path.split('.')[1];
-      for (const kf of layer.transform[key].keys) cands.add(kf.f);
+    for (const p of animatedProps(layer ?? {})) {
+      for (const kf of (getProp(layer, p.path)?.keys ?? [])) cands.add(kf.f);
     }
     let best = null, bestD = thr + 1;
     for (const c of cands) {
@@ -567,20 +590,20 @@ export function initTrackCanvas(tracksEl, layersEl, store, editorState, playback
       if (row.kind === 'layer') {
         const layer = doc.layers[row.id];
         if (!layer) continue;
-        for (const p of keyedProps(layer)) {
-          const key = p.path.split('.')[1];
-          for (const kf of layer.transform[key].keys) {
+        for (const p of animatedProps(layer)) {
+          if (p.remap) continue; // 다시 매기기 키는 선택 대상 아님
+          for (const kf of (getProp(layer, p.path)?.keys ?? [])) {
             if (kf.f < 0 || kf.f >= fc) continue;
-            const kx = _frameToX(kf.f);
+            const kx = _keyX(doc, row.id, kf.f, false);
             if (kx >= x0 && kx <= x1) refs.push({ id: row.id, path: p.path, f: kf.f });
           }
         }
       } else if (row.kind === 'prop') {
+        if (row.remap) continue;
         const layer = doc.layers[row.id];
-        const key   = row.path.split('.')[1];
-        for (const kf of (layer?.transform?.[key]?.keys ?? [])) {
+        for (const kf of (getProp(layer, row.path)?.keys ?? [])) {
           if (kf.f < 0 || kf.f >= fc) continue;
-          const kx = _frameToX(kf.f);
+          const kx = _keyX(doc, row.id, kf.f, false);
           if (kx >= x0 && kx <= x1) refs.push({ id: row.id, path: row.path, f: kf.f });
         }
       }
@@ -734,6 +757,20 @@ export function initTrackCanvas(tracksEl, layersEl, store, editorState, playback
     ctx.closePath();
   }
 
+  // R19-3: 키 모양으로 이징 종류 구분 — 일정(linear)=마름모, 곡선(cubicBezier)=모래시계,
+  //   정지(hold)=네모, 이름 이징=원.
+  function _keyShape(ctx, cx, cy, s, ease) {
+    if (ease === 'hold') { ctx.beginPath(); ctx.rect(cx - s, cy - s, s * 2, s * 2); return; }
+    if (ease === 'cubicBezier') { // 모래시계(bowtie)
+      ctx.beginPath();
+      ctx.moveTo(cx - s, cy - s); ctx.lineTo(cx + s, cy - s);
+      ctx.lineTo(cx - s, cy + s); ctx.lineTo(cx + s, cy + s);
+      ctx.closePath(); return;
+    }
+    if (ease && ease !== 'linear') { ctx.beginPath(); ctx.arc(cx, cy, s, 0, Math.PI * 2); return; }
+    _diamond(ctx, cx, cy, s);
+  }
+
   function _drawBody(ctx, doc, rows, es, fc, totalW, totalH) {
     const bgColor   = _cssVar('--tl')      || '#1a1c1f';
     const lineColor = _cssVar('--rowline') || '#24272b';
@@ -808,25 +845,28 @@ export function initTrackCanvas(tracksEl, layersEl, store, editorState, playback
         }
       }
 
-      // 키프레임 다이아몬드
-      let frames, pathForSel;
-      if (row.kind === 'layer') {
-        frames = _mergedKeyFrames(layer);
-        pathForSel = null; // 병합: id+f로 판정
+      // 키프레임 — 속성 행은 이징 종류로 모양을 구분(R19-3), 레이어 병합 행은 마름모.
+      if (row.kind === 'prop') {
+        // 다시 매기기 줄은 바깥 f 로 바로 그리고 흐리게(끌 수 없음). 그 밖은 바깥 위치로 변환.
+        ctx.globalAlpha = row.remap ? 0.4 : 1;
+        for (const k of (getProp(layer, row.path)?.keys ?? [])) {
+          if (k.f < 0 || k.f >= fc) continue;
+          const isSel = !row.remap && selSet.has(_selKey(row.id, row.path, k.f));
+          _keyShape(ctx, _keyX(doc, row.id, k.f, row.remap), cy, 4, k.ease);
+          ctx.fillStyle = isSel ? '#ffffff' : accColor;
+          ctx.fill();
+          if (isSel) { ctx.strokeStyle = accColor; ctx.lineWidth = 1.5; ctx.stroke(); }
+        }
+        ctx.globalAlpha = 1;
       } else {
-        const key = row.path.split('.')[1];
-        frames = new Set((layer.transform?.[key]?.keys ?? []).map(k => k.f));
-        pathForSel = row.path;
-      }
-      for (const f of frames) {
-        if (f < 0 || f >= fc) continue;
-        const isSel = pathForSel
-          ? selSet.has(_selKey(row.id, pathForSel, f))
-          : keyedProps(layer).some(p => selSet.has(_selKey(row.id, p.path, f)));
-        _diamond(ctx, _frameToX(f), cy, row.kind === 'prop' ? 4 : 5);
-        ctx.fillStyle = isSel ? '#ffffff' : accColor;
-        ctx.fill();
-        if (isSel) { ctx.strokeStyle = accColor; ctx.lineWidth = 1.5; ctx.stroke(); }
+        for (const f of _mergedKeyFrames(layer)) {
+          if (f < 0 || f >= fc) continue;
+          const isSel = animatedProps(layer).some(p => !p.remap && selSet.has(_selKey(row.id, p.path, f)));
+          _diamond(ctx, _keyX(doc, row.id, f, false), cy, 5);
+          ctx.fillStyle = isSel ? '#ffffff' : accColor;
+          ctx.fill();
+          if (isSel) { ctx.strokeStyle = accColor; ctx.lineWidth = 1.5; ctx.stroke(); }
+        }
       }
 
       // 스트레치 핸들
