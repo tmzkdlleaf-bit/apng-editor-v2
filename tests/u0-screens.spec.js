@@ -55,7 +55,7 @@ for (const theme of ['dark', 'light']) {
       await select(page, textId);
       await page.evaluate(() => {
         for (const h of document.querySelectorAll('[data-region="inspector"] .inspector-section.collapsed .inspector-section-header')) h.click();
-        const sc = document.querySelector('.inspector-scroll'); if (sc) sc.scrollTop = sc.scrollHeight;
+        const sc = document.querySelector('[data-region="inspector"] .inspector-scroll'); if (sc) sc.scrollTop = sc.scrollHeight;
       });
       await page.waitForTimeout(120);
       await shot('03-text');

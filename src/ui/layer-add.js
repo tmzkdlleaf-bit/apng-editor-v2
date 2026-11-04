@@ -6,8 +6,7 @@ import { showToast } from './shell/status.js';
 import { SHAPE_PACK, shapePreviewSvg } from './shapes-pack.js';
 import { probeAnim } from '../core/io/anim-decode.js';
 import { reduceAnim, planReduce, estAnimMemory, ANIM_MEM_LIMIT } from './anim-reduce.js';
-import { openEffectGallery } from './effect-gallery.js';
-import { getEffect } from '../effects/registry.js';
+import { openEffectsPanel } from './shell/panel-actions.js';
 import { importPsdFile } from './psd-import.js';
 import { openMyParts } from './library-parts.js';
 
@@ -166,7 +165,8 @@ export function createLayerAddMenu(store, editorState, containerEl) {
       return;
     }
     if (item.type === 'effect') {
-      openEffectGallery(btn, { onPick: (effect) => _addEffect(effect) });
+      // R23b: 효과는 왼쪽 "효과" 탭에서 끌어 놓거나 더블클릭해 더한다.
+      openEffectsPanel('fx');
       return;
     }
 
@@ -201,20 +201,6 @@ export function createLayerAddMenu(store, editorState, containerEl) {
     const topIndex = doc.order.length;
     store.apply({ type: 'addLayer', layer, index: topIndex });
     editorState.set({ selection: [layer.id] });
-  }
-
-  // 이펙트 추가(F4-1) — 기본 파라미터로 효과 레이어 생성(화면 전체).
-  function _addEffect(effect) {
-    const doc = store.get();
-    const params = {};
-    for (const p of (effect.params ?? [])) params[p.key] = p.default;
-    const layer = createLayer('effect', { name: effect.name.replace(/^\[시험\]\s*/, ''), effectId: effect.id });
-    layer.params = params;
-    layer.seed = Math.floor(Math.random() * 1e6);
-    layer.transform.x.value = 0; layer.transform.y.value = 0;
-    store.apply({ type: 'addLayer', layer, index: doc.order.length });
-    editorState.set({ selection: [layer.id] });
-    return layer.id;
   }
 
   // 도형 격자에서 고른 도형을 중앙에 추가

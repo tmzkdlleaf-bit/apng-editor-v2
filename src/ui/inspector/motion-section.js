@@ -2,7 +2,7 @@
 import { makeSectionShell } from './section-shell.js';
 import { createNumberField } from '../controls/number-field.js';
 import { createDropdown } from '../controls/dropdown.js';
-import { openMotionGallery } from '../motion-gallery.js';
+import { openEffectsPanel } from '../shell/panel-actions.js';
 import { createClip } from '../../core/doc/schema.js';
 import { getMotion } from '../../motions/registry.js';
 import { defaultParams } from '../../motions/contract.js';
@@ -37,9 +37,11 @@ export function createMotionSection(store, editorState) {
   // ── 모션 추가 ────────────────────────────────────────────────────────
   const addBtn = document.createElement('button');
   addBtn.className = 'accent sm'; addBtn.textContent = '+ 모션 추가';
+  addBtn.title = '효과 탭의 모션 분류에서 골라 끌어 놓거나 더블클릭하세요';
   addBtn.addEventListener('click', () => {
     if (!ids().length) { showToast('레이어를 선택하세요.'); return; }
-    openMotionGallery(addBtn, { onPick: (m) => _applyMotion(m) });
+    // R23b: 모션 갤러리 창 대신 왼쪽 "효과" 탭의 모션 분류를 펼친다.
+    openEffectsPanel('motion');
   });
   body.appendChild(addBtn);
 

@@ -1,10 +1,10 @@
 #app {
   display: grid;
   grid-template-rows: 48px 1fr;
-  grid-template-columns: 1fr var(--inspector-width, 320px);
+  grid-template-columns: var(--left-width, 240px) 1fr var(--inspector-width, 320px);
   grid-template-areas:
-    "topbar topbar"
-    "main   inspector";
+    "topbar topbar topbar"
+    "left   main   inspector";
   height: 100vh;
   overflow: hidden;
 }

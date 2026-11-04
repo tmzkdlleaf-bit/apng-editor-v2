@@ -82,3 +82,81 @@
 .panel-dock.is-collapsed .panel-tabs,
 .panel-dock.is-collapsed .panel-bodies { display: none; }
 .panel-dock.is-collapsed .panel-head { justify-content: center; }
+
+/* ── R23b 패널 본문(프로젝트·효과·효과 컨트롤·정보) ─────────────────────── */
+/* 전문가 툴 밀도: 작고 촘촘하게. 글자 최소 12px(--fs-2). 색·간격은 토큰만. */
+.side-panel { font-size: var(--fs-2); color: var(--text); }
+
+.side-search {
+  position: sticky; top: 0; z-index: 2;
+  display: flex; gap: var(--sp-1);
+  padding: var(--sp-2);
+  background: var(--panel);
+  border-bottom: 1px solid var(--line2);
+}
+.side-search input[type="search"] {
+  flex: 1; min-width: 0;
+  background: var(--bg, var(--panel2, var(--panel)));
+  border: 1px solid var(--line); border-radius: var(--r-1);
+  color: var(--text); font-size: var(--fs-2); font-family: inherit;
+  padding: 3px var(--sp-2);
+}
+.side-search .accent.sm { flex-shrink: 0; }
+
+.side-list { padding: var(--sp-1) 0; }
+.side-empty { padding: var(--sp-3); color: var(--dim); font-size: var(--fs-2); }
+
+.side-group-head {
+  display: flex; align-items: center; gap: var(--sp-2);
+  width: 100%; text-align: left;
+  background: transparent; border: none; cursor: pointer;
+  color: var(--text2); font-size: var(--fs-2); font-family: inherit;
+  padding: 4px var(--sp-3); height: 24px;
+}
+.side-group-head:hover { background: var(--selrow); color: var(--text); }
+.side-caret { width: 10px; color: var(--faint); }
+.side-group-name { flex: 1; min-width: 0; }
+.side-group-count { color: var(--faint); font-size: var(--fs-2); }
+.side-group-body { padding-bottom: var(--sp-1); }
+
+.side-item {
+  display: flex; align-items: center; gap: var(--sp-2);
+  padding: 3px var(--sp-3) 3px var(--sp-5);
+  height: 24px; cursor: grab; user-select: none;
+}
+.side-item:hover { background: var(--selrow); }
+.side-item-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-2); }
+
+/* 마우스 올림 미리보기 */
+.side-preview {
+  position: fixed; z-index: 9400;
+  background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-2);
+  box-shadow: 0 6px 20px rgba(0,0,0,0.35); padding: 3px;
+}
+.side-preview canvas { display: block; border-radius: var(--r-1); }
+
+/* 프로젝트(에셋) 목록 */
+.project-panel.drop-hot { outline: 2px dashed var(--acc); outline-offset: -4px; }
+.asset-row {
+  display: flex; align-items: center; gap: var(--sp-2);
+  padding: var(--sp-1) var(--sp-3); cursor: grab;
+}
+.asset-row:hover { background: var(--selrow); }
+.asset-thumb {
+  width: 40px; height: 40px; flex-shrink: 0;
+  background: var(--bg, var(--panel2, var(--panel))); border: 1px solid var(--line2); border-radius: var(--r-1);
+}
+.asset-info { min-width: 0; flex: 1; }
+.asset-name { font-size: var(--fs-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.asset-meta { font-size: var(--fs-2); color: var(--dim); }
+
+/* 정보 탭 */
+.info-panel { padding: var(--sp-2) var(--sp-3); }
+.info-panel .info-row {
+  display: flex; align-items: center; gap: var(--sp-2);
+  justify-content: space-between; min-height: 22px;
+}
+.info-panel .info-label { color: var(--dim); font-size: var(--fs-2); }
+.info-panel .info-value { color: var(--text); font-size: var(--fs-2); font-variant-numeric: tabular-nums; display: inline-flex; align-items: center; gap: var(--sp-1); }
+.info-swatch { width: 12px; height: 12px; border: 1px solid var(--line); border-radius: 2px; display: inline-block; }
+.info-panel .adj-subtitle { margin-top: var(--sp-2); }

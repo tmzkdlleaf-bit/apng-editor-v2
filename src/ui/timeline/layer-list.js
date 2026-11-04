@@ -5,6 +5,8 @@ import { createThumbnailer } from './thumbnail.js';
 import { groupSelection, ungroupSelection } from '../group-ops.js';
 import { makeComponent, addInstance, hasInstancesOf } from '../component-ops.js';
 import { iconMarkup } from '../icons.js';
+import { hasDrag, readDrag } from '../shell/panel-dnd.js';
+import { addFxToLayer, addEffectLayer, addMotionToLayers, addAssetLayer } from '../layer-ops.js';
 
 const ROW_H  = 28; // C3: 28px
 const INDENT = 12; // G1: 단계당 들여쓰기 px
@@ -422,6 +424,37 @@ export function initLayerList(containerEl, store, editorState, deps = {}) {
     store.apply({ type: 'removeLayers', ids: idsToDelete });
     editorState.set({ selection: [] });
   }
+
+  // R23b: 왼쪽 "효과"/"프로젝트" 패널에서 끌어 온 효과·모션·에셋을 레이어 줄에 놓기.
+  //   레이어 순서 바꾸기는 pointer 이벤트라 이 HTML5 끌어 놓기와 겹치지 않는다.
+  function _clearPanelDrop() { for (const r of containerEl.querySelectorAll('.tl-row-drop-into')) r.classList.remove('tl-row-drop-into'); }
+  containerEl.addEventListener('dragover', (e) => {
+    if (!hasDrag(e)) return;
+    e.preventDefault();
+    _clearPanelDrop();
+    const rowEl = e.target.closest?.('.tl-row[data-kind="layer"]');
+    if (rowEl) rowEl.classList.add('tl-row-drop-into');
+  });
+  containerEl.addEventListener('dragleave', (e) => { if (hasDrag(e)) _clearPanelDrop(); });
+  containerEl.addEventListener('drop', (e) => {
+    if (!hasDrag(e)) return;
+    e.preventDefault();
+    const data = readDrag(e); _clearPanelDrop();
+    if (!data) return;
+    const rowEl = e.target.closest?.('.tl-row[data-kind="layer"]');
+    const layerId = rowEl?.dataset.id;
+    if (data.kind === 'fx') {
+      if (layerId) addFxToLayer(store, layerId, data.id); else addEffectLayer(store, editorState, data.id);
+    } else if (data.kind === 'motion') {
+      if (layerId) addMotionToLayers(store, editorState, [layerId], data.id);
+    } else if (data.kind === 'asset') {
+      // 놓은 줄의 자리(쌓임 순서)에. 줄이 없으면 맨 위.
+      const doc = store.get();
+      let index = doc.order.length;
+      if (layerId && !(doc.layers[layerId]?.parentId)) { const i = doc.order.indexOf(layerId); if (i >= 0) index = i + 1; }
+      addAssetLayer(store, editorState, data.id, { index });
+    }
+  });
 
   document.addEventListener('pointermove', _onPointerMove);
   document.addEventListener('pointerup',   _onPointerUp);

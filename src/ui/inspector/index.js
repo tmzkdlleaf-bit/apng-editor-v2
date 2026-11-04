@@ -13,8 +13,6 @@ import { createGroupSection } from './group-section.js';
 import { createCameraSection } from './camera-section.js';
 import { createInstanceSection } from './instance-section.js';
 import { createMotionSection } from './motion-section.js';
-import { createEffectSection } from './effect-section.js';
-import { createFxStackSection } from './fx-stack-section.js';
 import { makePlaceholderSection }  from './section-shell.js';
 
 const _TYPE_KO = {
@@ -54,8 +52,6 @@ export function initInspector(containerEl, store, editorState, getStageDeps = nu
   const anim       = createAnimSection(store, editorState);          // 움직이는 이미지 자리(F1-9)
   const group      = createGroupSection(store, editorState);         // 그룹 자리(F1-9)
   const instance   = createInstanceSection(store, editorState);      // 인스턴스(F2-5)
-  const effect     = createEffectSection(store, editorState);        // 이펙트(F4)
-  const fxStack    = createFxStackSection(store, editorState);       // 효과 쌓기(R17b)
   const adjust     = createAdjustSection(store, editorState);        // 보정(F1)
   const tint       = createTintSection(store, editorState);          // 색 덮기(F1)
   const matte      = createMatteSection(store, editorState, getStageDeps); // 다른 레이어로 가리기(F1)
@@ -65,10 +61,11 @@ export function initInspector(containerEl, store, editorState, getStageDeps = nu
   const camera     = createCameraSection(store, editorState);        // 카메라 자리(F1-9)
   const align      = createAlignSection(store, editorState);         // 정렬
 
-  const sections = [layout, motion, appearance, shape, text, anim, group, instance, effect, fxStack, adjust, tint, matte, masks, outline, exit, camera, align];
+  const sections = [layout, motion, appearance, shape, text, anim, group, instance, adjust, tint, matte, masks, outline, exit, camera, align];
   // 스스로 display 를 관리하는 섹션 — 인스펙터의 블랭킷 토글이 전혀 건드리지 않는다
   // (레이어 타입/카메라 키 유무에 따라 각자 숨김/표시).
-  const selfManaged = new Set([shape, text, anim, group, instance, effect, fxStack, adjust, tint, matte, masks, outline, exit, camera]);
+  // 효과(effect)·효과 쌓기(fxStack)는 R23b 에서 "효과 컨트롤" 탭으로 옮겼다.
+  const selfManaged = new Set([shape, text, anim, group, instance, adjust, tint, matte, masks, outline, exit, camera]);
   for (const s of sections) scrollEl.appendChild(s.el);
   scrollEl.appendChild(emptyEl);
 

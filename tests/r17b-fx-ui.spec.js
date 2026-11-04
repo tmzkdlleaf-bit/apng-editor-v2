@@ -5,6 +5,8 @@ async function openApp(page) {
   await page.goto('/?demo=1');
   await page.waitForFunction(() => !!(window.__store && window.__stage));
   await page.waitForTimeout(120);
+  // R23b: 효과 쌓기·효과 레이어 파라미터는 오른쪽 "효과 컨트롤" 탭으로 옮겼다.
+  await page.locator('.panel-dock-right .panel-tab', { hasText: '효과 컨트롤' }).click();
 }
 async function addShape(page) {
   return page.evaluate(async () => {

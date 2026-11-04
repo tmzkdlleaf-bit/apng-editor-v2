@@ -25,14 +25,15 @@ export function resetWorkspace() {
 // side: 'left' | 'right'. tabs: [{ id, label, el }]. widthVar: 그리드 폭을 잇는 CSS 변수 이름.
 export function createPanelDock({
   side = 'right', key, tabs = [], defaultWidth = 320, minWidth = 200, maxWidth = 560,
-  widthVar, collapsedWidth = 28, startCollapsed = false,
+  widthVar, collapsedWidth = 28, startCollapsed = false, defaultActive = null,
 }) {
   _docKeys.add(key);
   const saved = _load(key);
+  const _fallbackActive = (defaultActive && tabs.some((t) => t.id === defaultActive)) ? defaultActive : (tabs[0]?.id ?? null);
   const state = {
     width: _clamp(Number.isFinite(saved.width) ? saved.width : defaultWidth, minWidth, maxWidth),
     collapsed: (saved.collapsed != null) ? !!saved.collapsed : !!startCollapsed,
-    active: (saved.active && tabs.some((t) => t.id === saved.active)) ? saved.active : (tabs[0]?.id ?? null),
+    active: (saved.active && tabs.some((t) => t.id === saved.active)) ? saved.active : _fallbackActive,
   };
 
   const col = document.createElement('div');
@@ -129,7 +130,7 @@ export function createPanelDock({
   splitter.addEventListener('pointercancel', _endDrag);
 
   function reset() {
-    state.width = defaultWidth; state.collapsed = false; state.active = tabs[0]?.id ?? null;
+    state.width = defaultWidth; state.collapsed = false; state.active = _fallbackActive;
     _applyWidth(); if (state.active) setActive(state.active); _persist();
   }
 

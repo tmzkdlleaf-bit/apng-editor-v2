@@ -5,20 +5,25 @@ async function openApp(page) {
   await page.goto('/?demo=1');
   await page.waitForFunction(() => !!(window.__store && window.__stage));
   await page.waitForTimeout(120);
+  // R23b: 효과 레이어 파라미터는 오른쪽 "효과 컨트롤" 탭으로 옮겼다.
+  await page.locator('.panel-dock-right .panel-tab', { hasText: '효과 컨트롤' }).click();
 }
 function fxSec(page) { return page.locator('.inspector-section', { hasText: '이펙트' }); }
 
-test('F4-1 — 갤러리: 분류·검색, 카드 선택 → 효과 레이어·기록 1건', async ({ page }) => {
+test('F4-1 — 효과 탭: 검색 → 더블클릭 → 효과 레이어·기록 1건', async ({ page }) => {
   await openApp(page);
+  await page.evaluate(() => window.__editorState.set({ selection: [] }));
   const depth0 = await page.evaluate(() => window.__store.undoDepth?.() ?? -1);
+  // 레이어 추가 메뉴의 "이펙트" → 왼쪽 "효과" 탭이 펼쳐지고 검색 칸에 초점(가운데 갤러리 대체).
   await page.click('.tl-layers-head .tl-add-btn');
   await page.click('.layer-add-item[data-kind="effect"]');
-  await expect(page.locator('.gallery-panel')).toBeVisible();
+  await expect(page.locator('.panel-dock-left .effects-panel')).toBeVisible();
 
-  // 검색 "마법진" → magic-circle 만(이름 고유). 시험 효과는 갤러리에서 숨김(S5-5).
-  await page.fill('.gallery-search', '마법진');
-  await expect(page.locator('.gallery-grid .gallery-card')).toHaveCount(1);
-  await page.locator('.gallery-card[data-id="magic-circle"]').dblclick();
+  // 검색 "마법진" → magic-circle 만(이름 고유). 시험 효과는 숨김(S5-5).
+  await page.fill('.effects-search', '마법진');
+  await expect(page.locator('.fx-row[data-fx-id="magic-circle"]')).toHaveCount(1);
+  // 선택이 없으므로 더블클릭 → 효과 레이어 생성.
+  await page.locator('.fx-row[data-fx-id="magic-circle"]').dblclick();
 
   const r = await page.evaluate(() => {
     const id = window.__editorState.get().selection[0];

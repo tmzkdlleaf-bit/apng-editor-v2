@@ -169,6 +169,23 @@ export function drawOverlay(ctx, doc, es, snapLines = [], W, H, assets = null) {
   // R21b 가리기 — 선택 레이어의 가리기 선·점·손잡이 + 그리는 중 미리보기(maskDraft).
   _drawMasks(ctx, doc, es, W, H, assets);
 
+  // R23b: 끌어 놓기 대상 강조(왼쪽 패널에서 효과·에셋을 끌 때 그 레이어 테두리).
+  if (es.dndHover && doc.layers[es.dndHover]) {
+    const worldTr = getDocWorldTr(doc, es.dndHover, f);
+    const bounds  = getLayerBounds(doc.layers[es.dndHover], assets);
+    if (worldTr && bounds) {
+      const { hw, hh, ox = 0, oy = 0 } = bounds;
+      const acc = getComputedStyle(document.documentElement).getPropertyValue('--acc').trim() || '#f0a35e';
+      const cs = [[ox - hw, oy - hh], [ox + hw, oy - hh], [ox + hw, oy + hh], [ox - hw, oy + hh]]
+        .map(([lx, ly]) => localToScreen(lx, ly, worldTr, zoom, panX, panY, W, H, docW, docH));
+      ctx.save();
+      ctx.strokeStyle = acc; ctx.lineWidth = 2.5; ctx.setLineDash([]);
+      ctx.beginPath(); ctx.moveTo(cs[0].x, cs[0].y);
+      for (let i = 1; i < 4; i++) ctx.lineTo(cs[i].x, cs[i].y);
+      ctx.closePath(); ctx.stroke(); ctx.restore();
+    }
+  }
+
   // 선택 기즈모
   if (selection.length > 0) {
     ctx.save();

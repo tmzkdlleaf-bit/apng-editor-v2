@@ -199,10 +199,11 @@ test.describe('P6 보완2 — 타임라인 키 / 그룹 / 정렬 / 혼합', () =
     const rectId   = await layerIdByName(page, '사각형');
     const circleId = await layerIdByName(page, '원');
     await page.evaluate((id) => window.__editorState.set({ selection: [id] }), rectId);
-    await page.waitForSelector('.inspector-section');
+    // R23b: 효과 컨트롤 탭에도 .inspector-* 가 있으므로 속성(인스펙터) 영역으로 한정.
+    await page.waitForSelector('[data-region="inspector"] .inspector-section');
 
     const muted = await page.evaluate(async ([a, b]) => {
-      const scrollEl = document.querySelector('.inspector-scroll');
+      const scrollEl = document.querySelector('[data-region="inspector"] .inspector-scroll');
       let count = 0;
       const obs = new MutationObserver((muts) => {
         for (const m of muts) if (m.type === 'childList' && (m.addedNodes.length || m.removedNodes.length)) count++;
@@ -224,10 +225,10 @@ test.describe('P6 보완2 — 타임라인 키 / 그룹 / 정렬 / 혼합', () =
     }, [rectId, circleId]);
 
     // 숫자 칸 끌기 100px — 별도로 (실제 포인터)
-    const label = page.locator('.num-label').first();
+    const label = page.locator('[data-region="inspector"] .num-label').first();
     const lb = await label.boundingBox();
     const mutedDrag = await page.evaluate(() => {
-      const scrollEl = document.querySelector('.inspector-scroll');
+      const scrollEl = document.querySelector('[data-region="inspector"] .inspector-scroll');
       window.__mutCount = 0;
       window.__obs2 = new MutationObserver((muts) => {
         for (const m of muts) if (m.type === 'childList' && (m.addedNodes.length || m.removedNodes.length)) window.__mutCount++;

@@ -32,16 +32,16 @@ test('item 3 — 속성 패널의 모든 라벨이 한 줄(줄바꿈 0)', async 
   expect(bad, JSON.stringify(bad)).toEqual([]);
 });
 
-test('item 4 — 이펙트 갤러리 창 ≥ 880×560, 카드 높이 ≥ 120px', async ({ page }) => {
+test('item 4 — 효과는 왼쪽 "효과" 탭에서 검색·추가(가운데 갤러리 창 제거)', async ({ page }) => {
   await openApp(page);
+  // 가운데 큰 갤러리 창은 더 이상 없다.
   await page.click('.tl-layers-head .tl-add-btn');
   await page.click('.layer-add-item[data-kind="effect"]');
-  await expect(page.locator('.gallery-panel')).toBeVisible();
-  const panel = await page.locator('.gallery-panel').boundingBox();
-  expect(panel.width).toBeGreaterThanOrEqual(880);
-  expect(panel.height).toBeGreaterThanOrEqual(560);
-  const card = await page.locator('.gallery-card').first().boundingBox();
-  expect(card.height).toBeGreaterThanOrEqual(120);
+  await expect(page.locator('.gallery-panel')).toHaveCount(0);
+  // 대신 왼쪽 "효과" 탭이 펼쳐지고 검색으로 효과 줄을 찾는다.
+  await expect(page.locator('.panel-dock-left .effects-panel')).toBeVisible();
+  await page.fill('.effects-search', '빛무리');
+  await expect(page.locator('.fx-row[data-fx-id="glow"]')).toHaveCount(1);
 });
 
 test('item 5 — 트랙 폭 맞춤: 마지막 프레임 칸 오른쪽 끝이 트랙 폭 ±1칸', async ({ page }) => {

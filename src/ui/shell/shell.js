@@ -11,6 +11,15 @@ import { iconMarkup } from '../icons.js';
 import { openLibrary } from '../library.js';
 import { openHelp, startOnboarding, maybeStartOnboarding } from '../help.js';
 import { createPanelDock, resetWorkspace } from './panels.js';
+import { createProjectPanel } from './project-panel.js';
+import { createEffectsPanel } from './effects-panel.js';
+import { createInfoPanel } from './info-panel.js';
+import { createFxControlPanel } from './fx-control-panel.js';
+import { registerOpenEffects } from './panel-actions.js';
+import { showToast } from './status.js';
+import { hasDrag, readDrag } from './panel-dnd.js';
+import { hitTest } from '../canvas/hit.js';
+import { addFxToLayer, addEffectLayer, addMotionToLayers, addAssetLayer } from '../layer-ops.js';
 
 const TL_KEY     = 'apng2.timelineHeight';
 const TL_DEFAULT = 340;
@@ -75,17 +84,40 @@ export function init(store, editorState, projectApi = null) {
     </div>
   `;
 
-  // R23: 오른쪽 도킹 패널(경계 끌기·접기·탭 + localStorage 저장). "속성" 탭 본문이 인스펙터 영역.
-  //   정보·효과 컨트롤 탭은 뒤 단계에서 추가한다(지금은 속성 하나).
+  // R23b: 오른쪽 도킹 패널 — 효과 컨트롤 · 속성 · 정보. 기본은 "속성". 본문은 뒤에서 채운다.
   const inspectorBody = document.createElement('div');
   inspectorBody.setAttribute('data-region', 'inspector');
+  const fxControlBody = document.createElement('div');
+  fxControlBody.setAttribute('data-region', 'fx-control');
+  const infoBody = document.createElement('div');
+  infoBody.setAttribute('data-region', 'info');
   const rightDock = createPanelDock({
     side: 'right', key: 'right', widthVar: '--inspector-width',
-    defaultWidth: 320, minWidth: 220, maxWidth: 560,
-    tabs: [{ id: 'props', label: '속성', el: inspectorBody }],
+    defaultWidth: 320, minWidth: 220, maxWidth: 560, defaultActive: 'props',
+    tabs: [
+      { id: 'fx',    label: '효과 컨트롤', el: fxControlBody },
+      { id: 'props', label: '속성',       el: inspectorBody },
+      { id: 'info',  label: '정보',       el: infoBody },
+    ],
   });
   rightDock.el.style.gridArea = 'inspector';
   app.appendChild(rightDock.el);
+
+  // R23b: 왼쪽 도킹 패널 — 프로젝트 · 효과. 본문은 뒤에서 채운다(화면 stage 준비 후).
+  const leftProjectBody = document.createElement('div');
+  leftProjectBody.setAttribute('data-region', 'project');
+  const leftEffectsBody = document.createElement('div');
+  leftEffectsBody.setAttribute('data-region', 'effects');
+  const leftDock = createPanelDock({
+    side: 'left', key: 'left', widthVar: '--left-width',
+    defaultWidth: 240, minWidth: 180, maxWidth: 420, defaultActive: 'project',
+    tabs: [
+      { id: 'project', label: '프로젝트', el: leftProjectBody },
+      { id: 'effects', label: '효과',     el: leftEffectsBody },
+    ],
+  });
+  leftDock.el.style.gridArea = 'left';
+  app.appendChild(leftDock.el);
 
   document.body.appendChild(app);
 
@@ -166,9 +198,56 @@ export function init(store, editorState, projectApi = null) {
   const timelineEl = app.querySelector('[data-region="timeline"]');
   initTimeline(timelineEl, store, editorState, playback, { assets: stage.assets });
 
-  // 인스펙터
+  // 인스펙터(속성 탭)
   const inspectorEl = app.querySelector('[data-region="inspector"]');
   initInspector(inspectorEl, store, editorState, () => ({ overlay: stage.overlayCanvas, assets: stage.assets }));
+
+  // R23b: 나머지 패널 본문 채우기(화면 stage 가 준비된 뒤).
+  const fxControl = createFxControlPanel(store, editorState);
+  fxControlBody.appendChild(fxControl.el);
+  const infoPanel = createInfoPanel(store, editorState, () => ({
+    overlay: stage.overlayCanvas, scene: stage.sceneCanvas, screenToDoc: stage.screenToDoc, assets: stage.assets,
+  }));
+  infoBody.appendChild(infoPanel.el);
+  const projectPanel = createProjectPanel(store, editorState, () => ({ assets: stage.assets }));
+  leftProjectBody.appendChild(projectPanel.el);
+  const effectsPanel = createEffectsPanel(store, editorState);
+  leftEffectsBody.appendChild(effectsPanel.el);
+
+  // "효과 추가" 류 버튼이 왼쪽 "효과" 탭을 펼치고 검색 칸에 초점을 주도록 연결(가운데 갤러리 대체).
+  registerOpenEffects((mode) => {
+    leftDock.collapse(false);
+    leftDock.setActive('effects');
+    effectsPanel.focusSearch(mode);
+  });
+
+  // 패널에서 끌어 온 효과·모션·에셋을 화면(캔버스)에 놓기.
+  _setupCanvasDrop();
+
+  function _setupCanvasDrop() {
+    const cv = stage.overlayCanvas;
+    let _hover = null;
+    const _setHover = (id) => { if ((id ?? null) !== _hover) { _hover = id ?? null; editorState.set({ dndHover: _hover }); } };
+    const _docAt = (e) => { const r = cv.getBoundingClientRect(); return stage.screenToDoc(e.clientX - r.left, e.clientY - r.top); };
+    const _hitAt = (d) => hitTest(store.get(), d.x, d.y, editorState.get().f, null, stage.assets);
+    cv.addEventListener('dragover', (e) => {
+      if (!hasDrag(e)) return;
+      e.preventDefault();
+      _setHover(_hitAt(_docAt(e)));
+    });
+    cv.addEventListener('dragleave', (e) => { if (hasDrag(e)) _setHover(null); });
+    cv.addEventListener('drop', (e) => {
+      if (!hasDrag(e)) return;
+      e.preventDefault();
+      const data = readDrag(e); _setHover(null);
+      if (!data) return;
+      const d = _docAt(e);
+      const id = _hitAt(d);
+      if (data.kind === 'asset') addAssetLayer(store, editorState, data.id, { x: d.x, y: d.y });
+      else if (data.kind === 'fx') { if (id) addFxToLayer(store, id, data.id); else addEffectLayer(store, editorState, data.id); }
+      else if (data.kind === 'motion') { if (id) addMotionToLayers(store, editorState, [id], data.id); else showToast('모션은 레이어 위에 놓아 주세요.'); }
+    });
+  }
 
   // 내보내기 화면 (E3) — 상단 [내보내기] 버튼 + Ctrl+E
   const exportUI = initExport(store, editorState, projectApi);
@@ -362,5 +441,5 @@ export function init(store, editorState, projectApi = null) {
   }
   if (typeof window !== 'undefined') window.__resetWorkspace = resetWorkspaceAndReload;
 
-  return { stage, playback, setSaveStatus, setProjectName, rightDock, resetWorkspace: resetWorkspaceAndReload };
+  return { stage, playback, setSaveStatus, setProjectName, rightDock, leftDock, resetWorkspace: resetWorkspaceAndReload };
 }

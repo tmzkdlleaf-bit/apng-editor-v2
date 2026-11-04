@@ -320,15 +320,16 @@ test.describe('P6 — 재생 / 타임라인 / 레이어 추가 / 인스펙터', 
   // ── 인스펙터 ─────────────────────────────────────────────────────────────
   test('[인스펙터] 선택 없음 → 빈 안내 표시', async ({ page }) => {
     await page.evaluate(() => window.__editorState.set({ selection: [] }));
-    const empty = page.locator('.inspector-empty');
+    // R23b: 효과 컨트롤 탭에도 .inspector-* 가 있으므로 속성(인스펙터) 영역으로 한정.
+    const empty = page.locator('[data-region="inspector"] .inspector-empty');
     await expect(empty).toBeVisible();
   });
 
   test('[인스펙터] 레이어 선택 → 레이아웃 섹션 표시', async ({ page }) => {
     await page.locator('.tl-row').first().click();
-    const section = page.locator('.inspector-section').first();
+    const section = page.locator('[data-region="inspector"] .inspector-section').first();
     await expect(section).toBeVisible();
-    const xLabel = page.locator('.num-label').filter({ hasText: 'X' });
+    const xLabel = page.locator('[data-region="inspector"] .num-label').filter({ hasText: 'X' });
     await expect(xLabel.first()).toBeVisible();
   });
 
@@ -337,7 +338,7 @@ test.describe('P6 — 재생 / 타임라인 / 레이어 추가 / 인스펙터', 
 
     const id = await page.evaluate(() => window.__editorState.get().selection[0]);
 
-    const xInput = page.locator('.num-input').first();
+    const xInput = page.locator('[data-region="inspector"] .num-input').first();
     await xInput.click({ clickCount: 3 });
     await xInput.fill('123');
     await xInput.press('Enter');
@@ -353,11 +354,11 @@ test.describe('P6 — 재생 / 타임라인 / 레이어 추가 / 인스펙터', 
   test('[E5] 스크럽 중 인스펙터 패널 루트 자식 교체 0회', async ({ page }) => {
     // 레이어 선택
     await page.locator('.tl-row').first().click();
-    await page.waitForSelector('.inspector-section');
+    await page.waitForSelector('[data-region="inspector"] .inspector-section');
 
     const mutationCount = await page.evaluate(async () => {
-      // 패널 루트(.inspector-scroll)의 자식 교체를 감지
-      const scrollEl = document.querySelector('.inspector-scroll');
+      // 패널 루트(.inspector-scroll)의 자식 교체를 감지 — 속성(인스펙터) 영역만.
+      const scrollEl = document.querySelector('[data-region="inspector"] .inspector-scroll');
       if (!scrollEl) return -1;
 
       let count = 0;
