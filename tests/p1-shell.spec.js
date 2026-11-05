@@ -1,5 +1,11 @@
 import { test, expect } from '@playwright/test';
 
+// R23c: 테마 토글은 메뉴 막대 "보기 › 라이트/다크 테마"로 옮겼다.
+async function toggleThemeViaMenu(page) {
+  await page.locator('.menu-top', { hasText: '보기' }).click();
+  await page.locator('.menu-item', { hasText: '라이트/다크 테마' }).click();
+}
+
 test.describe('P1 - 화면 틀', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
@@ -23,7 +29,7 @@ test.describe('P1 - 화면 틀', () => {
     const before = await page.evaluate(() =>
       document.documentElement.getAttribute('data-theme')
     );
-    await page.locator('#btn-theme').click();
+    await toggleThemeViaMenu(page);
     const after = await page.evaluate(() =>
       document.documentElement.getAttribute('data-theme')
     );
@@ -35,8 +41,8 @@ test.describe('P1 - 화면 틀', () => {
     const before = await page.evaluate(() =>
       document.documentElement.getAttribute('data-theme')
     );
-    await page.locator('#btn-theme').click();
-    await page.locator('#btn-theme').click();
+    await toggleThemeViaMenu(page);
+    await toggleThemeViaMenu(page);
     const after = await page.evaluate(() =>
       document.documentElement.getAttribute('data-theme')
     );
@@ -44,7 +50,7 @@ test.describe('P1 - 화면 틀', () => {
   });
 
   test('테마가 localStorage에 저장된다', async ({ page }) => {
-    await page.locator('#btn-theme').click();
+    await toggleThemeViaMenu(page);
     const stored = await page.evaluate(() =>
       localStorage.getItem('apng2.theme')
     );
@@ -55,7 +61,7 @@ test.describe('P1 - 화면 틀', () => {
   });
 
   test('새로고침 후에도 테마가 유지된다', async ({ page }) => {
-    await page.locator('#btn-theme').click();
+    await toggleThemeViaMenu(page);
     const before = await page.evaluate(() =>
       document.documentElement.getAttribute('data-theme')
     );

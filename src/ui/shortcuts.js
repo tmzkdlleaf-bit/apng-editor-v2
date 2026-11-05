@@ -1,10 +1,16 @@
 // 단축키 단일 소스(F5-4) — 도움말(?)의 단축키 안내가 이 표에서 생성된다(버그 #6 방지: 안내와 실제가
 // 다른 문제). keys.js 에 단축키를 추가/변경하면 반드시 이 표도 함께 고친다(한 곳에서 안내 생성).
 export const SHORTCUTS = [
+  { cat: '파일', keys: ['Ctrl', 'N'], label: '새 장면' },
+  { cat: '파일', keys: ['Ctrl', 'I'], label: '가져오기' },
+  { cat: '파일', keys: ['Ctrl', 'E'], label: '내보내기' },
+
   { cat: '편집', keys: ['Ctrl', 'Z'], label: '되돌리기' },
   { cat: '편집', keys: ['Ctrl', 'Shift', 'Z'], label: '다시하기' },
   { cat: '편집', keys: ['Ctrl', 'C'], label: '복사 (레이어 / 타임라인 키)' },
   { cat: '편집', keys: ['Ctrl', 'V'], label: '붙여넣기' },
+  { cat: '편집', keys: ['Ctrl', 'D'], label: '복제' },
+  { cat: '편집', keys: ['Ctrl', 'A'], label: '모두 선택' },
   { cat: '편집', keys: ['Delete'], label: '삭제 (레이어 / 선택한 키)' },
 
   { cat: '레이어', keys: ['Ctrl', 'G'], label: '그룹으로 묶기' },
@@ -19,10 +25,12 @@ export const SHORTCUTS = [
   { cat: '보기', keys: ['G'], label: '그리드 표시/숨김' },
   { cat: '보기', keys: ['O'], label: '앞뒤 프레임 겹쳐 보기' },
 
+  { cat: '애니메이션', keys: ['F9'], label: '부드럽게' },
+  { cat: '애니메이션', keys: ['Shift', 'F3'], label: '그래프 편집기' },
+
   { cat: '재생', keys: ['Space'], label: '재생 / 멈춤' },
   { cat: '재생', keys: [','], label: '이전 프레임' },
   { cat: '재생', keys: ['.'], label: '다음 프레임' },
 
-  { cat: '도구상자', keys: ['Ctrl', 'E'], label: '내보내기 창' },
   { cat: '도구상자', keys: ['Ctrl', 'Shift', 'L'], label: '루프 이음새 검사' },
 ];

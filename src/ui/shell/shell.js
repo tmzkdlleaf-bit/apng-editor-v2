@@ -1,4 +1,4 @@
-import { toggle as toggleTheme, current as currentTheme } from './theme.js';
+import { toggle as toggleTheme } from './theme.js';
 import { initStage }      from '../canvas/stage.js';
 import { initKeys }       from '../keys.js';
 import { createPlayback } from '../playback.js';
@@ -15,11 +15,16 @@ import { createProjectPanel } from './project-panel.js';
 import { createEffectsPanel } from './effects-panel.js';
 import { createInfoPanel } from './info-panel.js';
 import { createFxControlPanel } from './fx-control-panel.js';
-import { registerOpenEffects } from './panel-actions.js';
+import { registerOpenEffects, openEffectsPanel } from './panel-actions.js';
 import { showToast } from './status.js';
 import { hasDrag, readDrag } from './panel-dnd.js';
+import { createMenubar } from './menubar.js';
 import { hitTest } from '../canvas/hit.js';
 import { addFxToLayer, addEffectLayer, addMotionToLayers, addAssetLayer } from '../layer-ops.js';
+import { groupSelection, ungroupSelection } from '../group-ops.js';
+import { openMyParts } from '../library-parts.js';
+import { openLoopCheck } from '../loop-check.js';
+import { createLayer } from '../../core/doc/schema.js';
 
 const TL_KEY     = 'apng2.timelineHeight';
 const TL_DEFAULT = 340;
@@ -52,19 +57,17 @@ export function init(store, editorState, projectApi = null) {
   app.innerHTML = `
     <div data-region="topbar">
       <div class="topbar-left">
-        <span class="app-title">코코포리아 APNG 에디터</span>
+        <span class="app-title">APNG 에디터</span>
+        <div class="menubar-slot"></div>
         <button class="project-name-btn" aria-label="프로젝트 이름">새 프로젝트 ▾</button>
         <span class="save-status" id="save-status"></span>
       </div>
-      <div class="sep"></div>
-      <button class="icon-btn" data-action="undo" aria-label="되돌리기" title="되돌리기 (Ctrl+Z)">${iconMarkup('undo')}</button>
-      <button class="icon-btn" data-action="redo" aria-label="다시하기" title="다시하기 (Ctrl+Shift+Z)">${iconMarkup('redo')}</button>
       <div class="topbar-center"></div>
       <div class="topbar-right">
         <button class="canvas-info-btn" id="canvas-info" title="캔버스 설정">-</button>
         <div class="sep"></div>
-        <button class="icon-btn" data-action="toggle-theme" id="btn-theme"></button>
-        <button class="icon-btn" data-action="help" aria-label="도움말" title="도움말">${iconMarkup('help')}</button>
+        <button class="icon-btn" data-action="undo" aria-label="되돌리기" title="되돌리기 (Ctrl+Z)">${iconMarkup('undo')}</button>
+        <button class="icon-btn" data-action="redo" aria-label="다시하기" title="다시하기 (Ctrl+Shift+Z)">${iconMarkup('redo')}</button>
         <div class="sep"></div>
         <button data-action="export" class="btn accent"><span class="btn-icon">${iconMarkup('export')}</span>내보내기</button>
       </div>
@@ -108,9 +111,13 @@ export function init(store, editorState, projectApi = null) {
   leftProjectBody.setAttribute('data-region', 'project');
   const leftEffectsBody = document.createElement('div');
   leftEffectsBody.setAttribute('data-region', 'effects');
+  // R23c 2-4: 좁은 화면(1280px 이하)에서 처음 열면(저장된 배치 없음) 왼쪽 패널을 접힌 채로 시작.
+  let _noLeftWs = true; try { _noLeftWs = !localStorage.getItem('apng2.ws.left'); } catch {}
+  const _narrow = (typeof window !== 'undefined' && window.innerWidth <= 1280);
   const leftDock = createPanelDock({
     side: 'left', key: 'left', widthVar: '--left-width',
     defaultWidth: 240, minWidth: 180, maxWidth: 420, defaultActive: 'project',
+    startCollapsed: _noLeftWs && _narrow,
     tabs: [
       { id: 'project', label: '프로젝트', el: leftProjectBody },
       { id: 'effects', label: '효과',     el: leftEffectsBody },
@@ -124,37 +131,24 @@ export function init(store, editorState, projectApi = null) {
   const mainArea = app.querySelector('#main-area');
   setTlHeight(mainArea, getStoredTlHeight());
 
-  // 테마 전환 — 해/달 아이콘 + 툴팁("…로")
-  const themeBtn = app.querySelector('#btn-theme');
-  function _updateThemeBtn() {
-    const dark = currentTheme() === 'dark';
-    // 다크면 '라이트로' 전환(해), 라이트면 '다크로' 전환(달)
-    themeBtn.innerHTML = iconMarkup(dark ? 'sun' : 'moon');
-    themeBtn.title = dark ? '라이트 테마로' : '다크 테마로';
-    themeBtn.setAttribute('aria-label', dark ? '라이트 테마로' : '다크 테마로');
-  }
-  _updateThemeBtn();
-  themeBtn.addEventListener('click', () => { toggleTheme(); _updateThemeBtn(); });
-
-  // 도움말(F5-4) — 단축키 안내 + 처음 안내 다시 보기
-  app.querySelector('[data-action="help"]')?.addEventListener('click', () => openHelp(() => startOnboarding()));
-  // 첫 실행이면 처음 안내(데모 모드 제외)
+  // R23c: 테마 전환·도움말은 메뉴 막대로 옮겼다(아래 menus 정의 참고). 첫 실행 안내는 유지(3부에서 제거).
   if (projectApi) { try { maybeStartOnboarding(); } catch {} }
 
-  // 되돌리기 / 다시하기 버튼
+  // 되돌리기 / 다시하기 — 버튼과 메뉴가 함께 쓴다.
   const undoBtn = app.querySelector('[data-action="undo"]');
   const redoBtn = app.querySelector('[data-action="redo"]');
-
-  undoBtn.addEventListener('click', () => {
+  function _undo() {
     const result = store.undo();
     if (result?.selectionSnapshot) editorState.set({ selection: result.selectionSnapshot });
     _updateUndoRedo();
-  });
-  redoBtn.addEventListener('click', () => {
+  }
+  function _redo() {
     const result = store.redo();
     if (result?.selectionSnapshot) editorState.set({ selection: result.selectionSnapshot });
     _updateUndoRedo();
-  });
+  }
+  undoBtn.addEventListener('click', _undo);
+  redoBtn.addEventListener('click', _redo);
 
   function _updateUndoRedo() {
     undoBtn.disabled = !store.canUndo();
@@ -188,9 +182,6 @@ export function init(store, editorState, projectApi = null) {
   const canvasRegion = app.querySelector('[data-region="canvas"]');
   const stage = initStage(canvasRegion, store, editorState);
 
-  // 키보드 단축키
-  initKeys(store, editorState, () => stage.isDragging());
-
   // 재생 컨트롤러
   const playback = createPlayback(store, editorState);
 
@@ -219,6 +210,117 @@ export function init(store, editorState, projectApi = null) {
     leftDock.collapse(false);
     leftDock.setActive('effects');
     effectsPanel.focusSearch(mode);
+  });
+
+  // ── 메뉴 막대(R23c) — 위쪽 막대의 흩어진 버튼을 메뉴로 모은다. 데스크톱에서도 같은 웹 메뉴. ──
+  const _dispatchKey = (key, mod = {}) => document.dispatchEvent(new KeyboardEvent('keydown', {
+    key, ctrlKey: !!mod.ctrl, shiftKey: !!mod.shift, altKey: !!mod.alt, bubbles: true, cancelable: true,
+  }));
+  const _sel = () => editorState.get().selection.filter((id) => store.get().layers[id]);
+  function _addNewLayer(type) {
+    const doc = store.get();
+    const layer = createLayer(type, { name: type === 'text' ? '글자' : type === 'group' ? '그룹' : '도형', ...(type === 'group' ? { childOrder: [] } : {}) });
+    if (type !== 'group') { layer.transform.x.value = Math.round(doc.meta.width / 2); layer.transform.y.value = Math.round(doc.meta.height / 2); }
+    if (type === 'text') { layer.text = '텍스트'; layer.size = 48; layer.color = '#ffffff'; }
+    if (type === 'shape') { layer.shape = { kind: 'rect', w: 120, h: 120, fill: '#ffffff', stroke: null }; }
+    store.apply({ type: 'addLayer', layer, index: doc.order.length });
+    editorState.set({ selection: [layer.id] });
+  }
+  function _toggleAllFx(on) {
+    const cmds = [];
+    for (const id of _sel()) { const l = store.get().layers[id]; for (const fxId of (l.fxOrder ?? [])) cmds.push({ type: 'setFx', id, fxId, patch: { enabled: on } }); }
+    if (cmds.length) store.apply(cmds.length === 1 ? cmds[0] : { type: 'batch', cmds });
+  }
+  function _moveSelTo(top) {
+    const s = editorState.get().selection; if (s.length !== 1) return;
+    const id = s[0]; const pid = store.get().layers[id]?.parentId ?? null;
+    store.apply({ type: 'moveLayer', id, parentId: pid, index: top ? 9999 : 0 });
+  }
+  const _selHasGroup = () => _sel().some((id) => store.get().layers[id]?.type === 'group');
+  const _selHasFx = () => _sel().some((id) => (store.get().layers[id]?.fxOrder ?? []).length);
+
+  // 웹 전용 프로젝트 파일 열기 입력(메뉴 전용). 데스크톱은 열기 대화상자.
+  const projOpenInput = document.createElement('input');
+  projOpenInput.type = 'file'; projOpenInput.accept = '.apngproj,application/json'; projOpenInput.style.display = 'none';
+  projOpenInput.addEventListener('change', () => { const f = projOpenInput.files[0]; projOpenInput.value = ''; if (f) projectApi?.importFile?.(f); });
+  document.body.appendChild(projOpenInput);
+  const _openProjectFile = () => { if (isDesktop()) projectApi?.openProject?.(); else projOpenInput.click(); };
+  const _triggerImport = () => { leftDock.collapse(false); leftDock.setActive('project'); projectPanel.triggerImport(); };
+  const _hasProject = () => !!projectApi;
+
+  const menus = [
+    { id: 'file', label: '파일', items: [
+      { label: '새 장면', sc: '새 장면', run: () => projectApi?.newProject?.(), enabled: _hasProject },
+      { label: '템플릿에서 새로 만들기', run: () => openLibrary(projectApi, { currentId: projectApi?.getId?.() }), enabled: _hasProject },
+      { label: '프로젝트 목록', run: () => openLibrary(projectApi, { currentId: projectApi?.getId?.() }), enabled: _hasProject },
+      { sep: true },
+      { label: '가져오기', sc: '가져오기', run: _triggerImport },
+      { label: '내보내기', sc: '내보내기', run: () => exportUI.open() },
+      { label: '저장 시점 목록', run: () => import('../snapshots.js').then((m) => m.openSnapshots(projectApi)), enabled: _hasProject },
+      { sep: true },
+      { label: '프로젝트 파일 저장', run: () => projectApi?.exportFile?.(), enabled: _hasProject },
+      { label: '프로젝트 파일 열기', run: _openProjectFile, enabled: _hasProject },
+    ] },
+    { id: 'edit', label: '편집', items: [
+      { label: '되돌리기', sc: '되돌리기', run: _undo, enabled: () => store.canUndo() },
+      { label: '다시하기', sc: '다시하기', run: _redo, enabled: () => store.canRedo() },
+      { sep: true },
+      { label: '복사', sc: '복사 (레이어 / 타임라인 키)', run: () => _dispatchKey('c', { ctrl: true }), enabled: () => _sel().length > 0 },
+      { label: '붙여넣기', sc: '붙여넣기', run: () => _dispatchKey('v', { ctrl: true }) },
+      { label: '복제', sc: '복제', run: () => { if (_sel().length) store.apply({ type: 'duplicateLayers', ids: _sel() }); }, enabled: () => _sel().length > 0 },
+      { label: '삭제', sc: '삭제 (레이어 / 선택한 키)', run: () => { if (_sel().length) { store.apply({ type: 'removeLayers', ids: _sel() }); editorState.set({ selection: [] }); } }, enabled: () => _sel().length > 0 },
+      { label: '모두 선택', sc: '모두 선택', run: () => editorState.set({ selection: (store.get().order ?? []).filter((id) => store.get().layers[id]) }) },
+    ] },
+    { id: 'layer', label: '레이어', items: [
+      { label: '새 글자 레이어', run: () => _addNewLayer('text') },
+      { label: '새 도형 레이어', run: () => _addNewLayer('shape') },
+      { label: '빈 그룹', run: () => _addNewLayer('group') },
+      { sep: true },
+      { label: '그룹으로 묶기', sc: '그룹으로 묶기', run: () => groupSelection(store, editorState), enabled: () => _sel().length > 0 },
+      { label: '그룹 풀기', sc: '그룹 풀기', run: () => ungroupSelection(store, editorState), enabled: _selHasGroup },
+      { sep: true },
+      { label: '부품으로 저장 · 내 부품', run: () => openMyParts(store, editorState) },
+      { sep: true },
+      { label: '맨 앞으로', run: () => _moveSelTo(true), enabled: () => editorState.get().selection.length === 1 },
+      { label: '맨 뒤로', run: () => _moveSelTo(false), enabled: () => editorState.get().selection.length === 1 },
+    ] },
+    { id: 'effect', label: '효과', items: [
+      { label: '효과 패널 열기', run: () => openEffectsPanel('fx') },
+      { sep: true },
+      { label: '선택 레이어 효과 모두 끄기', run: () => _toggleAllFx(false), enabled: _selHasFx },
+      { label: '선택 레이어 효과 모두 켜기', run: () => _toggleAllFx(true), enabled: _selHasFx },
+    ] },
+    { id: 'anim', label: '애니메이션', items: [
+      { label: '자동 키 켜기/끄기', run: () => editorState.set({ autoKey: !editorState.get().autoKey }) },
+      { label: '그래프 편집기', sc: '그래프 편집기', run: () => editorState.set({ graphMode: !editorState.get().graphMode }) },
+      { label: '부드럽게', sc: '부드럽게', run: () => _dispatchKey('F9') },
+      { label: '루프 이음새 검사', sc: '루프 이음새 검사', run: () => openLoopCheck(store, editorState) },
+      { label: '모션 녹화', run: () => editorState.set({ tool: 'motion' }) },
+    ] },
+    { id: 'view', label: '보기', items: [
+      { label: '확대', run: () => _dispatchKey('=', { ctrl: true }) },
+      { label: '축소', run: () => _dispatchKey('-', { ctrl: true }) },
+      { label: '화면에 맞추기', run: () => _dispatchKey('0', { ctrl: true }) },
+      { sep: true },
+      { label: '격자', sc: '그리드 표시/숨김', run: () => editorState.set({ grid: !editorState.get().grid }) },
+      { label: '앞뒤 프레임 겹쳐 보기', sc: '앞뒤 프레임 겹쳐 보기', run: () => editorState.set({ onion: !editorState.get().onion }) },
+      { sep: true },
+      { label: '라이트/다크 테마', run: () => toggleTheme() },
+      { label: '작업 공간 초기화', run: () => resetWorkspaceAndReload() },
+    ] },
+    { id: 'help', label: '도움말', items: [
+      { label: '단축키 안내', run: () => openHelp(() => startOnboarding()) },
+      { label: '둘러보기', run: () => startOnboarding() },
+      { label: '정보', run: () => showToast('APNG 에디터 — 코코포리아용 APNG·WebP 제작 도구') },
+    ] },
+  ];
+  const menubar = createMenubar(menus, { onOpenChange: (open) => editorState.set({ menuOpen: open }) });
+  app.querySelector('.menubar-slot').appendChild(menubar.el);
+
+  // 키보드 단축키(메뉴와 같은 동작의 Ctrl+N·Ctrl+I 포함). 메뉴가 열려 있으면 keys 는 쉰다.
+  initKeys(store, editorState, () => stage.isDragging(), {
+    onNewScene: projectApi ? () => projectApi.newProject() : null,
+    onImport: _triggerImport,
   });
 
   // 패널에서 끌어 온 효과·모션·에셋을 화면(캔버스)에 놓기.

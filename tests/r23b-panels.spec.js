@@ -5,6 +5,9 @@ async function openApp(page) {
   await page.goto('/?demo=1');
   await page.waitForFunction(() => !!(window.__store && window.__stage));
   await page.waitForTimeout(150);
+  // R23c: 1280px 이하 첫 실행이면 왼쪽 패널이 접힌 채로 뜬다(기본 뷰포트 1280×720). 펼친다.
+  const collapsed = await page.locator('.panel-dock-left.is-collapsed').count();
+  if (collapsed) await page.locator('.panel-dock-left .panel-collapse').click();
 }
 
 async function addShape(page, x = 120, y = 100) {

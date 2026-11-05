@@ -7,11 +7,16 @@ async function openReal(page) {
   await page.waitForFunction(() => !!(window.__store && window.__stage));
   await page.waitForTimeout(120);
 }
+// R23c: 도움말은 메뉴 막대 "도움말 › 단축키 안내"로 옮겼다.
+async function openHelpMenu(page) {
+  await page.locator('.menu-top', { hasText: '도움말' }).click();
+  await page.locator('.menu-item', { hasText: '단축키 안내' }).click();
+}
 
 test('F5-4 — 도움말 단축키 항목 수 == SHORTCUTS 표 항목 수', async ({ page }) => {
   await openReal(page);
   const nTable = await page.evaluate(async () => (await import('/src/ui/shortcuts.js')).SHORTCUTS.length);
-  await page.click('[data-action="help"]');
+  await openHelpMenu(page);
   await expect(page.locator('.help-modal')).toBeVisible();
   const nUI = await page.locator('.help-modal .shortcut-row').count();
   expect(nUI).toBe(nTable);
@@ -19,7 +24,7 @@ test('F5-4 — 도움말 단축키 항목 수 == SHORTCUTS 표 항목 수', asyn
 
 test('F5-4 — 단축키 검색', async ({ page }) => {
   await openReal(page);
-  await page.click('[data-action="help"]');
+  await openHelpMenu(page);
   await page.fill('.help-search', '내보내기');
   const rows = page.locator('.help-modal .shortcut-row');
   expect(await rows.count()).toBe(1);
@@ -47,7 +52,7 @@ test('F5-4 — 처음 안내: 첫 실행 시 뜸, 건너뛰기 후 안 뜸', asy
 
 test('F5-4 — 도움말에서 처음 안내 다시 보기', async ({ page }) => {
   await openReal(page); // onboarded=1
-  await page.click('[data-action="help"]');
+  await openHelpMenu(page);
   await page.click('.help-modal .quiet.sm'); // "처음 안내 다시 보기"
   await expect(page.locator('.onboard-overlay')).toBeVisible();
 });

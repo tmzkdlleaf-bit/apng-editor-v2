@@ -366,3 +366,35 @@
   background: var(--acc);
   opacity: 0.5;
 }
+
+/* ── R23c 메뉴 막대 ─────────────────────────────────────────────────────── */
+.menubar { display: flex; align-items: stretch; height: 100%; }
+.menu-group { position: relative; display: flex; }
+.menu-top {
+  appearance: none; background: transparent; border: none; cursor: pointer;
+  color: var(--text2); font-family: inherit; font-size: var(--fs-2);
+  padding: 0 var(--sp-3); height: 100%;
+}
+.menu-top:hover, .menu-top.is-open { background: var(--selrow); color: var(--text); }
+.menu-top:focus-visible { outline: 1px solid var(--acc); outline-offset: -2px; }
+
+.menu-dropdown {
+  position: absolute; top: 100%; left: 0; z-index: 2100;
+  min-width: 220px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-2);
+  box-shadow: 0 6px 20px rgba(0,0,0,0.35);
+  padding: var(--sp-1); display: flex; flex-direction: column;
+}
+.menu-item {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--sp-4);
+  appearance: none; background: transparent; border: none; cursor: pointer;
+  color: var(--text); font-family: inherit; font-size: var(--fs-2); text-align: left;
+  padding: 4px var(--sp-3); border-radius: var(--r-1); white-space: nowrap;
+}
+.menu-item:hover:not(:disabled), .menu-item.is-focus:not(:disabled) { background: var(--selrow); }
+.menu-item:disabled { color: var(--faint); cursor: default; }
+.menu-item-label { flex: 1; }
+.menu-key { color: var(--faint); font-size: var(--fs-2); font-variant-numeric: tabular-nums; }
+.menu-sep { height: 1px; background: var(--line2); margin: var(--sp-1) 0; }
+
+.app-title { font-size: var(--fs-2); color: var(--dim); white-space: nowrap; }

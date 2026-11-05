@@ -206,6 +206,7 @@ export function createProjectPanel(store, editorState, getDeps = () => ({})) {
   const unsubStore = store.subscribe({ any: true }, _render);
   _render();
 
+  function triggerImport() { fileInput.click(); }   // R23c: 파일 메뉴 "가져오기"·Ctrl+I 에서 호출
   function destroy() { unsubStore(); _closeMenu(); }
-  return { el, destroy };
+  return { el, destroy, triggerImport };
 }

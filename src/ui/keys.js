@@ -22,7 +22,7 @@ function _readKey(doc, ref) {
   return kf ? { id: ref.id, path: ref.path, f: ref.f, v: kf.v, ease: kf.ease ?? 'linear', sp: kf.sp, bezier: kf.bezier } : null;
 }
 
-export function initKeys(store, editorState, getDragging = () => false) {
+export function initKeys(store, editorState, getDragging = () => false, actions = {}) {
   // 복사 버퍼 (레이어 id 목록)
   let _clipboard = [];
   // 키프레임 복사 버퍼 [{id, path, f, v, ease}]
@@ -33,6 +33,8 @@ export function initKeys(store, editorState, getDragging = () => false) {
 
   function _handler(e) {
     if (_isInputFocused()) return;
+    // R23c: 메뉴 막대가 열려 있으면 다른 단축키가 같이 동작하지 않게 한다(메뉴가 Alt·화살표·Enter·Esc 를 처리).
+    if (editorState.get().menuOpen) return;
     // 드래그(begin~commit) 진행 중엔 문서를 바꾸는 단축키를 무시한다.
     // (apply 가 예외를 던지거나 되돌리기 기록이 꼬이는 것을 막는다. Esc 는 drag.js 가 먼저 처리.)
     if (store.isBatching?.()) return;
@@ -142,6 +144,21 @@ export function initKeys(store, editorState, getDragging = () => false) {
         return layer && !allNewSet.has(layer.parentId ?? null);
       });
       if (topNew.length) editorState.set({ selection: topNew });
+      return;
+    }
+
+    // ── 파일(새 장면 Ctrl+N · 가져오기 Ctrl+I) — 메뉴 막대와 같은 동작 ──────
+    if (ctrl && !e.shiftKey && e.key.toLowerCase() === 'n' && actions.onNewScene) {
+      e.preventDefault(); actions.onNewScene(); return;
+    }
+    if (ctrl && !e.shiftKey && e.key.toLowerCase() === 'i' && actions.onImport) {
+      e.preventDefault(); actions.onImport(); return;
+    }
+
+    // ── 모두 선택 (Ctrl+A) — 최상위 레이어 전부 ─────────────────────────
+    if (ctrl && !e.shiftKey && e.key.toLowerCase() === 'a') {
+      e.preventDefault();
+      editorState.set({ selection: (doc.order ?? []).filter((id) => doc.layers[id]) });
       return;
     }
 

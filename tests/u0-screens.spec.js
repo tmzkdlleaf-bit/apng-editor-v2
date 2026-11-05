@@ -136,10 +136,11 @@ for (const theme of ['dark', 'light']) {
     await shot('11-export');
     await page.keyboard.press('Escape');
 
-    // 12 단축키 안내 — 상단바 도움말 버튼
-    const helpBtn = page.locator('[data-action="help"]');
-    if (await helpBtn.count()) {
-      await helpBtn.click();
+    // 12 단축키 안내 — 메뉴 막대 "도움말 › 단축키 안내"(R23c)
+    const helpTop = page.locator('.menu-top', { hasText: '도움말' });
+    if (await helpTop.count()) {
+      await helpTop.click();
+      await page.locator('.menu-item', { hasText: '단축키 안내' }).click();
       await page.waitForSelector('.help-modal', { timeout: 3000 }).catch(() => {});
       await page.waitForTimeout(150);
       await shot('12-shortcuts');
