@@ -167,6 +167,7 @@ export function initKeys(store, editorState, getDragging = () => false, actions 
     if (!ctrl && e.key.toLowerCase() === 'e') { editorState.set({ tool: 'edit' });   return; }
     if (!ctrl && e.key.toLowerCase() === 'p') { editorState.set({ tool: 'motion' }); return; }
     if (!ctrl && e.key.toLowerCase() === 'h') { editorState.set({ tool: 'hand' });   return; }
+    if (!ctrl && e.key.toLowerCase() === 'z') { editorState.set({ tool: 'zoom' });   return; }
 
     // ── 그리드 토글 ────────────────────────────────────────────────────
     if (!ctrl && e.key.toLowerCase() === 'g') {

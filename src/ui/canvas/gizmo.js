@@ -62,6 +62,32 @@ export function drawOverlay(ctx, doc, es, snapLines = [], W, H, assets = null) {
     ctx.restore();
   }
 
+  // R23c 가이드(가운데 십자) — 화면 아래 줄 토글.
+  if (es.guides) {
+    const c = docToScreen(docW / 2, docH / 2, zoom, panX, panY, W, H, docW, docH);
+    const a = docToScreen(0, 0, zoom, panX, panY, W, H, docW, docH);
+    const b = docToScreen(docW, docH, zoom, panX, panY, W, H, docW, docH);
+    ctx.save();
+    ctx.strokeStyle = 'rgba(90,160,255,0.5)'; ctx.lineWidth = 1; ctx.setLineDash([4, 4]);
+    ctx.beginPath(); ctx.moveTo(c.x, a.y); ctx.lineTo(c.x, b.y);
+    ctx.moveTo(a.x, c.y); ctx.lineTo(b.x, c.y); ctx.stroke();
+    ctx.setLineDash([]); ctx.restore();
+  }
+
+  // R23c 안전 영역 — 컷인 템플릿 정보(doc.meta.safeArea)가 있으면 그걸, 없으면 가로·세로 각 90% 상자.
+  if (es.safeArea) {
+    const sa = doc.meta.safeArea;
+    let x0, y0, x1, y1;
+    if (sa && Number.isFinite(sa.x) && Number.isFinite(sa.w)) { x0 = sa.x; y0 = sa.y; x1 = sa.x + sa.w; y1 = sa.y + sa.h; }
+    else { const mx = docW * 0.05, my = docH * 0.05; x0 = mx; y0 = my; x1 = docW - mx; y1 = docH - my; }
+    const a = docToScreen(x0, y0, zoom, panX, panY, W, H, docW, docH);
+    const b = docToScreen(x1, y1, zoom, panX, panY, W, H, docW, docH);
+    ctx.save();
+    ctx.strokeStyle = 'rgba(240,163,94,0.7)'; ctx.lineWidth = 1; ctx.setLineDash([6, 3]);
+    ctx.strokeRect(a.x, a.y, b.x - a.x, b.y - a.y);
+    ctx.setLineDash([]); ctx.restore();
+  }
+
   // 카메라 영역(F2-6) — cameraActive 일 때 점선 사각형으로 카메라가 담는 범위 표시.
   if (es.cameraActive) {
     const cam = evalCamera(doc, f);

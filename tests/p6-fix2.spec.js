@@ -161,9 +161,10 @@ test.describe('P6 보완2 — 타임라인 키 / 그룹 / 정렬 / 혼합', () =
     const rectId   = await layerIdByName(page, '사각형');
     const circleId = await layerIdByName(page, '원');
     await page.evaluate(([a, b]) => window.__editorState.set({ selection: [a, b], f: 0 }), [rectId, circleId]);
-    await page.waitForSelector('.num-input');
+    // R23c: 화면 아래 줄의 배율 칸도 .num-input 이므로 속성(인스펙터) 영역으로 한정.
+    await page.waitForSelector('[data-region="inspector"] .num-input');
 
-    const xInput = page.locator('.num-input').first();
+    const xInput = page.locator('[data-region="inspector"] .num-input').first();
     expect(await xInput.inputValue()).toBe('');
     expect(await xInput.getAttribute('placeholder')).toBe('혼합');
 

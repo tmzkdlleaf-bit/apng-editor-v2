@@ -1,13 +1,33 @@
 #app {
   display: grid;
-  grid-template-rows: 48px 1fr;
+  grid-template-rows: 48px 34px 1fr;
   grid-template-columns: var(--left-width, 240px) 1fr var(--inspector-width, 320px);
   grid-template-areas:
-    "topbar topbar topbar"
-    "left   main   inspector";
+    "topbar  topbar topbar"
+    "toolbar toolbar toolbar"
+    "left    main   inspector";
   height: 100vh;
   overflow: hidden;
 }
+
+/* 도구 막대(R23c) — 메뉴 막대 아래 한 줄, 전체 폭 */
+.toolbar-slot { grid-area: toolbar; display: flex; align-items: center; }
+.toolbar {
+  display: flex; align-items: center; gap: var(--sp-1);
+  width: 100%; height: 100%;
+  padding: 0 var(--sp-2);
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+}
+.toolbar-btn {
+  width: 26px; height: 26px;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--btn); border: 1px solid var(--btnline); border-radius: var(--r-1);
+  color: var(--text2); cursor: pointer;
+}
+.toolbar-btn:hover { color: var(--text); }
+.toolbar-btn.active { background: var(--toolon); color: var(--acc); border-color: var(--accline); }
+.toolbar-sep { width: 1px; height: 18px; background: var(--line2); margin: 0 var(--sp-1); }
 
 /* 임시 상태 토스트 */
 .app-toast {
@@ -121,9 +141,29 @@
 #main-area {
   grid-area: main;
   display: grid;
-  grid-template-rows: 1fr var(--timeline-height, 340px);
+  grid-template-rows: 1fr auto var(--timeline-height, 340px);
   overflow: hidden;
 }
+
+/* 화면 아래 줄(R23c) */
+.bottombar-slot { display: flex; min-height: 0; }
+.stage-bottombar {
+  display: flex; align-items: center; gap: var(--sp-3);
+  width: 100%; height: 30px;
+  padding: 0 var(--sp-3);
+  background: var(--panel); border-top: 1px solid var(--line);
+  font-size: var(--fs-2); color: var(--text2);
+  overflow: hidden;
+}
+.stage-bottombar .bb-group { display: flex; align-items: center; gap: var(--sp-1); }
+.stage-bottombar .bb-label { color: var(--dim); }
+.stage-bottombar .bb-unit { color: var(--dim); }
+.stage-bottombar .bb-zoom-num { width: 48px; }
+.stage-bottombar .bb-check { display: flex; align-items: center; gap: var(--sp-1); cursor: pointer; white-space: nowrap; }
+.stage-bottombar .bb-check input { margin: 0; }
+.stage-bottombar .bb-spacer { flex: 1; }
+.stage-bottombar .bb-frame-text { color: var(--text); font-variant-numeric: tabular-nums; }
+.stage-bottombar .dropdown { min-width: 64px; }
 
 [data-region="canvas"] {
   background: var(--stage);
@@ -217,35 +257,6 @@
 }
 .canvas-info-btn:hover { color: var(--text); }
 .canvas-info-btn .ci-pencil { display: inline-flex; color: var(--faint); }
-
-.stage-tools {
-  position: absolute;
-  top: var(--sp-2);
-  left: var(--sp-2);
-  display: flex;
-  gap: var(--sp-1);
-  z-index: 10;
-}
-
-.stage-tools button {
-  width: 28px;
-  height: 28px;
-  font-size: var(--fs-2);
-  border-radius: var(--r-1);
-  background: var(--btn);
-  border: 1px solid var(--btnline);
-  color: var(--text2);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.stage-tools button.active {
-  background: var(--toolon);
-  color: var(--acc);
-  border-color: var(--accline);
-}
 
 /* 숫자 칸 */
 .num-field {

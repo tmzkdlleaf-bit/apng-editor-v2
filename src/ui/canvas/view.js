@@ -1,4 +1,3 @@
-import { iconMarkup } from '../icons.js';
 import { createDropdown } from '../controls/dropdown.js';
 
 const ZOOM_MIN = 0.1;
@@ -113,26 +112,15 @@ export function initView(containerEl, overlayCanvas, store, editorState) {
     setTimeout(() => document.addEventListener('pointerdown', _onViewOutside, true), 0);
   });
 
-  // Tool buttons
-  const toolWrap = document.createElement('div');
-  toolWrap.className = 'stage-tools';
-  toolWrap.innerHTML = `
-    <button data-tool="select" title="옮기기 (V)" aria-label="옮기기" class="active">${iconMarkup('select-tool')}</button>
-    <button data-tool="edit"   title="편집 — 경로·기준점 고치기 (E)" aria-label="편집">${iconMarkup('tool-edit')}</button>
-    <button data-tool="motion" title="움직이기 — 레이어 옮기기·모션 기록 (P)" aria-label="움직이기">${iconMarkup('tool-motion')}</button>
-    <button data-tool="hand"   title="손 — 화면 이동 (H)" aria-label="손">${iconMarkup('hand')}</button>
-    <button data-tool="maskRect"    title="사각형 가리기" aria-label="사각형 가리기"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="4" width="10" height="8" rx="1"/></svg></button>
-    <button data-tool="maskEllipse" title="타원 가리기" aria-label="타원 가리기"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><ellipse cx="8" cy="8" rx="5.5" ry="4"/></svg></button>
-    <button data-tool="pen"         title="펜 가리기" aria-label="펜 가리기"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M11 2l3 3-7 7-3.5.5.5-3.5z"/></svg></button>
-  `;
-  containerEl.appendChild(toolWrap);
-
-  // 도구별 커서
+  // R23c: 도구 버튼은 메뉴 막대 아래 "도구 막대"(toolbar.js)로 옮겼다. 여기선 커서만 관리한다.
+  // 도구별 커서 (zoom/text/shape 는 tool-extras.js 가 관리).
   function _cursorFor(tool) {
     if (tool === 'hand') return 'grab';
     if (tool === 'edit') return 'crosshair';
     if (tool === 'maskRect' || tool === 'maskEllipse' || tool === 'pen') return 'crosshair';
     if (tool === 'motion') return 'cell';
+    if (tool === 'zoom') return 'zoom-in';
+    if (tool === 'text' || tool === 'shape') return 'crosshair';
     return '';
   }
 
@@ -251,18 +239,6 @@ export function initView(containerEl, overlayCanvas, store, editorState) {
     overlayCanvas.releasePointerCapture(e.pointerId);
   }
 
-  // Tool button clicks
-  toolWrap.addEventListener('click', (e) => {
-    const btn = e.target.closest('[data-tool]');
-    if (!btn) return;
-    const tool = btn.dataset.tool;
-    editorState.set({ tool });
-    toolWrap.querySelectorAll('[data-tool]').forEach(b => {
-      b.classList.toggle('active', b.dataset.tool === tool);
-    });
-    overlayCanvas.style.cursor = _cursorFor(tool);
-  });
-
   editorState.subscribe((patch) => {
     if ('zoom' in patch) _updateZoomEl();
     if ('grid' in patch) gridInput.checked = !!editorState.get().grid;
@@ -271,12 +247,7 @@ export function initView(containerEl, overlayCanvas, store, editorState) {
     if ('onion' in patch) onionInput.checked = !!editorState.get().onion;
     if ('onionBefore' in patch) onionBeforeDd.setValue?.(String(editorState.get().onionBefore ?? 1));
     if ('onionAfter' in patch) onionAfterDd.setValue?.(String(editorState.get().onionAfter ?? 1));
-    if ('tool' in patch) {
-      toolWrap.querySelectorAll('[data-tool]').forEach(b => {
-        b.classList.toggle('active', b.dataset.tool === patch.tool);
-      });
-      overlayCanvas.style.cursor = _cursorFor(patch.tool);
-    }
+    if ('tool' in patch) overlayCanvas.style.cursor = _cursorFor(patch.tool);
   });
 
   overlayCanvas.addEventListener('wheel', _onWheel, { passive: false });

@@ -19,6 +19,8 @@ import { registerOpenEffects, openEffectsPanel } from './panel-actions.js';
 import { showToast } from './status.js';
 import { hasDrag, readDrag } from './panel-dnd.js';
 import { createMenubar } from './menubar.js';
+import { createToolbar } from './toolbar.js';
+import { createBottombar } from './bottombar.js';
 import { hitTest } from '../canvas/hit.js';
 import { addFxToLayer, addEffectLayer, addMotionToLayers, addAssetLayer } from '../layer-ops.js';
 import { groupSelection, ungroupSelection } from '../group-ops.js';
@@ -46,7 +48,8 @@ function saveTlHeight(h) {
 
 function setTlHeight(mainArea, h) {
   const clamped = Math.min(TL_MAX, Math.max(TL_MIN, h));
-  mainArea.style.gridTemplateRows = `1fr ${clamped}px`;
+  // R23c: 캔버스(1fr) · 화면 아래 줄(auto) · 타임라인(고정). 아래 줄이 추가돼 3행이다.
+  mainArea.style.gridTemplateRows = `1fr auto ${clamped}px`;
   saveTlHeight(clamped);
 }
 
@@ -73,8 +76,11 @@ export function init(store, editorState, projectApi = null) {
       </div>
     </div>
 
+    <div class="toolbar-slot"></div>
+
     <div id="main-area">
       <div data-region="canvas"></div>
+      <div class="bottombar-slot"></div>
 
       <div data-region="timeline" style="position:relative;">
         <div class="resize-handle" id="tl-resize"></div>
@@ -316,6 +322,14 @@ export function init(store, editorState, projectApi = null) {
   ];
   const menubar = createMenubar(menus, { onOpenChange: (open) => editorState.set({ menuOpen: open }) });
   app.querySelector('.menubar-slot').appendChild(menubar.el);
+
+  // 도구 막대(R23c 2-2) — 메뉴 막대 아래 한 줄.
+  const toolbar = createToolbar(editorState);
+  app.querySelector('.toolbar-slot').appendChild(toolbar.el);
+
+  // 화면 아래 줄(R23c 2-3) — 배율·해상도·격자·가이드·안전 영역·프레임.
+  const bottombar = createBottombar(store, editorState);
+  app.querySelector('.bottombar-slot').appendChild(bottombar.el);
 
   // 키보드 단축키(메뉴와 같은 동작의 Ctrl+N·Ctrl+I 포함). 메뉴가 열려 있으면 keys 는 쉰다.
   initKeys(store, editorState, () => stage.isDragging(), {

@@ -18,6 +18,7 @@ export const SHORTCUTS = [
   { cat: '레이어', keys: ['방향키'], label: '선택 레이어 이동 (Shift = 크게)' },
 
   { cat: '도구', keys: ['V'], label: '옮기기' },
+  { cat: '도구', keys: ['Z'], label: '확대 (Alt+클릭 축소)' },
   { cat: '도구', keys: ['E'], label: '편집 (경로·기준점)' },
   { cat: '도구', keys: ['P'], label: '움직이기 (모션 기록·배치)' },
   { cat: '도구', keys: ['H'], label: '손 (화면 이동)' },

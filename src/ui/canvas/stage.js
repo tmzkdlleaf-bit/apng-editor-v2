@@ -7,6 +7,7 @@ import { initTextEdit } from './text-edit.js';
 import { initPathEdit } from './path-edit.js';
 import { initEffectCoordEdit } from './effect-coord.js';
 import { initMaskEdit } from './mask-edit.js';
+import { initToolExtras } from './tool-extras.js';
 import { createAssets } from '../assets.js';
 import { effects as effectsRegistry } from '../../effects/registry.js';
 import motionRegistry from '../../motions/registry.js';
@@ -146,7 +147,8 @@ export function initStage(containerEl, store, editorState) {
     const ctx = sceneCanvas.getContext('2d');
     ctx.clearRect(0, 0, sceneCanvas.width, sceneCanvas.height);
 
-    _drawChecker(ctx, zoom, panX, panY, _cssW, _cssH, docW, docH, dpr);
+    // 투명 격자(체커) — 화면 아래 줄 토글. 기본 켜짐(지금 동작과 동일).
+    if (es.checker !== false) _drawChecker(ctx, zoom, panX, panY, _cssW, _cssH, docW, docH, dpr);
 
     const { ox, oy } = docOrigin(zoom, panX, panY, _cssW, _cssH, docW, docH);
     const visDocX0 = Math.max(0, (-ox) / zoom);
@@ -158,18 +160,29 @@ export function initStage(containerEl, store, editorState) {
 
     const offW = Math.max(1, Math.ceil((visDocX1 - visDocX0) * zoom * dpr));
     const offH = Math.max(1, Math.ceil((visDocY1 - visDocY0) * zoom * dpr));
-    const offscreen = _getOffscreen(offW, offH);
-    const offCtx = offscreen.getContext('2d');
-    offCtx.clearRect(0, 0, offW, offH);
 
-    const quality = (_draftMode || _autoDraft) ? 'draft' : 'final';
+    // R23c 미리보기 해상도. 'auto' 는 지금 규칙 그대로(픽셀 단위 동일) — 아래 경로를 건드리지 않는다.
+    //   full/half/quarter 는 명시 배율: 작은 오프스크린에 그려 확대해 깐다(내보내기와 무관).
+    const pr = es.previewRes ?? 'auto';
+    let quality = (_draftMode || _autoDraft) ? 'draft' : 'final';
+    let drawScale = 1;
+    if (pr === 'full')         { quality = 'final'; _autoDraft = false; }
+    else if (pr === 'half')    { quality = 'final'; drawScale = 0.5; }
+    else if (pr === 'quarter') { quality = 'final'; drawScale = 0.25; }
+
+    const rOffW = (drawScale === 1) ? offW : Math.max(1, Math.round(offW * drawScale));
+    const rOffH = (drawScale === 1) ? offH : Math.max(1, Math.round(offH * drawScale));
+    const offscreen = _getOffscreen(rOffW, rOffH);
+    const offCtx = offscreen.getContext('2d');
+    offCtx.clearRect(0, 0, rOffW, rOffH);
+
     const t0 = performance.now();
 
     // 세트 변형 미리보기(R13-1) — 문서는 바꾸지 않고 렌더에만 변형 값을 적용한 복사본을 쓴다.
     const rdoc = _effectiveDoc(doc, es);
 
     engine.renderFrame(offCtx, rdoc, f, {
-      scale: zoom * dpr,
+      scale: zoom * dpr * drawScale,
       quality,
       view: { x: visDocX0, y: visDocY0, w: visDocX1 - visDocX0, h: visDocY1 - visDocY0 },
     });
@@ -178,12 +191,12 @@ export function initStage(containerEl, store, editorState) {
     _lastRenderMs = elapsed;
 
     // 느린 프레임 판단: 에셋 로딩 중 프레임은 제외(첫 로딩은 원래 느림).
-    // 한 번 느렸다고 켜지지 말고 최근 몇 프레임 평균으로 자동 절반 해상도를 켠다.
+    // 한 번 느렸다고 켜지지 말고 최근 몇 프레임 평균으로 자동 절반 해상도를 켠다. (auto 에서만)
     if ((assets.pendingCount?.() ?? 0) === 0) {
       _recentMs.push(elapsed);
       if (_recentMs.length > 5) _recentMs.shift();
     }
-    if (!_draftMode && !_autoDraft && _recentMs.length >= 2) {
+    if (pr === 'auto' && !_draftMode && !_autoDraft && _recentMs.length >= 2) {
       const avg = _recentMs.reduce((a, b) => a + b, 0) / _recentMs.length;
       if (avg > 16) _autoDraft = true;
     }
@@ -198,11 +211,13 @@ export function initStage(containerEl, store, editorState) {
       offW, offH, blitX, blitY,
     });
 
-    ctx.drawImage(offscreen, blitX, blitY);
+    // drawScale===1 이면 소스·대상 크기가 같아 지금과 픽셀 단위로 동일. 아니면 확대해 깐다.
+    if (drawScale === 1) ctx.drawImage(offscreen, blitX, blitY);
+    else ctx.drawImage(offscreen, 0, 0, rOffW, rOffH, blitX, blitY, offW, offH);
 
     // 자동 절반 해상도일 때: 드래그·재생이 계속되면 매 프레임 타이머가 리셋돼 흐린 상태 유지.
-    // 입력/재생이 멎으면(일정 시간 새 요청 없음) 한 번 원래 해상도로 다시 그린다.
-    if (_autoDraft && !_draftMode) {
+    // 입력/재생이 멎으면(일정 시간 새 요청 없음) 한 번 원래 해상도로 다시 그린다. (auto 에서만)
+    if (pr === 'auto' && _autoDraft && !_draftMode) {
       clearTimeout(_settleTimer);
       _settleTimer = setTimeout(() => {
         _autoDraft = false;
@@ -387,6 +402,7 @@ export function initStage(containerEl, store, editorState) {
   const pathEdit = initPathEdit(overlayCanvas, store, editorState);
   const effectCoordEdit = initEffectCoordEdit(overlayCanvas, store, editorState);
   const maskEdit = initMaskEdit(overlayCanvas, store, editorState, () => assets);
+  const toolExtras = initToolExtras(overlayCanvas, store, editorState);
 
   store.subscribe({ any: true }, () => {
     _docEpoch++;            // 온니언 캐시 무효화
@@ -397,7 +413,8 @@ export function initStage(containerEl, store, editorState) {
   editorState.subscribe((patch) => {
     const needsScene = 'zoom' in patch || 'panX' in patch || 'panY' in patch || 'f' in patch
       || 'onion' in patch || 'onionBefore' in patch || 'onionAfter' in patch
-      || 'playing' in patch || 'loopMode' in patch || 'previewVariantId' in patch;
+      || 'playing' in patch || 'loopMode' in patch || 'previewVariantId' in patch
+      || 'previewRes' in patch || 'checker' in patch;
     if (needsScene) requestScene();
     requestOverlay();
   });
@@ -483,6 +500,7 @@ export function initStage(containerEl, store, editorState) {
       pathEdit?.destroy?.();
       effectCoordEdit?.destroy?.();
       maskEdit?.destroy?.();
+      toolExtras?.destroy?.();
       clearTimeout(_settleTimer);
     },
   };

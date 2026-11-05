@@ -31,6 +31,13 @@ export function createEditorState(initial = {}) {
     graphView: 'value',
     // R21b 가리기 그리는 중 미리보기(문서 미변경). { layerId, path, cursor? } 또는 null.
     maskDraft: null,
+    // R23c 미리보기 해상도(미리보기 전용 — 내보내기에는 영향 없음). 'full'|'half'|'quarter'|'auto'.
+    //   'auto' = 지금 자동 절반 해상도 규칙(드래그·재생 중만 낮춤). 문서에 저장하지 않는다.
+    previewRes: 'auto',
+    // R23c 화면 아래 줄 토글(미리보기 전용). 투명 격자는 기본 켜짐(지금 늘 보이던 체커).
+    checker: true,
+    guides: false,
+    safeArea: false,
   };
 
   for (const k of Object.keys(initial)) {
