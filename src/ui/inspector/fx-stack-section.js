@@ -27,7 +27,7 @@ export function createFxStackSection(store, editorState) {
   // [+ 효과] 머리
   const head = document.createElement('div'); head.className = 'fx-stack-head';
   const addBtn = document.createElement('button'); addBtn.className = 'accent sm'; addBtn.textContent = '+ 효과';
-  addBtn.title = '효과 탭에서 골라 끌어 놓거나 더블클릭하세요';
+  addBtn.title = '효과 탭 열기';
   addBtn.addEventListener('click', () => {
     // R23b: 가운데 갤러리 창 대신 왼쪽 "효과" 탭을 펼치고 검색 칸에 초점.
     openEffectsPanel('fx');

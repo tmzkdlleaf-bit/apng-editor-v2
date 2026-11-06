@@ -107,7 +107,7 @@ export function createMatteSection(store, editorState, getStageDeps) {
   });
   const pickBtn = document.createElement('button');
   pickBtn.className = 'quiet sm'; pickBtn.textContent = '캔버스에서 고르기';
-  pickBtn.title = '누른 뒤 캔버스에서 소스로 쓸 레이어를 클릭';
+  pickBtn.title = '소스 레이어 고르기';
 
   const modeDd = createDropdown({
     ariaLabel: '매트 방식',

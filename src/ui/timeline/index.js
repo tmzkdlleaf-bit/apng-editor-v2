@@ -68,7 +68,7 @@ export function initTimeline(timelineEl, store, editorState, playback, deps = {}
   // R20-C: 움직임 번짐 문서 스위치(레이어 스위치와 둘 다 켜야 번진다).
   const blurBtn = document.createElement('button');
   blurBtn.className = 'tl-graph-btn tl-blur-btn'; blurBtn.textContent = '번짐';
-  blurBtn.title = '움직임 번짐 문서 스위치 (레이어 스위치도 켜야 번짐. 설정은 캔버스 설정)';
+  blurBtn.title = '움직임 번짐';
   blurBtn.setAttribute('aria-label', '움직임 번짐');
   blurBtn.addEventListener('click', () => {
     const mb = store.get().meta.motionBlur ?? { on: false, shutter: 180, phase: -90, samples: 8 };
@@ -78,7 +78,7 @@ export function initTimeline(timelineEl, store, editorState, playback, deps = {}
   // ── 모션 기록(F3-5) ─────────────────────────────────────────────────
   const recBtn = document.createElement('button');
   recBtn.className = 'tl-rec-btn';
-  recBtn.title = '모션 기록 — 재생 중 드래그한 움직임을 키로 녹화 (Esc 취소)';
+  recBtn.title = '모션 기록';
   recBtn.setAttribute('aria-label', '모션 기록');
   recBtn.innerHTML = '<span class="tl-rec-dot"></span>';
   const recorder = createMotionRecorder({

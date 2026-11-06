@@ -9,7 +9,7 @@ import { startUpdateCheck } from '../update-banner.js';
 import { isDesktop }      from '../../platform/index.js';
 import { iconMarkup } from '../icons.js';
 import { openLibrary } from '../library.js';
-import { openHelp, startOnboarding, maybeStartOnboarding } from '../help.js';
+import { openHelp, startOnboarding } from '../help.js';
 import { createPanelDock, resetWorkspace } from './panels.js';
 import { createProjectPanel } from './project-panel.js';
 import { createEffectsPanel } from './effects-panel.js';
@@ -26,6 +26,7 @@ import { addFxToLayer, addEffectLayer, addMotionToLayers, addAssetLayer } from '
 import { groupSelection, ungroupSelection } from '../group-ops.js';
 import { openMyParts } from '../library-parts.js';
 import { openLoopCheck } from '../loop-check.js';
+import { openNewScene } from '../new-scene.js';
 import { createLayer } from '../../core/doc/schema.js';
 
 const TL_KEY     = 'apng2.timelineHeight';
@@ -137,8 +138,7 @@ export function init(store, editorState, projectApi = null) {
   const mainArea = app.querySelector('#main-area');
   setTlHeight(mainArea, getStoredTlHeight());
 
-  // R23c: 테마 전환·도움말은 메뉴 막대로 옮겼다(아래 menus 정의 참고). 첫 실행 안내는 유지(3부에서 제거).
-  if (projectApi) { try { maybeStartOnboarding(); } catch {} }
+  // R23c: 테마 전환·도움말은 메뉴 막대로 옮겼다. 첫 실행 자동 안내는 없앴다 — "도움말 › 둘러보기"에서만 연다.
 
   // 되돌리기 / 다시하기 — 버튼과 메뉴가 함께 쓴다.
   const undoBtn = app.querySelector('[data-action="undo"]');
@@ -256,7 +256,7 @@ export function init(store, editorState, projectApi = null) {
 
   const menus = [
     { id: 'file', label: '파일', items: [
-      { label: '새 장면', sc: '새 장면', run: () => projectApi?.newProject?.(), enabled: _hasProject },
+      { label: '새 장면', sc: '새 장면', run: () => openNewScene(projectApi), enabled: _hasProject },
       { label: '템플릿에서 새로 만들기', run: () => openLibrary(projectApi, { currentId: projectApi?.getId?.() }), enabled: _hasProject },
       { label: '프로젝트 목록', run: () => openLibrary(projectApi, { currentId: projectApi?.getId?.() }), enabled: _hasProject },
       { sep: true },
@@ -333,7 +333,7 @@ export function init(store, editorState, projectApi = null) {
 
   // 키보드 단축키(메뉴와 같은 동작의 Ctrl+N·Ctrl+I 포함). 메뉴가 열려 있으면 keys 는 쉰다.
   initKeys(store, editorState, () => stage.isDragging(), {
-    onNewScene: projectApi ? () => projectApi.newProject() : null,
+    onNewScene: projectApi ? () => openNewScene(projectApi) : null,
     onImport: _triggerImport,
   });
 

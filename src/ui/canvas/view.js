@@ -35,7 +35,7 @@ export function initView(containerEl, overlayCanvas, store, editorState) {
   const viewBtn = document.createElement('button');
   viewBtn.className = 'stage-view-btn';
   viewBtn.textContent = '보기';
-  viewBtn.title = '보기 설정 — 그리드·스냅';
+  viewBtn.title = '보기 설정';
   viewBtn.setAttribute('aria-label', '보기 설정');
   containerEl.appendChild(viewBtn);
 

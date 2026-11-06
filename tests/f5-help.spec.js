@@ -31,22 +31,21 @@ test('F5-4 — 단축키 검색', async ({ page }) => {
   await expect(rows.first()).toContainText('내보내기');
 });
 
-test('F5-4 — 처음 안내: 첫 실행 시 뜸, 건너뛰기 후 안 뜸', async ({ page }) => {
-  // onboarded 플래그 없이 로드 → 안내 떠야 함
+test('R23c — 첫 실행에 자동 안내가 뜨지 않는다; 도움말 › 둘러보기로는 뜬다', async ({ page }) => {
+  // onboarded 플래그 없이 로드해도 자동 안내는 뜨지 않는다(R23c에서 자동 시작 제거).
   await page.goto('/');
   await page.waitForFunction(() => !!(window.__store && window.__stage));
+  await page.waitForTimeout(200);
+  await expect(page.locator('.onboard-overlay')).toHaveCount(0);
+  // "도움말 › 둘러보기" → 안내가 뜬다. 3단계 확인.
+  await page.locator('.menu-top', { hasText: '도움말' }).click();
+  await page.locator('.menu-item', { hasText: '둘러보기' }).click();
   await expect(page.locator('.onboard-overlay')).toBeVisible();
-  // 3단계 확인: 다음 두 번 → 시작
   await expect(page.locator('.onboard-step')).toContainText('1 / 3');
   await page.click('.onboard-next'); // 2
   await page.click('.onboard-next'); // 3
   await expect(page.locator('.onboard-next')).toHaveText('시작');
   await page.click('.onboard-next'); // 완료
-  await expect(page.locator('.onboard-overlay')).toHaveCount(0);
-  // 다시 로드 → 안 뜸
-  await page.reload();
-  await page.waitForFunction(() => !!(window.__store && window.__stage));
-  await page.waitForTimeout(200);
   await expect(page.locator('.onboard-overlay')).toHaveCount(0);
 });
 

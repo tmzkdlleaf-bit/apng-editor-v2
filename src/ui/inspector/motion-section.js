@@ -37,7 +37,7 @@ export function createMotionSection(store, editorState) {
   // ── 모션 추가 ────────────────────────────────────────────────────────
   const addBtn = document.createElement('button');
   addBtn.className = 'accent sm'; addBtn.textContent = '+ 모션 추가';
-  addBtn.title = '효과 탭의 모션 분류에서 골라 끌어 놓거나 더블클릭하세요';
+  addBtn.title = '효과 탭 모션 열기';
   addBtn.addEventListener('click', () => {
     if (!ids().length) { showToast('레이어를 선택하세요.'); return; }
     // R23b: 모션 갤러리 창 대신 왼쪽 "효과" 탭의 모션 분류를 펼친다.
@@ -145,15 +145,26 @@ export function createMotionSection(store, editorState) {
     secNote.textContent = `≈ 시작 ${(clip.start / fps()).toFixed(2)}초 · 길이 ${(clip.length / fps()).toFixed(2)}초`;
     editWrap.appendChild(secNote);
 
-    // 속도 5단계 · 진폭 5단계
+    // 세기 — 말로 된 단계 대신 숫자 칸(R23c). 속도=배수(×), 진폭=%.
+    //   저장 값은 그대로(속도→clip.length, 진폭→clip.gain). 둘 다 연속값이라 가장 가까운 단계로 바꿀 필요 없음.
     _sub(editWrap, '세기');
-    const speeds = [0.5, 0.75, 1, 1.5, 2];
-    const amps = [0.5, 0.75, 1, 1.5, 2];
-    editWrap.appendChild(_steps('속도', speeds, Math.round(clip.length / (mot?.defaultLength ?? clip.length) * 100) / 100, (mul) => {
-      store.apply({ type: 'setClip', id, clipId: clip.id, patch: { length: Math.max(1, Math.round((mot?.defaultLength ?? clip.length) * (1 / mul))) } });
-      _renderList();
-    }));
-    editWrap.appendChild(_steps('진폭', amps, clip.gain ?? 1, (g) => { store.apply({ type: 'setClip', id, clipId: clip.id, patch: { gain: g } }); }));
+    const defLen = mot?.defaultLength ?? clip.length;
+    const speedF = createNumberField({
+      label: '속도', min: 0.1, max: 8, step: 0.05, unit: '×', defaultValue: 1,
+      onBegin() { store.begin('모션 속도'); },
+      onChange(v) { const mul = Math.max(0.1, v); store.preview({ type: 'setClip', id, clipId: clip.id, patch: { length: Math.max(1, Math.round(defLen / mul)) } }); },
+      onCommit() { store.commit(); _renderList(); }, onCancel() { store.cancel(); },
+    });
+    speedF.setValue(Math.round(defLen / Math.max(1, clip.length) * 100) / 100);
+    const ampF = createNumberField({
+      label: '진폭', min: 0, max: 400, step: 5, unit: '%', defaultValue: 100,
+      onBegin() { store.begin('모션 진폭'); },
+      onChange(v) { store.preview({ type: 'setClip', id, clipId: clip.id, patch: { gain: Math.max(0, v) / 100 } }); },
+      onCommit() { store.commit(); }, onCancel() { store.cancel(); },
+    });
+    ampF.setValue(Math.round((clip.gain ?? 1) * 100));
+    _row2(editWrap, speedF.el, ampF.el);
+    _knobFields.push(speedF, ampF);
 
     // 이징 일괄
     const easeDd = createDropdown({
@@ -213,15 +224,3 @@ export function createMotionSection(store, editorState) {
 function _sub(parent, text) { const d = document.createElement('div'); d.className = 'adj-subtitle'; d.textContent = text; parent.appendChild(d); }
 function _row2(parent, a, b) { const r = document.createElement('div'); r.className = 'prop-row-2'; r.append(a, b); parent.appendChild(r); }
 function _rowLabel(label, ctrl) { const r = document.createElement('div'); r.className = 'prop-row'; const l = document.createElement('label'); l.className = 'num-label'; l.textContent = label; r.append(l, ctrl); return r; }
-function _steps(label, values, current, onPick) {
-  const r = document.createElement('div'); r.className = 'prop-row motion-steps';
-  const l = document.createElement('label'); l.className = 'num-label'; l.textContent = label; r.appendChild(l);
-  const grp = document.createElement('div'); grp.className = 'motion-step-grp';
-  for (const v of values) {
-    const b = document.createElement('button'); b.className = 'motion-step' + (Math.abs(v - current) < 0.01 ? ' is-on' : '');
-    b.textContent = v + '×';
-    b.addEventListener('click', () => onPick(v));
-    grp.appendChild(b);
-  }
-  r.appendChild(grp); return r;
-}

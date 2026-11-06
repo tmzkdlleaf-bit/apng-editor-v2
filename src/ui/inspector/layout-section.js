@@ -95,7 +95,7 @@ export function createLayoutSection(store, editorState) {
   // 크기 행: 배율 + 사슬 토글
   const chainBtn = document.createElement('button');
   chainBtn.className = 'size-chain-btn';
-  chainBtn.title = '비율 고정 (끄면 가로·세로 따로)';
+  chainBtn.title = '비율 고정';
   chainBtn.setAttribute('aria-label', '비율 고정');
   function _syncChain() {
     chainBtn.classList.toggle('is-on', _ratioLock);

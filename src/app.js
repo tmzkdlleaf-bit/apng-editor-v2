@@ -149,6 +149,16 @@ const projectApi = {
     _setCurrentId(id);
     projectApi.reload();
   },
+  // R23c 새 장면 — 크기·fps·길이·배경을 받아 새 프로젝트 생성·전환.
+  async newScene({ width = 768, height = 768, fps = 12, frameCount = 24, background = null, name = '새 장면' } = {}) {
+    if (autosave) { try { await autosave.flush({ withThumb: false }); } catch {} }
+    const id  = _genId();
+    const doc = createDoc({ width, height, fps, frameCount });
+    if (background && background.type) doc.meta.background = background;
+    await putProject({ id, name, doc, updatedAt: Date.now() });
+    _setCurrentId(id);
+    projectApi.reload();
+  },
   // 새 프로젝트(템플릿·프리셋) — 전환+새로고침.
   async newProjectFromTemplate(templateKey = 'empty', presetKey = 'ccfolia-cutin') {
     if (autosave) { try { await autosave.flush({ withThumb: false }); } catch {} }
