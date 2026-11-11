@@ -1,5 +1,5 @@
 // P6 보완3 테스트 — 그룹 계층 / 끌어 놓기 / 만들기·풀기 (C2, G1~G3)
-import { test, expect } from '@playwright/test';
+import { test, expect } from './helpers/fixtures.js';
 
 test.describe('P6 보완3 — 그룹 계층 / 끌어 놓기 / 만들기·풀기', () => {
   test.beforeEach(async ({ page }) => {

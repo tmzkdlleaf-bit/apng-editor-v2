@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './helpers/fixtures.js';
 
 // 모듈을 브라우저 컨텍스트에서 동적 import해 실행한다.
 // src/core/는 DOM을 쓰지 않으므로 브라우저와 Worker 어디서나 동작한다.

@@ -1,5 +1,5 @@
 // P6 보완2 테스트 (항목 13-18)
-import { test, expect } from '@playwright/test';
+import { test, expect } from './helpers/fixtures.js';
 
 test.describe('P6 보완2 — 타임라인 키 / 그룹 / 정렬 / 혼합', () => {
   test.beforeEach(async ({ page }) => {

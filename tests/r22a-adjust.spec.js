@@ -1,5 +1,5 @@
 // R22a — 보정 레이어: 가리기·효과·불투명도. (그룹 시간은 R22b)
-import { test, expect } from '@playwright/test';
+import { test, expect } from './helpers/fixtures.js';
 
 test.beforeEach(async ({ page }) => { await page.goto('/'); });
 

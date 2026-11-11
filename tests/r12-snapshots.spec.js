@@ -1,6 +1,6 @@
 // R12-3 — 작업 시점 되돌리기(자동 저장 기록). 생성 규칙·개수 상한·되돌리기 후 다시 되돌리기·
 // 에셋 생존(시점이 가리키는 이미지는 시작 정리에서 지우지 않음)·replaceDoc 1건.
-import { test, expect } from '@playwright/test';
+import { test, expect } from './helpers/fixtures.js';
 
 test.describe('R12-3 저장 시점', () => {
   test('[정책] 생성 규칙(5분·변경)·개수 상한·수동 보존', async ({ page }) => {

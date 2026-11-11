@@ -1,5 +1,5 @@
 // F1-7 — 글자 속성 섹션 + 캔버스 더블클릭 편집 + 그림자 흐림 렌더.
-import { test, expect } from '@playwright/test';
+import { test, expect } from './helpers/fixtures.js';
 
 async function openApp(page) {
   await page.goto('/?demo=1');

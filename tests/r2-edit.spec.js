@@ -1,5 +1,5 @@
 // R2 추가 — 편집 조작 버그 수정 검증(단위 + DOM 드래그).
-import { test, expect } from '@playwright/test';
+import { test, expect } from './helpers/fixtures.js';
 
 async function blank(page) { await page.goto('/tests/e1-helpers.js'); }
 

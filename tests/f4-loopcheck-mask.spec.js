@@ -1,5 +1,5 @@
 // F4-7 루프 검사 도구 + F4-4 이펙트 마스크(UI→렌더).
-import { test, expect } from '@playwright/test';
+import { test, expect } from './helpers/fixtures.js';
 
 async function openApp(page) {
   await page.goto('/?demo=1');

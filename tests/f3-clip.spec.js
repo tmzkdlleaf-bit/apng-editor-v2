@@ -1,5 +1,5 @@
 // F3-3 — 클립: 자르기(프레임별 동일)·복제·삭제(원래값)·루프 토글.
-import { test, expect } from '@playwright/test';
+import { test, expect } from './helpers/fixtures.js';
 
 test('F3-3 — 클립 자르기: 두 조각 합친 결과가 자르기 전과 프레임별 동일', async ({ page }) => {
   await page.goto('/');

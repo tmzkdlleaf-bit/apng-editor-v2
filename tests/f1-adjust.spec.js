@@ -1,5 +1,5 @@
 // F1 — 보정 섹션(기본+고급). 렌더/캐시는 엔진으로 직접, store 기록은 UI 슬라이더로 검증.
-import { test, expect } from '@playwright/test';
+import { test, expect } from './helpers/fixtures.js';
 
 async function openApp(page) {
   await page.goto('/?demo=1');

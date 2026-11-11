@@ -1,5 +1,5 @@
 // R8-1 — 카메라 의미 변경: X/Y = 화면 이동, 줌 = 화면 가운데 기준. 기존 문서는 v2→v3 변환.
-import { test, expect } from '@playwright/test';
+import { test, expect } from './helpers/fixtures.js';
 
 async function open(page) {
   await page.goto('/');

@@ -1,5 +1,5 @@
 // P4 보완: 스키마 일치·좌표·효과 계약·캐시
-import { test, expect } from '@playwright/test';
+import { test, expect } from './helpers/fixtures.js';
 
 test.describe('P4 보완', () => {
   test.beforeEach(async ({ page }) => {

@@ -1,5 +1,5 @@
 // R21a — 펜/도형 가리기: 데이터·렌더·속성 패널. (펜/점 편집/모양 키 캔버스 편집은 R21b)
-import { test, expect } from '@playwright/test';
+import { test, expect } from './helpers/fixtures.js';
 
 test.beforeEach(async ({ page }) => { await page.goto('/'); });
 

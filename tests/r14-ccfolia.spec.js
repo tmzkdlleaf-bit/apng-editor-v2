@@ -1,6 +1,6 @@
 // R14-2 — 코코포리아 화면 미리보기. 내보낸 Blob 이 <img> 에 들어가는지, 배경 저장·복원,
 // 창 닫으면 객체 URL 해제, 배경 에셋이 정리에서 보호되는지(keepIds).
-import { test, expect } from '@playwright/test';
+import { test, expect } from './helpers/fixtures.js';
 
 async function pngBlob(page) {
   // 작은 빨간 PNG Blob (미리보기 img 재료). PNG 라 <img> 가 바로 표시.

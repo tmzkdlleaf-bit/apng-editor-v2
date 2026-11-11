@@ -136,7 +136,10 @@ export function initTimeline(timelineEl, store, editorState, playback, deps = {}
     input.value = String(editorState.get().f + 1);
     frameCur.replaceWith(input);
     input.focus(); input.select();
+    let done = false;   // Enter 가 먼저 바꾸면 blur 가 또 부르지 않게(한 번만).
     const commit = (apply) => {
+      if (done) return;
+      done = true;
       if (apply) {
         const v = parseInt(input.value, 10);
         if (Number.isFinite(v)) playback.goTo(Math.max(0, Math.min(_fc() - 1, v - 1)));

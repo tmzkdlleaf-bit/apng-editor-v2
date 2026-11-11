@@ -1,5 +1,5 @@
 // F3-2 — 움직임 섹션: 갤러리·적용·덮어쓰기 확인·클립 편집.
-import { test, expect } from '@playwright/test';
+import { test, expect } from './helpers/fixtures.js';
 
 async function openApp(page) {
   await page.goto('/?demo=1');

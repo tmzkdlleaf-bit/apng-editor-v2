@@ -1,5 +1,5 @@
 // R18 — 곡선 이동 경로(sp)·경로 따라 회전(autoOrient).
-import { test, expect } from '@playwright/test';
+import { test, expect } from './helpers/fixtures.js';
 
 test.beforeEach(async ({ page }) => { await page.goto('/'); });
 

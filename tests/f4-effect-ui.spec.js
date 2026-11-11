@@ -1,5 +1,5 @@
 // F4 — 이펙트 갤러리(1)·파라미터 UI(2)·시드(3)·소스(5)·박스 범위(6).
-import { test, expect } from '@playwright/test';
+import { test, expect } from './helpers/fixtures.js';
 
 async function openApp(page) {
   await page.goto('/?demo=1');

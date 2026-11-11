@@ -1,5 +1,5 @@
 // S5-1 효과(빛 13 + 날씨 8) — 결정론·루프 이음매·시드 변화·파라미터 극값·성능.
-import { test, expect } from '@playwright/test';
+import { test, expect } from './helpers/fixtures.js';
 
 // 시드에 의존하지 않는(절차적/고정 배치) 효과 — 시드 변화 검사 제외.
 const NO_SEED = new Set(['glow', 'sheen', 'wipe', 'candle', 'flashlight', 'light-leak', 'neon']);

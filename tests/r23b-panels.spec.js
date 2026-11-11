@@ -1,5 +1,5 @@
 // R23b — 전문가 화면 1부: 왼쪽/오른쪽 패널(프로젝트·효과 / 효과 컨트롤·속성·정보).
-import { test, expect } from '@playwright/test';
+import { test, expect } from './helpers/fixtures.js';
 import { expectOnTop } from './helpers/on-top.js';
 
 async function openApp(page) {

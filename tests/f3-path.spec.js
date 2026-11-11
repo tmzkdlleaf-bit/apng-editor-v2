@@ -1,5 +1,5 @@
 // F3-4 — 캔버스 모션 경로: 점 끌기(해당 키만)·직선화·장면 재렌더 없음.
-import { test, expect } from '@playwright/test';
+import { test, expect } from './helpers/fixtures.js';
 
 async function openApp(page) {
   await page.goto('/?demo=1');

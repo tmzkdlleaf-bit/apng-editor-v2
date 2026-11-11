@@ -1,5 +1,5 @@
 // R23c 3부 — 새 장면 창(템플릿 갤러리 대체).
-import { test, expect } from '@playwright/test';
+import { test, expect } from './helpers/fixtures.js';
 import { expectOnTop } from './helpers/on-top.js';
 
 async function openReal(page) {

@@ -1,5 +1,5 @@
 // R4 — R1~R3 후속 재현. 고치기 전에는 실패/대기가 정상.
-import { test, expect } from '@playwright/test';
+import { test, expect } from './helpers/fixtures.js';
 
 test.describe('R4 재현', () => {
   // R4-1: 카메라 줌 2에서 도형을 끌면 커서와 같은 양만큼 움직여야 한다(2배 앞서면 버그).

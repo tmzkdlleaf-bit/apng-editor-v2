@@ -1,5 +1,5 @@
 // R10 — 큰 GIF 줄여 가져오기 · 움직이는 이미지 이음새 · 타자기 이음새.
-import { test, expect } from '@playwright/test';
+import { test, expect } from './helpers/fixtures.js';
 
 test.describe('R10-1 큰 GIF 줄여 가져오기', () => {
   test('[줄이기] 기준 안으로 + 전체 길이 유지', async ({ page }) => {

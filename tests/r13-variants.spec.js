@@ -1,6 +1,6 @@
 // R13-1 — 세트 한 번에 만들기. normalizeDoc 보존·정리, collectAssetIds 포함, applyVariant 임시 복사본,
 // setVariants 되돌리기 1건, exportSet zip(파일 3개·바뀐 이미지 픽셀·원본 불변).
-import { test, expect } from '@playwright/test';
+import { test, expect } from './helpers/fixtures.js';
 
 test.describe('R13-1 세트(바리에이션)', () => {
   test('[정리] normalizeDoc 이 세트를 보존하고 없는 레이어 슬롯은 정리', async ({ page }) => {

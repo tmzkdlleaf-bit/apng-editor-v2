@@ -1,5 +1,5 @@
 // R17b — 레이어 효과 쌓기 UI(속성 패널 "효과" 섹션)·타임라인 라벨.
-import { test, expect } from '@playwright/test';
+import { test, expect } from './helpers/fixtures.js';
 
 async function openApp(page) {
   await page.goto('/?demo=1');

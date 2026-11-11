@@ -1,14 +1,17 @@
 // R23d 1부 — 화면 버그 수정 검증.
 //   메뉴 가려짐·새 장면 창·아이콘 원/사각형·가져오기 자동 레이어·효과 컨트롤 줄·작은 정리.
-import { test, expect } from '@playwright/test';
+import { test, expect } from './helpers/fixtures.js';
 import { expectOnTop } from './helpers/on-top.js';
 
-async function openApp(page, { width = 1440, height = 900 } = {}) {
+async function openApp(page, { width = 1440, height = 900, clearTl = false } = {}) {
   await page.setViewportSize({ width, height });
-  await page.addInitScript(() => { try { localStorage.setItem('apng2.onboarded', '1'); } catch {} });
+  await page.addInitScript((ct) => {
+    try { localStorage.setItem('apng2.onboarded', '1'); } catch {}
+    if (ct) { try { localStorage.removeItem('apng2.timelineHeight'); } catch {} }
+  }, clearTl);
   await page.goto('/');
   await page.waitForFunction(() => !!(window.__store && window.__stage && window.__editorState));
-  await page.waitForTimeout(120);
+  await page.waitForTimeout(150);
 }
 
 async function openLeftProject(page) {
@@ -201,4 +204,63 @@ test('화면 아래 줄 라벨 한 줄, 화면 위 보기 버튼·배율 표시 
     const b = await labels.nth(i).boundingBox();
     expect(b.height, `아래 줄 라벨 ${i} 높이(줄바꿈)`).toBeLessThanOrEqual(20);
   }
+});
+
+// ── 2부(10) 처음 화면 맞추기 ─────────────────────────────────────────────────
+test('1280×720 새 프로젝트: 그림판이 칸 안에 다 들어가고 배율 ≤ 100%, 256 문서는 100%', async ({ page }) => {
+  await openApp(page, { width: 1280, height: 720 });
+  const r = await page.evaluate(() => {
+    const es = window.__editorState.get();
+    const m = window.__store.get().meta;
+    const region = document.querySelector('[data-region="canvas"]').getBoundingClientRect();
+    return { zoom: es.zoom, docW: m.width, docH: m.height, rw: region.width, rh: region.height };
+  });
+  expect(r.zoom).toBeLessThanOrEqual(1.001);                 // 100%보다 크게 키우지 않음
+  expect(r.docW * r.zoom).toBeLessThanOrEqual(r.rw + 1);     // 그림판이 가로 칸 안
+  expect(r.docH * r.zoom).toBeLessThanOrEqual(r.rh + 1);     // 그림판이 세로 칸 안
+
+  // 256×256 로 바꾸면(문서 크기 변경 → 다시 맞춤) 작은 문서라 100%.
+  await page.evaluate(() => window.__store.apply({ type: 'setMeta', patch: { width: 256, height: 256 } }));
+  await page.waitForTimeout(80);
+  expect(await page.evaluate(() => window.__editorState.get().zoom)).toBeCloseTo(1, 2);
+});
+
+test('직접 확대한 뒤 창 크기를 바꿔도 배율이 그대로', async ({ page }) => {
+  await openApp(page, { width: 1280, height: 720 });
+  // 화면 아래 줄 배율 입력으로 200% (직접 조작 → viewUserAdjusted).
+  const zi = page.locator('.stage-bottombar .bb-zoom-input');
+  await zi.fill('200'); await zi.press('Enter');
+  expect(await page.evaluate(() => window.__editorState.get().zoom)).toBeCloseTo(2, 2);
+  await page.setViewportSize({ width: 1000, height: 640 });   // 창 크기 변경(리사이즈)
+  await page.waitForTimeout(120);
+  expect(await page.evaluate(() => window.__editorState.get().zoom)).toBeCloseTo(2, 2); // 안 건드림
+});
+
+// ── 2부(11) 타임라인 높이 / 겹친 표시 ────────────────────────────────────────
+test('저장값 없음 + 1280×720: 타임라인 ≤ 창 32%, 그림판 ≥ 280, 더블클릭 → 기본', async ({ page }) => {
+  await openApp(page, { width: 1280, height: 720, clearTl: true });
+  const tlH = () => page.evaluate(() => document.querySelector('[data-region="timeline"]').getBoundingClientRect().height);
+  const stageH = () => page.evaluate(() => document.querySelector('[data-region="canvas"]').getBoundingClientRect().height);
+  expect(await tlH()).toBeLessThanOrEqual(720 * 0.32 + 2);
+  expect(await stageH()).toBeGreaterThanOrEqual(280);
+
+  // 저장값을 크게 넣고 다시 열면 그림판 최소(280) 지키려 줄어든다(저장값은 안 바뀜).
+  await page.evaluate(() => { try { localStorage.setItem('apng2.timelineHeight', '560'); } catch {} });
+  await page.reload();
+  await page.waitForFunction(() => !!(window.__store && window.__stage));
+  await page.waitForTimeout(120);
+  expect(await stageH()).toBeGreaterThanOrEqual(280);
+  // 경계 더블클릭 → 기본 높이(저장값 지움)로.
+  await page.locator('#tl-resize').dblclick();
+  await page.waitForTimeout(80);
+  expect(await tlH()).toBeLessThanOrEqual(720 * 0.32 + 2);
+});
+
+test('화면 아래 줄에 프레임 위치 0개, 배율 표시 화면 전체에 1개', async ({ page }) => {
+  await openApp(page);
+  await expect(page.locator('.stage-bottombar .bb-frame-text')).toHaveCount(0);
+  await expect(page.locator('.bb-zoom-num')).toHaveCount(0);
+  await expect(page.locator('.stage-zoom')).toHaveCount(0);
+  // 확대 배율을 보여주는 칸은 화면 전체에서 하나(아래 줄 배율 입력).
+  await expect(page.locator('.bb-zoom-input')).toHaveCount(1);
 });

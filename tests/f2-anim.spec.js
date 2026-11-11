@@ -1,5 +1,5 @@
 // F2-1 — 움직이는 이미지 가져오기(GIF·APNG·WebP). 인코더로 만든 애니를 decodeAnim 으로 되가져온다.
-import { test, expect } from '@playwright/test';
+import { test, expect } from './helpers/fixtures.js';
 
 async function openApp(page) {
   await page.goto('/');

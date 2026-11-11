@@ -1,5 +1,5 @@
 // R20 — 월드 변환 통합·따라가기(follow)·움직임 번짐(motion blur).
-import { test, expect } from '@playwright/test';
+import { test, expect } from './helpers/fixtures.js';
 
 test.beforeEach(async ({ page }) => { await page.goto('/'); });
 

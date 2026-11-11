@@ -1,5 +1,5 @@
 // R5 마무리 — R5-3(스냅 후보가 다른 레이어의 축척·앵커 오프셋 반영)·R5-4(내보내기 재열기 비트맵 정리).
-import { test, expect } from '@playwright/test';
+import { test, expect } from './helpers/fixtures.js';
 
 test('R5-3 — 스냅 후보가 다른 레이어의 축척을 반영한다(축척 모서리로 스냅)', async ({ page }) => {
   await page.goto('/');

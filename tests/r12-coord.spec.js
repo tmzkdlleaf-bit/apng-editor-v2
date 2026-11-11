@@ -1,6 +1,6 @@
 // R12-1 — 이펙트 coord 파라미터를 캔버스에서 끌기. 좌표 매핑이 실제 렌더 위치와 맞는지(±2px),
 // 되돌리기 1건에 원래 값으로 돌아오는지. (밝은 픽셀 무게중심으로 효과 중심을 측정.)
-import { test, expect } from '@playwright/test';
+import { test, expect } from './helpers/fixtures.js';
 
 test.describe('R12-1 이펙트 좌표 끌기', () => {
   // 화면 파라미터를 항등으로(zoom1·pan0·W=H=docW) 두면 coordToScreen 가 doc-post-camera 좌표를 바로 돌려준다.

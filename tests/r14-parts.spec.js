@@ -1,6 +1,6 @@
 // R14-3 — 내 부품. 저장 → 다른 프로젝트에 넣기(렌더 일치·id 충돌 없음·되돌리기 1건),
 // 앱 시작 정리 후에도 부품 이미지 생존, .apnglib 내보내기·불러오기.
-import { test, expect } from '@playwright/test';
+import { test, expect } from './helpers/fixtures.js';
 
 // 가운데에 피벗을 둔 그룹(빨간 네모 자식) 문서를 만든다.
 async function buildGroupDoc(page, D) {

@@ -1,6 +1,6 @@
 // R7 — 2차 전체 검토에서 실제로 돌려 확인한 버그 재현(고치면 통과).
 // R7-1·R7-2는 dist 를 두 번 빌드해야 재현돼 별도(tests/sw/)로 뺐다.
-import { test, expect } from '@playwright/test';
+import { test, expect } from './helpers/fixtures.js';
 
 test.describe('R7 재현', () => {
   // ── R7-3: 다른 프로젝트를 지워도 되돌리기로 살릴 이미지는 남아야 한다(데이터 손실) ──

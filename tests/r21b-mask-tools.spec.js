@@ -1,5 +1,5 @@
 // R21b — 가리기 화면 도구(사각형/타원 끌기·펜·점 편집)·좌표 변환·모양 키.
-import { test, expect } from '@playwright/test';
+import { test, expect } from './helpers/fixtures.js';
 
 async function addShape(page, { w = 200, h = 200, x = 384, y = 384 } = {}) {
   return page.evaluate(async (args) => {

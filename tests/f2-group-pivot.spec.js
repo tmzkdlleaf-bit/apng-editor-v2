@@ -1,5 +1,5 @@
 // F2-7 — 그룹 기준점 이동 시 자식 화면 위치 그대로(렌더 픽셀로 검증).
-import { test, expect } from '@playwright/test';
+import { test, expect } from './helpers/fixtures.js';
 
 async function openApp(page) {
   await page.goto('/?demo=1');

@@ -1,5 +1,5 @@
 // F2-6 — 카메라: 행 클릭 → 섹션·영역, X·Y·줌 키프레임.
-import { test, expect } from '@playwright/test';
+import { test, expect } from './helpers/fixtures.js';
 
 async function openApp(page) {
   await page.goto('/?demo=1');

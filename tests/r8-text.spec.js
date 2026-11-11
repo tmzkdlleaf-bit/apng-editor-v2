@@ -1,5 +1,5 @@
 // R8-2 — 글자를 렌더 배율 단계에 맞춰 굽는다(확대·2배 내보내기에서 선명). 배율 1은 예전과 동일.
-import { test, expect } from '@playwright/test';
+import { test, expect } from './helpers/fixtures.js';
 
 async function open(page) {
   await page.goto('/');

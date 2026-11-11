@@ -1,5 +1,5 @@
 // F2-2·3 — 조정 레이어 + 도형 모음(path 도형 렌더 + 추가 메뉴 격자).
-import { test, expect } from '@playwright/test';
+import { test, expect } from './helpers/fixtures.js';
 
 async function openApp(page) {
   await page.goto('/?demo=1');

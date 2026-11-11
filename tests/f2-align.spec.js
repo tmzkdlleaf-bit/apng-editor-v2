@@ -1,5 +1,5 @@
 // F2-9 — 분배(3개 이상 균등 간격) + 그리드 간격 선택.
-import { test, expect } from '@playwright/test';
+import { test, expect } from './helpers/fixtures.js';
 
 async function openApp(page) {
   await page.goto('/?demo=1');

@@ -440,6 +440,9 @@ export function initStage(containerEl, store, editorState) {
       // dpr가 바뀌면 패턴 재생성
       _checkerPattern = null;
     }
+    // R23d item 10: 캔버스 크기가 바뀌면(창·패널) 직접 조작 전이면 다시 화면에 맞춘다.
+    //   캔버스 크기 갱신 뒤라 올바른 크기로 계산된다(RO 는 observe 직후에도 한 번 불려 처음 맞춤이 된다).
+    cleanupView.autoFitIfPassive?.();
     requestScene();
     requestOverlay();
   });
@@ -495,7 +498,7 @@ export function initStage(containerEl, store, editorState) {
     destroy() {
       ro.disconnect();
       drag.cleanup();
-      cleanupView();
+      cleanupView.destroy();
       textEdit?.destroy?.();
       pathEdit?.destroy?.();
       effectCoordEdit?.destroy?.();

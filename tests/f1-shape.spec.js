@@ -1,5 +1,5 @@
 // F1-8 — 도형 속성(종류·채움/그라디언트·선·둥글기·꼭짓점). 별·그라디언트 렌더 확장 포함.
-import { test, expect } from '@playwright/test';
+import { test, expect } from './helpers/fixtures.js';
 
 async function openApp(page) {
   await page.goto('/?demo=1');

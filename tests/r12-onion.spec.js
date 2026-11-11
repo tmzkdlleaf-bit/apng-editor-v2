@@ -3,7 +3,7 @@
 // 배경 체커가 캔버스를 덮어 "칠해진 픽셀 수"로는 못 재므로, 두 상태의 픽셀 차이로 판정한다.
 // 주의: 화면 전체 픽셀을 Node 로 옮기면(Array.from) 바쁠 때 직렬화가 느려 흔들린다.
 // 캡처는 브라우저 window 에 보관하고, 차이 계산도 브라우저 안에서 해서 "수"만 돌려받는다.
-import { test, expect } from '@playwright/test';
+import { test, expect } from './helpers/fixtures.js';
 
 async function setup(page) {
   await page.goto('/');
@@ -18,7 +18,8 @@ async function setup(page) {
     s.transform.x = { value: 60, keys: [{ f: 0, v: 60, ease: 'linear' }, { f: fc - 1, v: W - 60, ease: 'linear' }] };
     s.transform.y.value = store.get().meta.height / 2;
     store.apply({ type: 'addLayer', layer: s, index: 0 });
-    window.__editorState.set({ f: 5, onion: false, onionBefore: 1, onionAfter: 1 });
+    // 배율을 100%로 고정(R23d 자동 맞춤이 겹침 픽셀 수를 바꾸지 않게). viewUserAdjusted 로 다시 안 맞춤.
+    window.__editorState.set({ f: 5, onion: false, onionBefore: 1, onionAfter: 1, zoom: 1, panX: 0, panY: 0, viewUserAdjusted: true });
   });
 }
 

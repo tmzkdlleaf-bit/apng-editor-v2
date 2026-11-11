@@ -1,5 +1,5 @@
 // R23c — 전문가 화면 2부(2-1): 메뉴 막대.
-import { test, expect } from '@playwright/test';
+import { test, expect } from './helpers/fixtures.js';
 import { expectOnTop } from './helpers/on-top.js';
 
 async function openApp(page) {
@@ -76,7 +76,8 @@ test('Alt → 오른쪽 화살표 → 아래 → Enter 로 항목 실행', async
   await page.keyboard.press('Alt');
   for (let i = 0; i < 5; i++) await page.keyboard.press('ArrowRight'); // 파일 → 보기
   await page.keyboard.press('ArrowDown'); // 메뉴 열고 첫 항목(확대)
-  // "격자"까지: 확대·축소·화면에 맞추기·(구분)·격자 → 아래로 3번 더
+  // "격자"까지: 확대·축소·화면에 맞추기·100%·(구분)·격자 → 아래로 4번 더 (R23d: 100% 항목 추가)
+  await page.keyboard.press('ArrowDown');
   await page.keyboard.press('ArrowDown');
   await page.keyboard.press('ArrowDown');
   await page.keyboard.press('ArrowDown');

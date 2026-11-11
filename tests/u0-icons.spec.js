@@ -1,5 +1,5 @@
 // U0 — 아이콘 세트. 필요한 아이콘이 모두 유효한 SVG 로 렌더되는지.
-import { test, expect } from '@playwright/test';
+import { test, expect } from './helpers/fixtures.js';
 
 const REQUIRED = [
   'eye', 'eye-off', 'lock', 'unlock',

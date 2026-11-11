@@ -1,7 +1,7 @@
 // 화면 검수용 스크린샷(다크·라이트) → docs/screens/. 단언 최소, 파일 생성이 목적.
 // item 13: 빈 선택·이미지·글자(끝까지 스크롤)·이펙트·드롭다운·추가 메뉴·모션 갤러리·이펙트 갤러리·
 //   내보내기(결과 후)·프로젝트 목록·단축키 안내·레이어 행 호버·타임라인 키·클립.
-import { test, expect } from '@playwright/test';
+import { test, expect } from './helpers/fixtures.js';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 

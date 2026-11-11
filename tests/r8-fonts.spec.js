@@ -1,5 +1,5 @@
 // R8-3 — 글꼴 내장: vendor/fonts 의 woff2 로 그린다. 인터넷이 없어도 같은 결과.
-import { test, expect } from '@playwright/test';
+import { test, expect } from './helpers/fixtures.js';
 
 async function renderNoto(page) {
   return await page.evaluate(async () => {

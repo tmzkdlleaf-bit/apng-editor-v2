@@ -13,6 +13,7 @@
 - 같은 코드를 나중에 Tauri 2로 포장해 윈도우 설치형 앱으로도 낸다. 브라우저 전용 기능에 기대지 않는다.
   WebP 인코딩을 캔버스(`toBlob`/`convertToBlob`)에 맡기지 않는다(사파리 엔진은 PNG를 돌려준다).
 - GitHub Actions가 push마다 테스트를 돌린다. 테스트를 깨뜨린 채로 묶음을 끝내지 않는다.
+  테스트 통과만으로 끝났다고 보지 않는다. 바꾼 화면은 실제로 열어 보고 사진으로 확인한다.
 - 개발 서버: `npm run dev` (http-server, 5173 포트, 캐시 끔). devDependencies는 테스트·서버 도구만.
 - `src/core/`는 DOM(document, window)을 쓰지 않는다. Web Worker와 테스트에서 그대로 쓸 수 있어야 한다.
   단, 캔버스는 `OffscreenCanvas` 또는 주입받은 캔버스 생성 함수로 다룬다.
@@ -52,12 +53,17 @@
   3. 직접 확인하는 방법(무엇을 열고 무엇을 누르면 무엇이 보여야 하는지)
   4. 결정한 것 중 바꿀 수 있는 기본값
   5. 막힌 점·추측한 점
+  6. 화면 사진: 바뀐 화면을 라이트·다크로 찍어 `docs/screens/`에 두고 파일 이름을 적는다.
+     사진을 직접 열어 보고, 가려짐·잘림·줄바꿈·빈 상자가 없는지 한 줄로 적는다.
+  7. 콘솔: 첫 화면과 이번에 바꾼 화면에서 콘솔 오류 수(0이어야 함).
 
 ## 실행
 
 - `npm run dev` → http://localhost:5173
 - `npm test` → Playwright 테스트 전체
 - `npm run perf` → 성능 측정(P4 이후)
+- `npm run screens` → 화면 검수 스크린샷(docs/screens/ 갱신)
+- `npx playwright test r23d-visual --update-snapshots` → 일부러 화면을 바꾼 묶음에서 기준 사진 갱신
 
 ## 전문가판 규칙 (R16~)
 

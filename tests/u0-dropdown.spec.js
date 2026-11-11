@@ -1,5 +1,5 @@
 // U0 — 공통 드롭다운 컴포넌트 + 앱 전체에 네이티브 <select> 0개.
-import { test, expect } from '@playwright/test';
+import { test, expect } from './helpers/fixtures.js';
 import { readFileSync, readdirSync, statSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';

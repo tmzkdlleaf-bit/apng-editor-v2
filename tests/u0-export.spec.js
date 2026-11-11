@@ -1,5 +1,5 @@
 // U0-7 — 내보내기 창: 결과 전 placeholder, 형식 세그먼트 버튼.
-import { test, expect } from '@playwright/test';
+import { test, expect } from './helpers/fixtures.js';
 
 async function openModal(page) {
   await page.goto('/?demo=1');

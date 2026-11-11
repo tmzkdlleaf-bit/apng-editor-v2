@@ -1,5 +1,5 @@
 // E3 — 내보내기 화면(모달 UI).
-import { test, expect } from '@playwright/test';
+import { test, expect } from './helpers/fixtures.js';
 
 async function openApp(page) {
   await page.goto('/?demo=1');

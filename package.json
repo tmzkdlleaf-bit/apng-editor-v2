@@ -9,6 +9,7 @@
     "perf": "playwright test --config=playwright.perf.config.js",
     "sheets": "playwright test --config=playwright.sheets.config.js",
     "screens": "playwright test --config=playwright.screens.config.js",
+    "visual": "playwright test --config=playwright.visual.config.js",
     "test:sw": "playwright test --config=playwright.sw.config.js",
     "build": "node scripts/build.mjs"
   },

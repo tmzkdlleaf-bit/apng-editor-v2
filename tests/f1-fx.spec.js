@@ -1,5 +1,5 @@
 // F1 — 색 덮기 · 트랙 매트 · 외곽선 · 흩어지며 퇴장.
-import { test, expect } from '@playwright/test';
+import { test, expect } from './helpers/fixtures.js';
 
 async function openApp(page) {
   await page.goto('/?demo=1');

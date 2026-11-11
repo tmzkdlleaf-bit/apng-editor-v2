@@ -1,5 +1,5 @@
 // U0-2 — 타임라인: 왼쪽 레이어 행과 오른쪽 트랙 행의 화면 y 가 어긋나지 않는다.
-import { test, expect } from '@playwright/test';
+import { test, expect } from './helpers/fixtures.js';
 
 async function openApp(page) {
   await page.goto('/?demo=1');

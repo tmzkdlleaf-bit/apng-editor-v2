@@ -1,5 +1,5 @@
 // F5-4 — 단축키 안내(단일 소스) + 처음 사용 안내.
-import { test, expect } from '@playwright/test';
+import { test, expect } from './helpers/fixtures.js';
 
 async function openReal(page) {
   await page.addInitScript(() => { try { localStorage.setItem('apng2.onboarded', '1'); } catch {} }); // 자동 안내 끔

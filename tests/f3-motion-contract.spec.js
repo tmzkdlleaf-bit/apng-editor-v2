@@ -1,5 +1,5 @@
 // F3-1 — 모션 계약 + 시험 프리셋 3개.
-import { test, expect } from '@playwright/test';
+import { test, expect } from './helpers/fixtures.js';
 
 test('F3-1 — 시험 프리셋 3개: 계약 필드 + 루프 t0==t1', async ({ page }) => {
   await page.goto('/');

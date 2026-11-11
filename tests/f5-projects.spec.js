@@ -1,5 +1,5 @@
 // F5-2·3 — 프로젝트 목록(복제 독립·이름·삭제) + 템플릿.
-import { test, expect } from '@playwright/test';
+import { test, expect } from './helpers/fixtures.js';
 
 // 실제 앱(데모 아님)으로 idb 프로젝트 사용. reload 를 가로채 전환을 관찰.
 async function openReal(page) {

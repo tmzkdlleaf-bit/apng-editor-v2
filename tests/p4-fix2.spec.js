@@ -1,5 +1,5 @@
 // P4 보완2: 이펙트 변환/마스크, 콘텐츠 캐시, draft 해상도
-import { test, expect } from '@playwright/test';
+import { test, expect } from './helpers/fixtures.js';
 
 test.describe('P4 보완2', () => {
   test.beforeEach(async ({ page }) => {

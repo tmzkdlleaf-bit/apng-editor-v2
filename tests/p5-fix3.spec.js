@@ -3,7 +3,7 @@
 // 항목 2: 편집 화면 엔진에 이펙트 연결 확인
 // 항목 3: 글자 판정 크기 — renderer와 동일한 측정값 사용
 // 항목 4: 그룹 자식 크기 조절 시 반대쪽 코너 고정
-import { test, expect } from '@playwright/test';
+import { test, expect } from './helpers/fixtures.js';
 
 // ─── 항목 1: 이펙트 view 렌더 일치 ──────────────────────────────────────────
 test.describe('항목 1 — 이펙트 view 렌더 == 전체 렌더 잘라 낸 것', () => {

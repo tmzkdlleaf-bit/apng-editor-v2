@@ -1,5 +1,5 @@
 // R22b — 그룹 시간: 시작 어긋남·속도·범위 밖(hold/loop/hide)·다시 매기기·안쪽 프레임 키·이음새·왕복.
-import { test, expect } from '@playwright/test';
+import { test, expect } from './helpers/fixtures.js';
 
 test.beforeEach(async ({ page }) => { await page.goto('/'); });
 

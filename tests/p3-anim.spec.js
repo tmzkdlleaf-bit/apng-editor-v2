@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './helpers/fixtures.js';
 
 test.describe('P3 - 애니메이션 평가', () => {
   test.beforeEach(async ({ page }) => {

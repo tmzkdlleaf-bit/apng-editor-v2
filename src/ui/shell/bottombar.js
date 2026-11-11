@@ -1,35 +1,67 @@
-// R23c 2-3 — 화면(캔버스) 바로 아래 한 줄: 배율 · 미리보기 해상도 · 투명 격자 · 가이드 · 안전 영역 · 프레임.
+// R23c 2-3 — 화면(캔버스) 바로 아래 한 줄: 배율 · 미리보기 해상도 · 투명 격자 · 가이드 · 안전 영역 · 격자 · 스냅 · 겹침.
 //   배율·격자·가이드·안전 영역은 미리보기 전용(내보내기에 영향 없음). previewRes 는 작업 공간 저장값에만 둔다.
 //   R23d item 6: 화면 위 "보기" 메뉴를 지우고 격자 간격·스냅·겹침(온니언) 조절을 여기로 옮겼다.
+//   R23d item 11: 배율은 입력+목록 하나로 합치고(직접 입력 가능), 겹쳐 보이던 프레임 위치(1/24)는 재생 줄에만 둔다.
 import { createDropdown } from '../controls/dropdown.js';
 
-const ZOOM_STEPS = [0.1, 0.25, 0.5, 0.667, 1, 1.5, 2, 3, 4, 6, 8];
 const RES_KEY = 'apng2.ws.previewRes';
 
 function _loadRes() { try { const v = localStorage.getItem(RES_KEY); return ['full', 'half', 'quarter', 'auto'].includes(v) ? v : 'auto'; } catch { return 'auto'; } }
 function _saveRes(v) { try { localStorage.setItem(RES_KEY, v); } catch {} }
 
+// 배율 = 입력 칸 + 목록(프리셋). 직접 입력도 되고 목록에서도 고른다. 하나로 합친 것(R23d item 11).
+function _createZoomCombo(editorState) {
+  const wrap = document.createElement('div'); wrap.className = 'bb-group bb-zoom';
+  const input = document.createElement('input');
+  input.type = 'text'; input.className = 'bb-zoom-input'; input.setAttribute('aria-label', '배율');
+  const caret = document.createElement('button');
+  caret.type = 'button'; caret.className = 'bb-zoom-caret'; caret.setAttribute('aria-label', '배율 목록');
+  caret.innerHTML = '<span class="dropdown-caret" aria-hidden="true"></span>';
+  wrap.append(input, caret);
+
+  const PRESETS = [0.25, 0.5, 0.667, 1, 1.5, 2, 4, 8];
+  const _fmt = (z) => Math.round(z * 100) + '%';
+  const _setZoom = (z) => editorState.set({ zoom: Math.min(16, Math.max(0.1, z)), viewUserAdjusted: true });
+
+  function _applyInput() {
+    const pct = parseFloat(String(input.value).replace('%', '').trim());
+    if (Number.isFinite(pct)) _setZoom(pct / 100); else sync();
+  }
+  input.addEventListener('change', _applyInput);
+  input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { _applyInput(); input.blur(); } });
+
+  let list = null;
+  function _closeList() { if (list) { list.remove(); list = null; document.removeEventListener('pointerdown', _onOut, true); } }
+  function _onOut(e) { if (!wrap.contains(e.target) && (!list || !list.contains(e.target))) _closeList(); }
+  function _openList() {
+    _closeList();
+    list = document.createElement('div'); list.className = 'dropdown-list';
+    for (const z of PRESETS) {
+      const o = document.createElement('div'); o.className = 'dropdown-option'; o.textContent = _fmt(z); o.dataset.value = String(z);
+      o.addEventListener('click', () => { _setZoom(z); _closeList(); });
+      list.appendChild(o);
+    }
+    document.body.appendChild(list);
+    const r = wrap.getBoundingClientRect();
+    list.style.left = r.left + 'px'; list.style.minWidth = r.width + 'px';
+    const below = window.innerHeight - r.bottom;
+    if (below < 180 && r.top > below) { list.style.bottom = (window.innerHeight - r.top) + 'px'; list.style.top = ''; }
+    else { list.style.top = r.bottom + 'px'; list.style.bottom = ''; }
+    setTimeout(() => document.addEventListener('pointerdown', _onOut, true), 0);
+  }
+  caret.addEventListener('click', (e) => { e.stopPropagation(); list ? _closeList() : _openList(); });
+
+  function sync() { if (document.activeElement !== input) input.value = _fmt(editorState.get().zoom); }
+  sync();
+  return { el: wrap, sync, destroy: _closeList };
+}
+
 export function createBottombar(store, editorState) {
   const el = document.createElement('div');
   el.className = 'stage-bottombar';
 
-  // ── 배율 ──
-  const zoomWrap = document.createElement('div'); zoomWrap.className = 'bb-group';
-  const zoomDd = createDropdown({
-    ariaLabel: '배율',
-    options: ZOOM_STEPS.map((z) => ({ value: String(z), label: Math.round(z * 100) + '%' })),
-    value: '1',
-    onChange: (v) => editorState.set({ zoom: parseFloat(v) }),
-  });
-  const zoomNum = document.createElement('input');
-  zoomNum.type = 'number'; zoomNum.className = 'num-input bb-zoom-num'; zoomNum.min = '10'; zoomNum.max = '1600'; zoomNum.step = '5';
-  zoomNum.setAttribute('aria-label', '배율 %');
-  zoomNum.addEventListener('change', () => {
-    const pct = parseFloat(zoomNum.value);
-    if (Number.isFinite(pct)) editorState.set({ zoom: Math.min(16, Math.max(0.1, pct / 100)) });
-  });
-  const zoomPct = document.createElement('span'); zoomPct.className = 'bb-unit'; zoomPct.textContent = '%';
-  zoomWrap.append(zoomDd.el, zoomNum, zoomPct);
+  // ── 배율(입력+목록 하나) ──
+  const zoom = _createZoomCombo(editorState);
 
   // ── 미리보기 해상도 ──
   const resWrap = document.createElement('div'); resWrap.className = 'bb-group';
@@ -91,30 +123,14 @@ export function createBottombar(store, editorState) {
     onionAfterDd.el.style.display = on ? '' : 'none';
   }
 
-  // ── 프레임 ──
-  const frameWrap = document.createElement('div'); frameWrap.className = 'bb-group bb-frame';
-  const frameText = document.createElement('span'); frameText.className = 'bb-frame-text';
-  frameWrap.appendChild(frameText);
-
+  // 프레임 위치(1/24)는 재생 줄에만 둔다(R23d item 11) — 오른쪽 공간은 비워 둔다.
   const spacer = document.createElement('div'); spacer.className = 'bb-spacer';
-  el.append(zoomWrap, resWrap, checker.w, guides.w, safe.w, gridWrap, snap.w, onionWrap, spacer, frameWrap);
+  el.append(zoom.el, resWrap, checker.w, guides.w, safe.w, gridWrap, snap.w, onionWrap, spacer);
 
-  function _syncZoom() {
-    const z = editorState.get().zoom;
-    zoomNum.value = String(Math.round(z * 100));
-    // 가장 가까운 스텝으로 드롭다운 표시(없으면 그대로 둠).
-    const near = ZOOM_STEPS.reduce((a, b) => Math.abs(b - z) < Math.abs(a - z) ? b : a, ZOOM_STEPS[0]);
-    if (Math.abs(near - z) < 0.001) zoomDd.setValue?.(String(near));
-  }
-  function _syncFrame() {
-    const f = editorState.get().f; const fc = store.get().meta.frameCount ?? 1;
-    frameText.textContent = `${f + 1} / ${fc}`;
-  }
-  _syncZoom(); _syncFrame(); _syncOnion();
+  _syncOnion();
 
   const unsubES = editorState.subscribe((p) => {
-    if ('zoom' in p) _syncZoom();
-    if ('f' in p) _syncFrame();
+    if ('zoom' in p) zoom.sync();
     if ('checker' in p) checker.input.checked = !!editorState.get().checker;
     if ('guides' in p) guides.input.checked = !!editorState.get().guides;
     if ('safeArea' in p) safe.input.checked = !!editorState.get().safeArea;
@@ -125,14 +141,12 @@ export function createBottombar(store, editorState) {
     if ('onionBefore' in p) onionBeforeDd.setValue?.(String(editorState.get().onionBefore ?? 1));
     if ('onionAfter' in p) onionAfterDd.setValue?.(String(editorState.get().onionAfter ?? 1));
   });
-  const unsubStore = store.subscribe({ meta: true }, _syncFrame);
 
   // 처음 값 반영(작업 공간 저장값 → previewRes). checker 기본 켜짐(투명 격자는 늘 보이던 기본).
   editorState.set({ previewRes: _loadRes() });
 
   function destroy() {
-    unsubES(); unsubStore();
-    zoomDd.destroy?.(); resDd.destroy?.(); gridStepDd.destroy?.(); onionBeforeDd.destroy?.(); onionAfterDd.destroy?.();
+    unsubES(); zoom.destroy?.(); resDd.destroy?.(); gridStepDd.destroy?.(); onionBeforeDd.destroy?.(); onionAfterDd.destroy?.();
   }
   return { el, destroy };
 }

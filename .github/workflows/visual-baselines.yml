@@ -1,0 +1,36 @@
+name: visual-baselines
+
+# R23d item 8 — 리눅스용 사진 기준(baseline) 만들기.
+#   운영체제마다 글자 모양이 달라 기준 사진이 OS별로 따로 생긴다(파일명 -linux / -win32).
+#   이 워크플로를 "Run workflow"(수동)로 돌리면 리눅스에서 --update-snapshots 로 기준 사진을 새로 찍어
+#   산출물(artifact)로 올린다. 받아서 tests/r23d-visual.spec.js-snapshots/ 에 커밋하면
+#   CI 에서도 `npm run visual` 이 통과한다.
+on:
+  workflow_dispatch:
+
+jobs:
+  baselines:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: npm ci
+        run: npm ci
+
+      - name: playwright install
+        run: npx playwright install --with-deps chromium
+
+      - name: update visual baselines (linux)
+        run: npm run visual -- --update-snapshots
+
+      - name: upload linux baselines
+        uses: actions/upload-artifact@v7
+        with:
+          name: r23d-visual-linux-baselines
+          path: tests/r23d-visual.spec.js-snapshots/
+          retention-days: 14

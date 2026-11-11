@@ -1,5 +1,5 @@
 // P5: 캔버스 조작과 숫자 칸
-import { test, expect } from '@playwright/test';
+import { test, expect } from './helpers/fixtures.js';
 
 test.describe('P5 캔버스 조작', () => {
   test.beforeEach(async ({ page }) => {

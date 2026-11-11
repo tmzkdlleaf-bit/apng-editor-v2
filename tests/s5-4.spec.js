@@ -1,5 +1,5 @@
 // S5-4 모션(등장 12 + 퇴장 11 + 반복 12 + 강조 8 = 43) — 수·계약·결정론·끝점·루프 이음매.
-import { test, expect } from '@playwright/test';
+import { test, expect } from './helpers/fixtures.js';
 
 test('S5-4 — 모션 43종: 계약·결정론·끝점·루프 이음매', async ({ page }) => {
   await page.goto('/');

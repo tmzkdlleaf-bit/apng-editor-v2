@@ -1,5 +1,5 @@
 // F1-9 — 움직이는 이미지·그룹·카메라 섹션 자리(읽기 전용 표시).
-import { test, expect } from '@playwright/test';
+import { test, expect } from './helpers/fixtures.js';
 
 async function openApp(page) {
   await page.goto('/?demo=1');

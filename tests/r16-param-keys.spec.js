@@ -1,5 +1,5 @@
 // R16 — 효과 수치 키프레임(paramAnim): 값 보간 종류 확장·evalEffectParams·명령·마이그레이션·왕복·렌더.
-import { test, expect } from '@playwright/test';
+import { test, expect } from './helpers/fixtures.js';
 
 test.beforeEach(async ({ page }) => { await page.goto('/'); });
 

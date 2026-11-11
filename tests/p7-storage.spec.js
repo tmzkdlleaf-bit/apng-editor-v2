@@ -1,5 +1,5 @@
 // P7 — 저장 (IndexedDB 자동 저장 / 내용 주소 에셋 / 프로젝트 파일 / 마이그레이션)
-import { test, expect } from '@playwright/test';
+import { test, expect } from './helpers/fixtures.js';
 
 test.describe('P7 — 저장', () => {
   // 1. 레이어 추가·이동 → 자동 저장 → 새로고침 → 같은 문서, 이미지 바이트 유지

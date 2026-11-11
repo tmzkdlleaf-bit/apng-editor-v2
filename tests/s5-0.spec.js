@@ -1,5 +1,5 @@
 // S5-0 기반 — 가로·세로 크기 분리, 모션 채널(scaleX/Y·밝기·조각·이어그리기), bleed.
-import { test, expect } from '@playwright/test';
+import { test, expect } from './helpers/fixtures.js';
 
 async function openApp(page) {
   await page.goto('/?demo=1');

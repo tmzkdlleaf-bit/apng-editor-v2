@@ -161,12 +161,31 @@
 .stage-bottombar .bb-label { color: var(--dim); white-space: nowrap; }
 .stage-bottombar .bb-unit { color: var(--dim); white-space: nowrap; }
 .stage-bottombar .bb-group .dropdown { flex-shrink: 0; }
-.stage-bottombar .bb-zoom-num { width: 48px; }
 .stage-bottombar .bb-check { display: flex; align-items: center; gap: var(--sp-1); cursor: pointer; white-space: nowrap; }
 .stage-bottombar .bb-check input { margin: 0; }
 .stage-bottombar .bb-spacer { flex: 1; }
-.stage-bottombar .bb-frame-text { color: var(--text); font-variant-numeric: tabular-nums; }
 .stage-bottombar .dropdown { min-width: 64px; }
+
+/* 배율 = 입력+목록 하나(R23d item 11) — 숫자 칸/드롭다운을 합친다. */
+.stage-bottombar .bb-zoom { gap: 0; }
+.stage-bottombar .bb-zoom-input {
+  width: 52px; height: 22px; box-sizing: border-box;
+  background: var(--input); color: var(--text);
+  border: 1px solid var(--btnline); border-right: none;
+  border-radius: var(--r-1) 0 0 var(--r-1);
+  padding: 0 var(--sp-1); font-size: var(--fs-2); text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.stage-bottombar .bb-zoom-input:focus { outline: none; border-color: var(--acc); }
+.stage-bottombar .bb-zoom-caret {
+  height: 22px; width: 18px; padding: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--btn); color: var(--dim);
+  border: 1px solid var(--btnline); border-radius: 0 var(--r-1) var(--r-1) 0;
+  cursor: pointer;
+}
+.stage-bottombar .bb-zoom-caret:hover { color: var(--text); }
+.stage-bottombar .bb-zoom-caret .dropdown-caret { pointer-events: none; }
 
 [data-region="canvas"] {
   background: var(--stage);
@@ -282,7 +301,7 @@
   overflow: hidden;
   display: grid;
   grid-template-rows: 40px 1fr;
-  min-height: 200px;
+  min-height: 120px;
   max-height: 600px;
 }
 
@@ -319,20 +338,31 @@
   overflow-y: auto;
 }
 
+/* 그림판·타임라인 경계 손잡이 — 경계에 걸쳐 놓고, 마우스를 올리면 선이 진해지고 커서가 바뀐다.
+   더블클릭하면 기본 높이로 돌아간다(JS). (R23d item 11) */
 .resize-handle {
   position: absolute;
   left: 0;
   right: 0;
-  height: 4px;
+  top: -3px;
+  height: 7px;
   cursor: ns-resize;
   background: transparent;
-  z-index: 10;
+  z-index: var(--z-handle);
 }
-
-.resize-handle:hover,
-.resize-handle.dragging {
+.resize-handle::after {
+  content: '';
+  position: absolute;
+  left: 0; right: 0; top: 3px;
+  height: 1px;
+  background: var(--line);
+}
+.resize-handle:hover::after,
+.resize-handle.dragging::after {
+  top: 2px;
+  height: 3px;
   background: var(--acc);
-  opacity: 0.5;
+  border-radius: 2px;
 }
 
 /* ── R23c 메뉴 막대 ─────────────────────────────────────────────────────── */

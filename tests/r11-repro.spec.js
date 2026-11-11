@@ -1,7 +1,7 @@
 // R11 재현 — R7~R10 검토 후속. 고치기 전에는 2개 모두 실패하고, 고치면 통과한다.
 //  [R11-1] 핑퐁 문서 내보내기(투명 여백 자르기 꺼짐)가 DataCloneError 로 실패한다(R9-2 move 전송).
 //  [R11-2] 예전 카메라(v2) 애니메이션 변환이 키 사이에서 크게 어긋난다(R8-1 변환).
-import { test, expect } from '@playwright/test';
+import { test, expect } from './helpers/fixtures.js';
 
 test.describe('R11 재현', () => {
   // ── R11-1 ─────────────────────────────────────────────────────────────

@@ -1,7 +1,7 @@
 // E4 — 데스크톱(Tauri) 경계의 웹측 동작 + 자동 업데이트 배너 UI.
 // Rust/Tauri 빌드 없이 브라우저에서 검증 가능한 부분만 본다.
 // (실제 데스크톱 파일 저장·열기·업데이트는 Tauri 런타임이 있어야 하며 여기서 검증하지 않는다.)
-import { test, expect } from '@playwright/test';
+import { test, expect } from './helpers/fixtures.js';
 
 async function openApp(page) {
   await page.goto('/?demo=1');

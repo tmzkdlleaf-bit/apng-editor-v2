@@ -1,5 +1,5 @@
 // F3-7 — 조작 모드: 옮기기(V)·편집(E)·움직이기(P)·손(H).
-import { test, expect } from '@playwright/test';
+import { test, expect } from './helpers/fixtures.js';
 
 async function openApp(page) {
   await page.goto('/?demo=1');

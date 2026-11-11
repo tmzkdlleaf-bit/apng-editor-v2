@@ -1,5 +1,5 @@
 // F3-6 — 이징: 곡선 미리보기 + 커스텀 베지어(저장·불러오기 유지).
-import { test, expect } from '@playwright/test';
+import { test, expect } from './helpers/fixtures.js';
 
 test('F3-6 — easeCurveSvg 가 이징별 곡선 path 를 만든다', async ({ page }) => {
   await page.goto('/');

@@ -1,6 +1,6 @@
 // R13-2 — PNG 묶음 / 스프라이트 시트. zip 을 다시 풀어 파일 수·이름·픽셀이 renderFrame 과 같은지,
 // sheet.json 좌표로 잘라낸 조각이 해당 프레임과 같은지, 캔버스 한계 초과 시 막히는지.
-import { test, expect } from '@playwright/test';
+import { test, expect } from './helpers/fixtures.js';
 
 // 움직이는 사각형 문서(프레임마다 x 가 달라 프레임이 서로 다르게 나온다).
 async function makeDoc(page) {

@@ -1,5 +1,5 @@
 // E1 — 프레임 굽기 / 인코더(APNG·WebP·GIF). 결과는 브라우저 ImageDecoder로 디코딩해 검증한다.
-import { test, expect } from '@playwright/test';
+import { test, expect } from './helpers/fixtures.js';
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';

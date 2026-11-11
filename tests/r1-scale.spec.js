@@ -1,7 +1,7 @@
 // R1 추가 — 배율(scale 1·2·0.5)과 view(문서 일부만 그리기)에서 도형 위치가
 // 문서 단위로 같은지 확인한다. 합성은 문서 단위로 하고 renderScale 은 맨 마지막에
 // 한 번만 곱하므로, 어떤 배율·view 에서도 같은 자리에 와야 한다.
-import { test, expect } from '@playwright/test';
+import { test, expect } from './helpers/fixtures.js';
 
 // 불투명(alpha>128) 픽셀 bbox 의 '중심'을 문서 단위로. 외곽선·흐림의 대칭 확장에
 // 흔들리지 않도록 min/max 가 아니라 중심을 비교한다.

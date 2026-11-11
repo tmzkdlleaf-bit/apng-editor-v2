@@ -1,5 +1,5 @@
 // F2-4 — 레이어 썸네일: 표시 + 스크럽 중 재렌더 0회.
-import { test, expect } from '@playwright/test';
+import { test, expect } from './helpers/fixtures.js';
 
 async function openApp(page) {
   await page.goto('/?demo=1');

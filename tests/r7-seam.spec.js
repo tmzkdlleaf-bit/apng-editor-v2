@@ -1,5 +1,5 @@
 // R7-8 — 루프 이음새 검사가 scaleX·scaleY(가로·세로 크기)의 처음·끝 차이도 잡아야 한다.
-import { test, expect } from '@playwright/test';
+import { test, expect } from './helpers/fixtures.js';
 
 test('R7-8 — 이음새 검사가 scaleX 차이를 잡는다', async ({ page }) => {
   await page.goto('/');

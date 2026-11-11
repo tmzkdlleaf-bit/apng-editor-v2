@@ -1,5 +1,5 @@
 // R19 — 그래프 편집기(손잡이↔bezier·이어진 손잡이·F9·정지 키·이름 이징 근사·전환/편집).
-import { test, expect } from '@playwright/test';
+import { test, expect } from './helpers/fixtures.js';
 
 test.beforeEach(async ({ page }) => { await page.goto('/'); });
 

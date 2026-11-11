@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './helpers/fixtures.js';
 
 // R23c: 테마 토글은 메뉴 막대 "보기 › 라이트/다크 테마"로 옮겼다.
 async function toggleThemeViaMenu(page) {

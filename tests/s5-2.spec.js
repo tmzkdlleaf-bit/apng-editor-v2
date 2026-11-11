@@ -1,5 +1,5 @@
 // S5-2 효과(파티클 4 + 오버레이 9 + 사이버 6) — 결정론·루프·시드·극값·성능.
-import { test, expect } from '@playwright/test';
+import { test, expect } from './helpers/fixtures.js';
 
 const CATS = new Set(['파티클', '오버레이', '사이버']);
 // 시드(rng)에 의존하지 않는 효과 — 시드 변화 검사 제외.

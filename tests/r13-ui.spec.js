@@ -1,5 +1,5 @@
 // R13 UI — 내보내기 창에서 PNG 묶음 형식 선택→zip 저장, 세트 탭에서 변형 내보내기.
-import { test, expect } from '@playwright/test';
+import { test, expect } from './helpers/fixtures.js';
 
 async function addShape(page) {
   await page.evaluate(async () => {

@@ -1,5 +1,5 @@
 // U0-6 — 속성 패널: 준비 중 섹션 펼침 안내 · 섹션 머리 버튼 · 마름모 히트 24×24.
-import { test, expect } from '@playwright/test';
+import { test, expect } from './helpers/fixtures.js';
 
 async function openAppWithLayer(page) {
   await page.goto('/?demo=1');

@@ -1,5 +1,5 @@
 // F3-5 — 모션 기록: 키 줄이기 + 녹화 적용(입력과 오차 2px 이내) + 버튼.
-import { test, expect } from '@playwright/test';
+import { test, expect } from './helpers/fixtures.js';
 
 test('F3-5 — reduceKeys: 직선 위 중간 점 제거, 꺾이는 점 유지', async ({ page }) => {
   await page.goto('/');

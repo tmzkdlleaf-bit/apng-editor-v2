@@ -7,7 +7,7 @@
   <title>코코포리아 APNG 에디터</title>
   <!-- FOUC 방지: CSS 로드 전에 저장된 테마를 적용 -->
   <script>
-    (function(){var t=localStorage.getItem('apng2.theme');var v=t==='light'?'light':'dark';document.documentElement.setAttribute('data-theme',v);document.querySelector('meta[name="theme-color"]').setAttribute('content',v==='light'?'#eceae6':'#16171a');})();
+    (function(){var t=null;try{t=localStorage.getItem('apng2.theme');}catch(e){}var v=t==='light'?'light':'dark';document.documentElement.setAttribute('data-theme',v);document.querySelector('meta[name="theme-color"]').setAttribute('content',v==='light'?'#eceae6':'#16171a');})();
   </script>
   <link rel="icon" href="data:,">
   <link rel="manifest" href="manifest.webmanifest">

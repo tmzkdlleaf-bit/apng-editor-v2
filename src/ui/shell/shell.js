@@ -31,29 +31,40 @@ import { createLayer } from '../../core/doc/schema.js';
 import { putAsset } from '../../core/io/assets.js';
 import { probeAnim } from '../../core/io/anim-decode.js';
 
-const TL_KEY     = 'apng2.timelineHeight';
-const TL_DEFAULT = 340;
-const TL_MIN     = 200;
-const TL_MAX     = 600;
+const TL_KEY       = 'apng2.timelineHeight';
+const TL_MIN       = 120;   // 타임라인 최소(R23d: 작은 창에서 더 줄 수 있게 낮춤)
+const TL_MAX       = 600;
+const STAGE_MIN    = 280;   // 그림판 칸 최소(R23d item 11)
+const BOTTOMBAR_H  = 30;    // 화면 아래 줄
+const CHROME_H     = 48 + 34; // topbar + toolbar
+
+function _vh() { return (typeof window !== 'undefined' && window.innerHeight) ? window.innerHeight : 900; }
+function _clampTl(h) { return Math.min(TL_MAX, Math.max(TL_MIN, Math.round(h))); }
+
+// 저장값이 없을 때 기본 높이 = 창 높이의 32%(180~340).
+function defaultTlHeight() { return Math.round(Math.min(340, Math.max(180, _vh() * 0.32))); }
 
 function getStoredTlHeight() {
   try {
     const v = parseInt(localStorage.getItem(TL_KEY), 10);
-    return Number.isFinite(v) ? Math.min(TL_MAX, Math.max(TL_MIN, v)) : TL_DEFAULT;
-  } catch {
-    return TL_DEFAULT;
-  }
+    return Number.isFinite(v) ? _clampTl(v) : null;
+  } catch { return null; }
 }
+
+// 원하는 높이(저장값 또는 창에 맞춘 기본).
+function desiredTlHeight() { return getStoredTlHeight() ?? defaultTlHeight(); }
 
 function saveTlHeight(h) {
-  try { localStorage.setItem(TL_KEY, String(h)); } catch {}
+  try { localStorage.setItem(TL_KEY, String(_clampTl(h))); } catch {}
 }
 
-function setTlHeight(mainArea, h) {
-  const clamped = Math.min(TL_MAX, Math.max(TL_MIN, h));
-  // R23c: 캔버스(1fr) · 화면 아래 줄(auto) · 타임라인(고정). 아래 줄이 추가돼 3행이다.
-  mainArea.style.gridTemplateRows = `1fr auto ${clamped}px`;
-  saveTlHeight(clamped);
+// 적용 높이 = 원하는 높이. 단, 창이 작으면 그림판이 최소 STAGE_MIN 남게 타임라인을 줄인다(저장값은 안 바꾼다).
+function applyTlHeight(mainArea, desired) {
+  const maxForStage = Math.max(140, _vh() - CHROME_H - BOTTOMBAR_H - STAGE_MIN);
+  const applied = Math.max(TL_MIN, Math.min(TL_MAX, Math.min(desired, maxForStage)));
+  // 캔버스(1fr) · 화면 아래 줄(auto) · 타임라인(고정). 아래 줄이 추가돼 3행이다.
+  mainArea.style.gridTemplateRows = `1fr auto ${applied}px`;
+  return applied;
 }
 
 export function init(store, editorState, projectApi = null) {
@@ -138,7 +149,7 @@ export function init(store, editorState, projectApi = null) {
   document.body.appendChild(app);
 
   const mainArea = app.querySelector('#main-area');
-  setTlHeight(mainArea, getStoredTlHeight());
+  applyTlHeight(mainArea, desiredTlHeight());
 
   // R23c: 테마 전환·도움말은 메뉴 막대로 옮겼다. 첫 실행 자동 안내는 없앴다 — "도움말 › 둘러보기"에서만 연다.
 
@@ -178,13 +189,23 @@ export function init(store, editorState, projectApi = null) {
   });
   document.addEventListener('mousemove', (e) => {
     if (!dragging) return;
-    setTlHeight(mainArea, startH + (startY - e.clientY));
+    // 끈 값은 "원하는 높이"로 저장하고, 창이 작으면 그림판 최소(280)만큼 줄여 적용(저장값은 유지).
+    const desired = _clampTl(startH + (startY - e.clientY));
+    saveTlHeight(desired);
+    applyTlHeight(mainArea, desired);
   });
   document.addEventListener('mouseup', () => {
     if (!dragging) return;
     dragging = false;
     handle.classList.remove('dragging');
   });
+  // 더블클릭 → 기본 높이로(저장값 지움, 창 높이에 맞춰 다시 따라가게).
+  handle.addEventListener('dblclick', () => {
+    try { localStorage.removeItem(TL_KEY); } catch {}
+    applyTlHeight(mainArea, defaultTlHeight());
+  });
+  // 창 크기가 바뀌면 다시 적용(그림판 최소 보장 · 저장값 없으면 창 높이 따라감).
+  window.addEventListener('resize', () => applyTlHeight(mainArea, desiredTlHeight()));
 
   // 캔버스 스테이지
   const canvasRegion = app.querySelector('[data-region="canvas"]');
@@ -308,7 +329,8 @@ export function init(store, editorState, projectApi = null) {
     { id: 'view', label: '보기', items: [
       { label: '확대', run: () => _dispatchKey('=', { ctrl: true }) },
       { label: '축소', run: () => _dispatchKey('-', { ctrl: true }) },
-      { label: '화면에 맞추기', run: () => _dispatchKey('0', { ctrl: true }) },
+      { label: '화면에 맞추기 (Ctrl+0)', run: () => _dispatchKey('0', { ctrl: true }) },
+      { label: '100% (Ctrl+1)', run: () => _dispatchKey('1', { ctrl: true }) },
       { sep: true },
       { label: '격자', sc: '그리드 표시/숨김', run: () => editorState.set({ grid: !editorState.get().grid }) },
       { label: '스냅', run: () => editorState.set({ snap: !editorState.get().snap }) },

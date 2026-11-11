@@ -1,7 +1,7 @@
 // P5 보완4 테스트
 // 항목 1: 고배율 view 렌더 시 작업 캔버스 최대 크기 <= view 크기 + 여유
 // 항목 2: view 렌더 == 전체 렌더 잘라 낸 것 (이펙트+마스크 포함, 오차 2)
-import { test, expect } from '@playwright/test';
+import { test, expect } from './helpers/fixtures.js';
 
 test.describe('P5 보완4 — 작업 캔버스 크기 제한 + view 렌더 정확도', () => {
   test.beforeEach(async ({ page }) => {

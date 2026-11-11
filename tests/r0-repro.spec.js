@@ -1,7 +1,7 @@
 // R0 — 코드 검토에서 찾은 버그 재현 테스트.
 // 이 파일의 테스트는 "고친 뒤의 올바른 동작"을 기대한다. 고치기 전에는 실패하는 것이 정상.
 // R1~R3 묶음에서 해당 항목을 고치면 하나씩 통과해야 한다.
-import { test, expect } from '@playwright/test';
+import { test, expect } from './helpers/fixtures.js';
 
 // 빨간 픽셀(알파>128)의 왼쪽 위 좌표. 없으면 null.
 const BBOX_FN = `

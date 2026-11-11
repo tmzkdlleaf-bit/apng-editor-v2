@@ -1,5 +1,5 @@
 // R23 — 전문가 화면 틀. 1단계: 도킹 패널 프레임(경계 끌기·접기·탭 + localStorage 저장).
-import { test, expect } from '@playwright/test';
+import { test, expect } from './helpers/fixtures.js';
 
 test('오른쪽 패널이 보이고 경계 끌기로 폭이 바뀌며 새로고침 후 유지된다', async ({ page }) => {
   await page.goto('/');

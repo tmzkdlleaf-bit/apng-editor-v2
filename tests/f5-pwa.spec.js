@@ -1,5 +1,5 @@
 // F5-5 — 오프라인 설치(PWA): 서비스 워커 등록 → 오프라인 새로고침 시 앱 열림.
-import { test, expect } from '@playwright/test';
+import { test, expect } from './helpers/fixtures.js';
 
 test('F5-5 — 서비스 워커 설치 후 오프라인에서 새로고침 → 앱 열림·기존 프로젝트 열림', async ({ page, context }) => {
   await page.addInitScript(() => {

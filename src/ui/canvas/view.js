@@ -19,6 +19,38 @@ export function initView(containerEl, overlayCanvas, store, editorState) {
   //   배율·격자 간격·스냅·겹침은 화면 아래 줄(bottombar.js)과 "보기" 메뉴에서 다룬다.
   //   여기선 확대/이동/휠/단축키와 도구별 커서만 맡는다.
 
+  // R23d item 10: 처음 열 때·문서 크기를 바꿀 때 그림판을 화면에 맞춘다(100%보다 크게는 안 함).
+  //   사용자가 직접 확대/이동한 뒤에는(viewUserAdjusted) 창·패널 크기가 바뀌어도 건드리지 않는다.
+  //   맞춘 배율은 편집기 상태(문서에 저장 안 함).
+  const _markAdjusted = () => { if (!editorState.get().viewUserAdjusted) editorState.set({ viewUserAdjusted: true }); };
+
+  function _autoFit() {
+    const W = overlayCanvas.width, H = overlayCanvas.height;
+    const { width: docW, height: docH } = store.get().meta;
+    if (!W || !H || !docW || !docH) return;
+    const margin = 40;
+    // 자동 맞춤은 100% 를 넘기지 않는다(작은 문서는 100%로).
+    const z = _clampZoom(Math.min(1, (W - margin * 2) / docW, (H - margin * 2) / docH));
+    editorState.set({ zoom: z, panX: 0, panY: 0 });
+  }
+  function _autoFitIfPassive() {
+    if (typeof window !== 'undefined' && window.__noAutoFit) return;
+    if (!editorState.get().viewUserAdjusted) _autoFit();
+  }
+
+  // 문서 크기를 바꾸면(캔버스 설정) 다시 맞춘다 — 직접 조작 여부와 무관.
+  let _lastW = store.get().meta.width, _lastH = store.get().meta.height;
+  const _unsubMeta = store.subscribe({ meta: true }, () => {
+    const { width, height } = store.get().meta;
+    if (width !== _lastW || height !== _lastH) {
+      _lastW = width; _lastH = height;
+      if (!(typeof window !== 'undefined' && window.__noAutoFit)) {
+        editorState.set({ viewUserAdjusted: false });
+        _autoFit();
+      }
+    }
+  });
+
   function _cursorFor(tool) {
     if (tool === 'hand') return 'grab';
     if (tool === 'edit') return 'crosshair';
@@ -66,6 +98,7 @@ export function initView(containerEl, overlayCanvas, store, editorState) {
   // Wheel: zoom
   function _onWheel(e) {
     e.preventDefault();
+    _markAdjusted();
     const rect = overlayCanvas.getBoundingClientRect();
     const cx = e.clientX - rect.left;
     const cy = e.clientY - rect.top;
@@ -83,19 +116,22 @@ export function initView(containerEl, overlayCanvas, store, editorState) {
       overlayCanvas.style.cursor = 'grab';
       e.preventDefault();
     }
-    if ((e.ctrlKey || e.metaKey) && e.key === '0') { e.preventDefault(); _fitToCanvas(); }
+    if ((e.ctrlKey || e.metaKey) && e.key === '0') { e.preventDefault(); _markAdjusted(); _fitToCanvas(); }
     if ((e.ctrlKey || e.metaKey) && e.key === '1') {
       e.preventDefault();
+      _markAdjusted();
       editorState.set({ zoom: 1, panX: 0, panY: 0 });
     }
     if ((e.ctrlKey || e.metaKey) && (e.key === '=' || e.key === '+')) {
       e.preventDefault();
+      _markAdjusted();
       const W = overlayCanvas.width;
       const H = overlayCanvas.height;
       _setZoom(_nextStep(editorState.get().zoom, 1), W / 2, H / 2);
     }
     if ((e.ctrlKey || e.metaKey) && e.key === '-') {
       e.preventDefault();
+      _markAdjusted();
       const W = overlayCanvas.width;
       const H = overlayCanvas.height;
       _setZoom(_nextStep(editorState.get().zoom, -1), W / 2, H / 2);
@@ -117,6 +153,7 @@ export function initView(containerEl, overlayCanvas, store, editorState) {
   function _onPanDown(e) {
     if (e.button !== 0) return;
     if (!_panning && !_isPanningTool()) return;
+    _markAdjusted();
     _panStart = { x: e.clientX, y: e.clientY, panX: editorState.get().panX, panY: editorState.get().panY };
     overlayCanvas.style.cursor = 'grabbing';
     overlayCanvas.setPointerCapture(e.pointerId);
@@ -147,12 +184,15 @@ export function initView(containerEl, overlayCanvas, store, editorState) {
   document.addEventListener('keydown', _onKeyDownView);
   document.addEventListener('keyup', _onKeyUpView);
 
-  return () => {
+  function destroy() {
     overlayCanvas.removeEventListener('wheel', _onWheel);
     overlayCanvas.removeEventListener('pointerdown', _onPanDown);
     overlayCanvas.removeEventListener('pointermove', _onPanMove);
     overlayCanvas.removeEventListener('pointerup', _onPanUp);
     document.removeEventListener('keydown', _onKeyDownView);
     document.removeEventListener('keyup', _onKeyUpView);
-  };
+    _unsubMeta?.();
+  }
+
+  return { destroy, autoFit: _autoFit, autoFitIfPassive: _autoFitIfPassive };
 }

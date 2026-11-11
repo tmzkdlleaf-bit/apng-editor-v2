@@ -1,5 +1,5 @@
 // 4단계 화면 검수 보완 — 항목 3(라벨 줄바꿈 0), 4(갤러리 창 크기·카드), 5(트랙 폭 맞춤).
-import { test, expect } from '@playwright/test';
+import { test, expect } from './helpers/fixtures.js';
 
 async function openApp(page) {
   await page.goto('/?demo=1');

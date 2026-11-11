@@ -1,6 +1,6 @@
 // R1 추가 — 글자 정렬·간격·정적/타자기 조합에서 그려진 범위가 실측 폭과 맞고
 // (잘림 없음), 같은 정렬끼리 위치가 같은지. 선택 상자 폭이 실측 폭 수준인지.
-import { test, expect } from '@playwright/test';
+import { test, expect } from './helpers/fixtures.js';
 
 const BBOX_FN = `
   (cx, w, h) => {

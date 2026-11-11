@@ -1,5 +1,5 @@
 // R9 — 용량 맞추기 방식(점수) · 큰 캔버스(메모리) 내보내기.
-import { test, expect } from '@playwright/test';
+import { test, expect } from './helpers/fixtures.js';
 
 async function gotoDemo(page) {
   await page.goto('/?demo=1');

@@ -1,5 +1,5 @@
 // F4 — 시험 효과(빛줄기·소스 비추기) 렌더 + 소스 슬롯 + 결정론/시드.
-import { test, expect } from '@playwright/test';
+import { test, expect } from './helpers/fixtures.js';
 
 async function openApp(page) {
   await page.goto('/');

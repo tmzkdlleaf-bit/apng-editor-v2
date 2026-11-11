@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './helpers/fixtures.js';
 
 // 각 page.evaluate 안에서 재사용할 무결성 검사 함수(문자열로 전달)
 const INTEGRITY = `

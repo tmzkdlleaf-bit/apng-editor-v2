@@ -1,5 +1,5 @@
 // F5-1 — PSD 가져오기: 외부 네트워크(CDN) 차단 상태에서도 레이어/그룹/블렌드/숨김을 유지해 가져온다.
-import { test, expect } from '@playwright/test';
+import { test, expect } from './helpers/fixtures.js';
 
 test('F5-1 — 오프라인(CDN 차단)에서 PSD 가져오기: 폴더→그룹, blend/opacity/숨김 유지, 미지원 블렌드 경고', async ({ page, context }) => {
   // 외부 출처(구글 폰트 등 CDN)를 전부 막아 "실행 중 외부에서 코드를 받지 않음"을 보장한다.

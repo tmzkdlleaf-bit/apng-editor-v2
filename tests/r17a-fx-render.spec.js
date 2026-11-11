@@ -1,6 +1,6 @@
 // R17a — 레이어 효과 쌓기(fx): 렌더·데이터·명령. 화면(UI)은 R17b.
 // 레이어는 도형(shape)으로 검증한다(에셋 없이 leaf fx 경로를 그대로 탄다).
-import { test, expect } from '@playwright/test';
+import { test, expect } from './helpers/fixtures.js';
 
 test.beforeEach(async ({ page }) => { await page.goto('/'); });
 

@@ -1,5 +1,5 @@
 // R3 추가 — 인코더 워커 재사용(createEncoder)과 안정성.
-import { test, expect } from '@playwright/test';
+import { test, expect } from './helpers/fixtures.js';
 
 async function blank(page) { await page.goto('/tests/e1-helpers.js'); }
 

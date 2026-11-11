@@ -1,5 +1,5 @@
 // F1-10 — 여러 선택: 값이 다르면 '혼합' 표시, 입력하면 전부 적용·기록 1건.
-import { test, expect } from '@playwright/test';
+import { test, expect } from './helpers/fixtures.js';
 
 async function openApp(page) {
   await page.goto('/?demo=1');

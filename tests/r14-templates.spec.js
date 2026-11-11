@@ -1,6 +1,6 @@
 // R14-1 — 코코포리아 컷인 템플릿 6종. 생성·렌더 오류 없음, 반복용(6) 이음새 0,
 // 한 번 재생용(1·5) playback=once, 2·3·4 에 세트 변형 들어 있음.
-import { test, expect } from '@playwright/test';
+import { test, expect } from './helpers/fixtures.js';
 
 const NEW_KEYS = ['cutin-slide', 'cutin-critical', 'cutin-fumble', 'cutin-result', 'cutin-transition', 'cutin-loop-frame'];
 

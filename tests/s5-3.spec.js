@@ -1,5 +1,5 @@
 // S5-3 효과(판타지 7 + 연출 14) — 결정론·루프·시드·극값·성능.
-import { test, expect } from '@playwright/test';
+import { test, expect } from './helpers/fixtures.js';
 
 const CATS = new Set(['판타지', '연출']);
 // 시드(rng)에 의존하지 않는 효과 — 시드 변화 검사 제외.

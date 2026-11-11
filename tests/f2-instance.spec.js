@@ -1,5 +1,5 @@
 // F2-5 — 컴포넌트·인스턴스 + F2-8 행 메뉴 일부.
-import { test, expect } from '@playwright/test';
+import { test, expect } from './helpers/fixtures.js';
 
 async function openApp(page) {
   await page.goto('/?demo=1');
