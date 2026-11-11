@@ -1,5 +1,6 @@
 // R23b — 전문가 화면 1부: 왼쪽/오른쪽 패널(프로젝트·효과 / 효과 컨트롤·속성·정보).
 import { test, expect } from '@playwright/test';
+import { expectOnTop } from './helpers/on-top.js';
 
 async function openApp(page) {
   await page.goto('/?demo=1');
@@ -103,6 +104,17 @@ test('효과 탭: "빛무리" 검색 → 이미지 레이어 줄에 끌어 놓�
   await page.evaluate(() => window.__store.undo());
   const n0 = await page.evaluate((i) => (window.__store.get().layers[i].fxOrder ?? []).length, id);
   expect(n0).toBe(0);
+});
+
+test('에셋 우클릭 메뉴가 맨 위에 보인다(가려짐·잘림 없음)', async ({ page }) => {
+  await openApp(page);
+  await page.evaluate(() => window.__store.apply({ type: 'addAsset', id: 'ast_ctx', asset: { name: '포토', type: 'image/png', width: 50, height: 50 } }));
+  const row = page.locator('.asset-row[data-asset-id="ast_ctx"]');
+  await expect(row).toBeVisible();
+  await row.click({ button: 'right' });
+  const menu = page.locator('.asset-menu');
+  await expect(menu).toBeVisible();
+  await expectOnTop(page, menu);
 });
 
 test('효과를 빈 곳(화면 모서리)에 놓으면 효과 레이어가 생긴다; 더블클릭은 선택 레이어에 추가', async ({ page }) => {

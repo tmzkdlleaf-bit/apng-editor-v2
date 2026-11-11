@@ -28,6 +28,8 @@ import { openMyParts } from '../library-parts.js';
 import { openLoopCheck } from '../loop-check.js';
 import { openNewScene } from '../new-scene.js';
 import { createLayer } from '../../core/doc/schema.js';
+import { putAsset } from '../../core/io/assets.js';
+import { probeAnim } from '../../core/io/anim-decode.js';
 
 const TL_KEY     = 'apng2.timelineHeight';
 const TL_DEFAULT = 340;
@@ -309,6 +311,7 @@ export function init(store, editorState, projectApi = null) {
       { label: '화면에 맞추기', run: () => _dispatchKey('0', { ctrl: true }) },
       { sep: true },
       { label: '격자', sc: '그리드 표시/숨김', run: () => editorState.set({ grid: !editorState.get().grid }) },
+      { label: '스냅', run: () => editorState.set({ snap: !editorState.get().snap }) },
       { label: '앞뒤 프레임 겹쳐 보기', sc: '앞뒤 프레임 겹쳐 보기', run: () => editorState.set({ onion: !editorState.get().onion }) },
       { sep: true },
       { label: '라이트/다크 테마', run: () => toggleTheme() },
@@ -346,23 +349,51 @@ export function init(store, editorState, projectApi = null) {
     const _setHover = (id) => { if ((id ?? null) !== _hover) { _hover = id ?? null; editorState.set({ dndHover: _hover }); } };
     const _docAt = (e) => { const r = cv.getBoundingClientRect(); return stage.screenToDoc(e.clientX - r.left, e.clientY - r.top); };
     const _hitAt = (d) => hitTest(store.get(), d.x, d.y, editorState.get().f, null, stage.assets);
+    // OS 파일(이미지)을 화면에 바로 끌어 놓았는지 — 패널 드래그(hasDrag)가 아니고 이미지 파일이 있는 경우.
+    const _hasImageFiles = (e) => [...(e.dataTransfer?.items ?? [])].some((it) => it.kind === 'file' && (it.type || '').startsWith('image/'));
     cv.addEventListener('dragover', (e) => {
-      if (!hasDrag(e)) return;
-      e.preventDefault();
-      _setHover(_hitAt(_docAt(e)));
+      if (hasDrag(e)) { e.preventDefault(); _setHover(_hitAt(_docAt(e))); return; }
+      if (_hasImageFiles(e)) e.preventDefault();   // OS 이미지 파일 받기
     });
     cv.addEventListener('dragleave', (e) => { if (hasDrag(e)) _setHover(null); });
     cv.addEventListener('drop', (e) => {
-      if (!hasDrag(e)) return;
-      e.preventDefault();
-      const data = readDrag(e); _setHover(null);
-      if (!data) return;
-      const d = _docAt(e);
-      const id = _hitAt(d);
-      if (data.kind === 'asset') addAssetLayer(store, editorState, data.id, { x: d.x, y: d.y });
-      else if (data.kind === 'fx') { if (id) addFxToLayer(store, id, data.id); else addEffectLayer(store, editorState, data.id); }
-      else if (data.kind === 'motion') { if (id) addMotionToLayers(store, editorState, [id], data.id); else showToast('모션은 레이어 위에 놓아 주세요.'); }
+      if (hasDrag(e)) {
+        e.preventDefault();
+        const data = readDrag(e); _setHover(null);
+        if (!data) return;
+        const d = _docAt(e);
+        const id = _hitAt(d);
+        if (data.kind === 'asset') addAssetLayer(store, editorState, data.id, { x: d.x, y: d.y });
+        else if (data.kind === 'fx') { if (id) addFxToLayer(store, id, data.id); else addEffectLayer(store, editorState, data.id); }
+        else if (data.kind === 'motion') { if (id) addMotionToLayers(store, editorState, [id], data.id); else showToast('모션은 레이어 위에 놓아 주세요.'); }
+        return;
+      }
+      // R23d item 4: 파일을 화면(캔버스)에 바로 끌어 놓으면 에셋 추가 + 놓은 자리에 레이어 생성.
+      const files = [...(e.dataTransfer?.files ?? [])].filter((f) => (f.type || '').startsWith('image/'));
+      if (files.length) { e.preventDefault(); _dropImageFiles(files, _docAt(e)); }
     });
+  }
+
+  // 화면에 끌어 놓은 이미지 파일 → 에셋 + 레이어(놓은 자리). 파일당 되돌리기 1건.
+  async function _dropImageFiles(files, d) {
+    for (const file of files) {
+      const name = file.name.replace(/\.[^.]+$/, '');
+      const { id, meta } = await putAsset(file, name);
+      if (!meta.width || !meta.height) { showToast('이미지로 읽을 수 없는 파일입니다.'); continue; }
+      const probe = await probeAnim(file).catch(() => ({ animated: false }));
+      const assetMeta = probe.animated
+        ? { ...meta, animated: true, frameCount: probe.frameCount, delays: probe.delays, durationMs: probe.durationMs }
+        : meta;
+      const doc = store.get();
+      const layer = createLayer(probe.animated ? 'anim' : 'image', { name, assetId: id });
+      layer.transform.x.value = Math.round(d.x);
+      layer.transform.y.value = Math.round(d.y);
+      const cmds = [];
+      if (!doc.assets?.[id]) cmds.push({ type: 'addAsset', id, asset: assetMeta });
+      cmds.push({ type: 'addLayer', layer, index: doc.order.length });
+      store.apply(cmds.length === 1 ? cmds[0] : { type: 'batch', cmds });
+      editorState.set({ selection: [layer.id] });
+    }
   }
 
   // 내보내기 화면 (E3) — 상단 [내보내기] 버튼 + Ctrl+E
@@ -402,7 +433,7 @@ export function init(store, editorState, projectApi = null) {
   _updateCanvasInfo();
   store.subscribe({ meta: true }, _updateCanvasInfo);
 
-  // 확대율 표시는 캔버스 뷰(src/ui/canvas/view.js 의 .stage-zoom)가 이미 담당한다(오른쪽 아래).
+  // 확대율 표시는 화면 아래 줄(bottombar.js)이 담당한다(R23d item 6: 화면 위 .stage-zoom 은 지웠다).
 
   canvasInfoEl.addEventListener('click', () => _openCanvasSettings());
 

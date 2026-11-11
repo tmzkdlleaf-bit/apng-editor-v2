@@ -1,5 +1,6 @@
 // R23c — 전문가 화면 2부(2-1): 메뉴 막대.
 import { test, expect } from '@playwright/test';
+import { expectOnTop } from './helpers/on-top.js';
 
 async function openApp(page) {
   await page.addInitScript(() => { try { localStorage.setItem('apng2.onboarded', '1'); } catch {} });
@@ -20,13 +21,19 @@ async function addShape(page) {
   });
 }
 
-test('메뉴 7개가 열리고 드롭다운이 보인다', async ({ page }) => {
+test('메뉴 7개가 열리고 드롭다운·항목이 맨 위에 보인다', async ({ page }) => {
   await openApp(page);
   for (const label of ['파일', '편집', '레이어', '효과', '애니메이션', '보기', '도움말']) {
     const top = page.locator('.menu-top', { hasText: label });
     await expect(top).toBeVisible();
     await top.click();
-    await expect(page.locator('.menu-group', { has: top }).locator('.menu-dropdown')).toBeVisible();
+    const dd = page.locator('.menu-group', { has: top }).locator('.menu-dropdown');
+    await expect(dd).toBeVisible();
+    // R23d: 가려짐·잘림까지 — 드롭다운과 첫·마지막 항목이 실제로 맨 위에 보여야 한다.
+    await expectOnTop(page, dd);
+    const items = dd.locator('.menu-item');
+    await expectOnTop(page, items.first());
+    await expectOnTop(page, items.last());
     await page.keyboard.press('Escape');
   }
 });

@@ -387,6 +387,18 @@
 .slider-field .num-input { width: 52px; box-sizing: border-box; text-align: right; }
 .slider-field .slider-range { min-width: 0; }
 
+/* R23d item 5: 효과 컨트롤 패널 — 인스펙터 밖이라 --insp-label-w 가 비어
+   grid-template-columns 가 통째로 무효가 되고 한 파라미터가 3줄로 쪼개지던 문제.
+   라벨 폭 변수를 여기서도 정하면 [시계·키][이름(고정폭·말줄임)][슬라이더][숫자]가 한 줄로 선다. */
+.fx-control-panel {
+  --insp-label-w: 72px;
+  container-type: inline-size;
+}
+/* 패널이 240px 아래로 좁아지면 슬라이더만 숨기고 숫자 칸은 남긴다. */
+@container (max-width: 240px) {
+  .fx-control-panel .slider-field .slider-range { display: none; }
+}
+
 /* 크기 비율 고정(사슬) 버튼 */
 .size-chain-btn {
   width: 24px; height: 24px; flex-shrink: 0; padding: 0;

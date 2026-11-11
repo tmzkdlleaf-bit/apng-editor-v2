@@ -8,7 +8,6 @@ import { importPsdFile } from '../psd-import.js';
 import { addAssetLayer } from '../layer-ops.js';
 import { setDrag, DND_ASSET } from './panel-dnd.js';
 import { showToast } from './status.js';
-import { createLayer } from '../../core/doc/schema.js';
 
 export function createProjectPanel(store, editorState, getDeps = () => ({})) {
   const el = document.createElement('div');
@@ -62,6 +61,8 @@ export function createProjectPanel(store, editorState, getDeps = () => ({})) {
     }
   }
 
+  // R23d item 4(애프터 이펙트 방식): 프로젝트 탭 "가져오기"는 에셋만 더한다.
+  //   레이어는 에셋 줄 더블클릭·화면에 끌어 놓을 때 만든다(그래야 가져오기만으로 레이어가 저절로 생기지 않는다).
   async function _importImage(file) {
     const name = file.name.replace(/\.[^.]+$/, '');
     const { id, meta } = await putAsset(file, name);
@@ -71,14 +72,7 @@ export function createProjectPanel(store, editorState, getDeps = () => ({})) {
     const assetMeta = probe.animated
       ? { ...meta, animated: true, frameCount: probe.frameCount, delays: probe.delays, durationMs: probe.durationMs }
       : meta;
-    const layer = createLayer(probe.animated ? 'anim' : 'image', { name, assetId: id });
-    layer.transform.x.value = Math.round(doc.meta.width / 2);
-    layer.transform.y.value = Math.round(doc.meta.height / 2);
-    const cmds = [];
-    if (!doc.assets?.[id]) cmds.push({ type: 'addAsset', id, asset: assetMeta });
-    cmds.push({ type: 'addLayer', layer, index: doc.order.length });
-    store.apply(cmds.length === 1 ? cmds[0] : { type: 'batch', cmds });
-    editorState.set({ selection: [layer.id] });
+    if (!doc.assets?.[id]) store.apply({ type: 'addAsset', id, asset: assetMeta });
   }
 
   // ── 목록 ─────────────────────────────────────────────────────────────
@@ -165,7 +159,13 @@ export function createProjectPanel(store, editorState, getDeps = () => ({})) {
     del.addEventListener('click', () => { _closeMenu(); if (!inUse) store.apply({ type: 'removeAsset', id }); });
     menu.append(rename, replace, del);
     document.body.appendChild(menu);
-    menu.style.left = e.clientX + 'px'; menu.style.top = e.clientY + 'px';
+    // 커서 자리에 띄우되 화면 밖으로 나가지 않게 보정(R23d — expectOnTop: 메뉴는 화면 안에).
+    const mw = menu.offsetWidth, mh = menu.offsetHeight;
+    const vw = window.innerWidth, vh = window.innerHeight;
+    let left = e.clientX, top = e.clientY;
+    if (left + mw > vw - 4) left = Math.max(4, vw - mw - 4);
+    if (top + mh > vh - 4) top = Math.max(4, vh - mh - 4);
+    menu.style.left = left + 'px'; menu.style.top = top + 'px';
     _menu = menu;
     setTimeout(() => document.addEventListener('click', _closeMenu), 0);
   }

@@ -9,7 +9,7 @@ async function openApp(page) {
 
 test('F3-7 — E·P 키로 편집·움직이기 모드 전환', async ({ page }) => {
   await openApp(page);
-  await page.locator('body').click();
+  await page.locator('body').click({ position: { x: 5, y: 5 } });  // 중립 위치(아래 줄 컨트롤 피하기, R23d)
   await page.keyboard.press('e');
   expect(await page.evaluate(() => window.__editorState.get().tool)).toBe('edit');
   await page.keyboard.press('p');

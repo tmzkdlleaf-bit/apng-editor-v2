@@ -1,5 +1,6 @@
 // R23c 3부 — 새 장면 창(템플릿 갤러리 대체).
 import { test, expect } from '@playwright/test';
+import { expectOnTop } from './helpers/on-top.js';
 
 async function openReal(page) {
   await page.addInitScript(() => { try { localStorage.setItem('apng2.onboarded', '1'); } catch {} });
@@ -19,6 +20,13 @@ async function openDialog(page) {
   await page.locator('.menu-item', { hasText: '새 장면' }).click();
   await expect(page.locator('.newscene-modal')).toBeVisible();
 }
+
+test('창 상자·만들기 버튼이 맨 위에 보인다(가려짐·잘림 없음)', async ({ page }) => {
+  await openReal(page);
+  await openDialog(page);
+  await expectOnTop(page, page.locator('.newscene-box'));
+  await expectOnTop(page, page.locator('.newscene-btns .accent', { hasText: '만들기' }));
+});
 
 test('프리셋 고르기 → 가로·세로 반영', async ({ page }) => {
   await openReal(page);

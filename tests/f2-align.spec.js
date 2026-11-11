@@ -93,11 +93,10 @@ test('정렬 — 카메라 무시 토글: 기본은 보이는 화면, 켜면 원
   expect(Math.abs(xCam - 20)).toBeGreaterThan(1);
 });
 
-test('F2-9(item 7) — 보기 메뉴의 그리드 간격 드롭다운 → editorState.gridStep 변경', async ({ page }) => {
+test('F2-9(item 7) — 화면 아래 줄의 격자 간격 드롭다운 → editorState.gridStep 변경', async ({ page }) => {
   await openApp(page);
-  // 그리드 간격은 캔버스 "보기" 메뉴로 옮겼다(화면 설정).
-  await page.locator('.stage-view-btn').click();
-  const dd = page.locator('.stage-view-menu .dropdown[aria-label="그리드 간격"]');
+  // R23d item 6: 그리드 간격은 화면 "보기" 메뉴를 지우고 화면 아래 줄(bottombar)로 옮겼다.
+  const dd = page.locator('.stage-bottombar .dropdown[aria-label="격자 간격"]');
   await dd.click();
   await page.locator('.dropdown-list [data-value="64"]').click();
   const gs = await page.evaluate(() => window.__editorState.get().gridStep);

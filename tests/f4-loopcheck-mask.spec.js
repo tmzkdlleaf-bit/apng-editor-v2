@@ -19,7 +19,7 @@ test('F4-7 — Ctrl+Shift+L: 이음새 깨진 레이어가 목록에, 클릭하�
     return id;
   });
 
-  await page.locator('body').click();
+  await page.locator('body').click({ position: { x: 5, y: 5 } });  // 중립 위치(아래 줄 컨트롤 피하기, R23d)
   await page.keyboard.press('Control+Shift+L');
   await expect(page.locator('.loopcheck-modal')).toBeVisible();
   const rows = page.locator('.loopcheck-row');
@@ -43,7 +43,7 @@ test('F4-7 — 이음새 없으면 "문제 없음"', async ({ page }) => {
       }
     }
   });
-  await page.locator('body').click();
+  await page.locator('body').click({ position: { x: 5, y: 5 } });  // 중립 위치(아래 줄 컨트롤 피하기, R23d)
   await page.keyboard.press('Control+Shift+L');
   await expect(page.locator('.loopcheck-ok')).toBeVisible();
 });

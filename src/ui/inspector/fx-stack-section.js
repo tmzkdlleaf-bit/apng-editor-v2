@@ -4,8 +4,10 @@ import { makeSectionShell } from './section-shell.js';
 import { createSliderField } from '../controls/slider-field.js';
 import { createNumberField } from '../controls/number-field.js';
 import { createEffectParams } from './effect-params.js';
+import { createKeyToggle } from '../controls/key-toggle.js';
 import { openEffectsPanel } from '../shell/panel-actions.js';
 import { getEffect } from '../../effects/registry.js';
+import { evalProp } from '../../core/anim/prop.js';
 import { iconMarkup } from '../icons.js';
 
 const FX_TYPES = new Set(['image', 'anim', 'text', 'shape', 'group', 'instance', 'adjust']);
@@ -120,17 +122,56 @@ export function createFxStackSection(store, editorState) {
       cbody.appendChild(unk);
     }
 
-    // 섞기(mix) — 0~1
+    // 섞기(mix) — 0~1. R17 mix:{value,keys} 라 키를 넣을 수 있다 → 시계·마름모·화살표(R23d item 5).
+    const mixPath = `fx.${fxId}.mix`;
+    const _mixProp = () => store.get().layers[layerId]?.fx?.[fxId]?.mix ?? { value: 1 };
+    const _mixEval = (f) => evalProp(_mixProp(), f);
     const mixSf = createSliderField({
       label: '섞기', min: 0, max: 1, step: 0.01, defaultValue: 1,
       onBegin() { _dragging = true; store.begin('섞기'); },
-      onChange(v) { store.preview({ type: 'setProp', id: layerId, path: `fx.${fxId}.mix`, value: v }); },
+      onChange(v) {
+        const f = editorState.get().f;
+        const keyed = !!_mixProp().keys?.length;   // 키가 있으면 f 를 줘야 한다(없이 주면 정적 값 오류)
+        store.preview(keyed
+          ? { type: 'setProp', id: layerId, path: mixPath, value: v, f }
+          : { type: 'setProp', id: layerId, path: mixPath, value: v });
+      },
       onCommit() { _dragging = false; store.commit(); }, onCancel() { _dragging = false; store.cancel(); },
     });
-    mixSf.setValue(_mixVal(fx));
+    mixSf.setValue(_mixEval(editorState.get().f));
     const mixRow = document.createElement('div'); mixRow.className = 'prop-row'; mixRow.appendChild(mixSf.el);
+
+    function _toggleMixClock() {
+      const f = editorState.get().f;
+      if (!_mixProp().keys?.length) store.apply({ type: 'setProp', id: layerId, path: mixPath, value: _mixEval(f), f });
+      else store.apply({ type: 'setFx', id: layerId, fxId, patch: { mix: { value: _mixEval(f) } } });
+    }
+    function _toggleMixKey() {
+      const f = editorState.get().f;
+      const mx = _mixProp();
+      const hasAtF = (mx.keys ?? []).some((k) => k.f === f);
+      store.apply(hasAtF
+        ? { type: 'removeKey', id: layerId, path: mixPath, f }
+        : { type: 'setProp', id: layerId, path: mixPath, value: evalProp(mx, f), f });
+    }
+    function _gotoMixKey(dir) {
+      const f = editorState.get().f;
+      const frames = (_mixProp().keys ?? []).map((k) => k.f).sort((a, b) => a - b);
+      if (!frames.length) return;
+      let target = null;
+      if (dir < 0) { for (const kf of frames) if (kf < f) target = kf; }
+      else { for (const kf of frames) if (kf > f) { target = kf; break; } }
+      if (target == null) return;
+      const fc = store.get().meta.frameCount ?? 1;
+      editorState.set({ f: Math.max(0, Math.min(fc - 1, target)) });
+    }
+    const mixKt = createKeyToggle({
+      showClock: true, showArrows: true, title: '섞기 키',
+      onClock: _toggleMixClock, onDiamond: _toggleMixKey, onPrev: () => _gotoMixKey(-1), onNext: () => _gotoMixKey(+1),
+    });
+    mixRow.insertBefore(mixKt.el, mixRow.firstChild);
     cbody.appendChild(mixRow);
-    controls.push(mixSf);
+    controls.push(mixSf, mixKt);
 
     // 레이어 모양 안에서만(clip)
     const clipRow = document.createElement('div'); clipRow.className = 'prop-row';
@@ -155,7 +196,7 @@ export function createFxStackSection(store, editorState) {
     cbody.appendChild(seedRow);
     controls.push(seedField);
 
-    _cards.push({ fxId, params, controls, enable, clipIn, mixSf, seedField });
+    _cards.push({ fxId, params, controls, enable, clipIn, mixSf, mixKt, _mixProp, _mixEval, seedField });
     return card;
   }
 
@@ -163,11 +204,18 @@ export function createFxStackSection(store, editorState) {
   function _refresh() {
     const id = curId(); if (!id) return;
     const layer = store.get().layers[id];
+    const f = editorState.get().f;
     for (const c of _cards) {
       const fx = layer.fx?.[c.fxId]; if (!fx) continue;
       c.enable.checked = fx.enabled !== false;
       c.clipIn.checked = fx.clip !== false;
-      if (!_dragging) c.mixSf.setValue(_mixVal(fx));
+      if (!_dragging) c.mixSf.setValue(c._mixEval(f));
+      const mkeys = c._mixProp().keys ?? [];
+      c.mixKt.update({
+        clock: mkeys.length ? 'on' : 'off',
+        diamond: mkeys.length ? (mkeys.some((k) => k.f === f) ? 'on' : 'other') : '',
+        hasKeys: mkeys.length > 0,
+      });
       c.seedField.setValue(fx.seed ?? 1);
       c.params?.refresh();
     }
@@ -184,7 +232,6 @@ export function createFxStackSection(store, editorState) {
   return { el: section, destroy };
 }
 
-function _mixVal(fx) { const m = fx.mix; return (m && typeof m === 'object') ? (m.value ?? 1) : (m ?? 1); }
 function _iconBtn(icon, title, onClick) {
   const b = document.createElement('button'); b.className = 'fx-card-btn'; b.title = title;
   b.setAttribute('aria-label', title); b.innerHTML = iconMarkup(icon, { size: 12 });

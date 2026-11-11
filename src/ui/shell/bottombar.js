@@ -1,5 +1,6 @@
 // R23c 2-3 — 화면(캔버스) 바로 아래 한 줄: 배율 · 미리보기 해상도 · 투명 격자 · 가이드 · 안전 영역 · 프레임.
 //   배율·격자·가이드·안전 영역은 미리보기 전용(내보내기에 영향 없음). previewRes 는 작업 공간 저장값에만 둔다.
+//   R23d item 6: 화면 위 "보기" 메뉴를 지우고 격자 간격·스냅·겹침(온니언) 조절을 여기로 옮겼다.
 import { createDropdown } from '../controls/dropdown.js';
 
 const ZOOM_STEPS = [0.1, 0.25, 0.5, 0.667, 1, 1.5, 2, 3, 4, 6, 8];
@@ -54,13 +55,49 @@ export function createBottombar(store, editorState) {
   const guides  = _check('가이드', 'guides');
   const safe    = _check('안전 영역', 'safeArea');
 
+  // ── 격자(그리드) + 간격 ── (옛 "보기" 메뉴에서 옮김)
+  const gridWrap = document.createElement('div'); gridWrap.className = 'bb-group';
+  const grid = _check('격자', 'grid');
+  const gridStepDd = createDropdown({
+    ariaLabel: '격자 간격',
+    options: [8, 16, 32, 64, 128].map((v) => ({ value: String(v), label: `${v}px` })),
+    value: String(editorState.get().gridStep ?? 32),
+    onChange: (v) => editorState.set({ gridStep: parseInt(v, 10) }),
+  });
+  gridWrap.append(grid.w, gridStepDd.el);
+
+  // ── 스냅 ──
+  const snap = _check('스냅', 'snap');
+
+  // ── 겹침(온니언): 켜짐 토글 + 앞/뒤 장수(켜졌을 때만 보임) ──
+  const onionWrap = document.createElement('div'); onionWrap.className = 'bb-group';
+  const onion = _check('겹침', 'onion');
+  const onionBeforeDd = createDropdown({
+    ariaLabel: '겹침 앞 장수',
+    options: [0, 1, 2, 3].map((v) => ({ value: String(v), label: `앞${v}` })),
+    value: String(editorState.get().onionBefore ?? 1),
+    onChange: (v) => editorState.set({ onionBefore: parseInt(v, 10) }),
+  });
+  const onionAfterDd = createDropdown({
+    ariaLabel: '겹침 뒤 장수',
+    options: [0, 1, 2, 3].map((v) => ({ value: String(v), label: `뒤${v}` })),
+    value: String(editorState.get().onionAfter ?? 1),
+    onChange: (v) => editorState.set({ onionAfter: parseInt(v, 10) }),
+  });
+  onionWrap.append(onion.w, onionBeforeDd.el, onionAfterDd.el);
+  function _syncOnion() {
+    const on = !!editorState.get().onion;
+    onionBeforeDd.el.style.display = on ? '' : 'none';
+    onionAfterDd.el.style.display = on ? '' : 'none';
+  }
+
   // ── 프레임 ──
   const frameWrap = document.createElement('div'); frameWrap.className = 'bb-group bb-frame';
   const frameText = document.createElement('span'); frameText.className = 'bb-frame-text';
   frameWrap.appendChild(frameText);
 
   const spacer = document.createElement('div'); spacer.className = 'bb-spacer';
-  el.append(zoomWrap, resWrap, checker.w, guides.w, safe.w, spacer, frameWrap);
+  el.append(zoomWrap, resWrap, checker.w, guides.w, safe.w, gridWrap, snap.w, onionWrap, spacer, frameWrap);
 
   function _syncZoom() {
     const z = editorState.get().zoom;
@@ -73,7 +110,7 @@ export function createBottombar(store, editorState) {
     const f = editorState.get().f; const fc = store.get().meta.frameCount ?? 1;
     frameText.textContent = `${f + 1} / ${fc}`;
   }
-  _syncZoom(); _syncFrame();
+  _syncZoom(); _syncFrame(); _syncOnion();
 
   const unsubES = editorState.subscribe((p) => {
     if ('zoom' in p) _syncZoom();
@@ -81,12 +118,21 @@ export function createBottombar(store, editorState) {
     if ('checker' in p) checker.input.checked = !!editorState.get().checker;
     if ('guides' in p) guides.input.checked = !!editorState.get().guides;
     if ('safeArea' in p) safe.input.checked = !!editorState.get().safeArea;
+    if ('grid' in p) grid.input.checked = !!editorState.get().grid;
+    if ('gridStep' in p) gridStepDd.setValue?.(String(editorState.get().gridStep ?? 32));
+    if ('snap' in p) snap.input.checked = !!editorState.get().snap;
+    if ('onion' in p) { onion.input.checked = !!editorState.get().onion; _syncOnion(); }
+    if ('onionBefore' in p) onionBeforeDd.setValue?.(String(editorState.get().onionBefore ?? 1));
+    if ('onionAfter' in p) onionAfterDd.setValue?.(String(editorState.get().onionAfter ?? 1));
   });
   const unsubStore = store.subscribe({ meta: true }, _syncFrame);
 
   // 처음 값 반영(작업 공간 저장값 → previewRes). checker 기본 켜짐(투명 격자는 늘 보이던 기본).
   editorState.set({ previewRes: _loadRes() });
 
-  function destroy() { unsubES(); unsubStore(); zoomDd.destroy?.(); resDd.destroy?.(); }
+  function destroy() {
+    unsubES(); unsubStore();
+    zoomDd.destroy?.(); resDd.destroy?.(); gridStepDd.destroy?.(); onionBeforeDd.destroy?.(); onionAfterDd.destroy?.();
+  }
   return { el, destroy };
 }

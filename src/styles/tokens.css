@@ -85,4 +85,17 @@
 
   --dur-fast: 80ms;
   --dur-base: 160ms;
+
+  /* 쌓임 층(z-index) — 숫자를 흩어 쓰지 않고 여기서만 정한다.
+     handle(경계 손잡이) < panel(패널 분리선) < dialog(설정창) < toast
+     < menu(메뉴 막대 드롭다운) < modal(전체 덮는 창) < 드롭다운 목록(controls.css .dropdown-list=9000)
+     < popover(떠 있는 작은 메뉴).
+     주의: 모달 안에서도 드롭다운 목록이 눌려야 하므로 modal 은 .dropdown-list(9000)보다 아래에 둔다. */
+  --z-handle:  10;
+  --z-panel:   15;
+  --z-dialog:  1000;
+  --z-toast:   2000;
+  --z-menu:    2100;
+  --z-modal:   8000;
+  --z-popover: 9300;
 }

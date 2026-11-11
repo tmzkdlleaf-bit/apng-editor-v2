@@ -42,7 +42,7 @@
   color: var(--text);
   font-size: var(--fs-2);
   padding: var(--sp-2) var(--sp-4);
-  z-index: 2000;
+  z-index: var(--z-toast);
   opacity: 0;
   pointer-events: none;
   transition: opacity var(--dur-fast), transform var(--dur-fast);
@@ -66,7 +66,7 @@
   border-radius: var(--r-2);
   box-shadow: 0 4px 16px rgba(0,0,0,0.35);
   padding: var(--sp-1);
-  z-index: 2000;
+  z-index: var(--z-popover);
   display: flex;
   flex-direction: column;
   min-width: 140px;
@@ -94,7 +94,8 @@
   padding: 0 var(--sp-3);
   height: 48px;
   flex-shrink: 0;
-  overflow: hidden;
+  /* overflow:hidden 을 두지 않는다 — 메뉴 드롭다운이 48px 막대 아래로 내려가야 하므로.
+     가로로 넘치는 것은 #app 의 overflow:hidden 이 담는다(R23d-1). */
 }
 
 .topbar-left {
@@ -156,8 +157,10 @@
   overflow: hidden;
 }
 .stage-bottombar .bb-group { display: flex; align-items: center; gap: var(--sp-1); }
-.stage-bottombar .bb-label { color: var(--dim); }
-.stage-bottombar .bb-unit { color: var(--dim); }
+/* 짧은 라벨은 글자 단위 줄바꿈 금지("해상 / 도"처럼 쪼개지지 않게). (R23d item 6) */
+.stage-bottombar .bb-label { color: var(--dim); white-space: nowrap; }
+.stage-bottombar .bb-unit { color: var(--dim); white-space: nowrap; }
+.stage-bottombar .bb-group .dropdown { flex-shrink: 0; }
 .stage-bottombar .bb-zoom-num { width: 48px; }
 .stage-bottombar .bb-check { display: flex; align-items: center; gap: var(--sp-1); cursor: pointer; white-space: nowrap; }
 .stage-bottombar .bb-check input { margin: 0; }
@@ -183,54 +186,8 @@
   touch-action: none;
 }
 
-.stage-zoom {
-  position: absolute;
-  bottom: var(--sp-2);
-  right: calc(var(--sp-3) + 52px);  /* 보기 버튼 왼쪽 */
-  font-size: var(--fs-1);
-  color: var(--dim);
-  pointer-events: none;
-  user-select: none;
-  font-variant-numeric: tabular-nums;
-}
-
-/* 보기 메뉴 버튼(item 7) — 확대 표시 옆 */
-.stage-view-btn {
-  position: absolute;
-  bottom: var(--sp-2);
-  right: var(--sp-3);
-  height: 22px;
-  padding: 0 var(--sp-2);
-  font-size: var(--fs-1);
-  color: var(--text2);
-  background: var(--btn);
-  border: 1px solid var(--btnline);
-  border-radius: var(--r-1);
-  cursor: pointer;
-  z-index: 11;
-}
-.stage-view-btn:hover { color: var(--text); border-color: var(--line); }
-.stage-view-menu[hidden] { display: none; } /* display:flex 가 [hidden]을 덮지 않도록 */
-.stage-view-menu {
-  position: absolute;
-  bottom: calc(var(--sp-2) + 28px);
-  right: var(--sp-3);
-  z-index: 12;
-  min-width: 200px;
-  display: flex;
-  flex-direction: column;
-  gap: var(--sp-2);
-  padding: var(--sp-2);
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: var(--r-2);
-  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
-}
-.stage-view-menu .view-check { display: flex; align-items: center; gap: var(--sp-2); font-size: var(--fs-2); color: var(--text); cursor: pointer; }
-.stage-view-menu .view-check input { margin: 0; }
-.stage-view-menu .view-row { display: flex; align-items: center; gap: var(--sp-2); }
-.stage-view-menu .view-row-label { flex: 0 0 48px; font-size: var(--fs-2); color: var(--text2); }
-.stage-view-menu .view-row .dropdown { flex: 1; }
+/* R23d item 6: 화면 위 확대 표시(stage-zoom)·보기 버튼(stage-view-btn/menu)은
+   화면 아래 줄과 기능이 겹쳐 지웠다. 배율·격자·스냅·겹침은 화면 아래 줄(bottombar)에서 다룬다. */
 
 /* 캔버스 글자 바로 편집 입력 칸 */
 .canvas-text-edit {
@@ -389,8 +346,9 @@
 .menu-top:hover, .menu-top.is-open { background: var(--selrow); color: var(--text); }
 .menu-top:focus-visible { outline: 1px solid var(--acc); outline-offset: -2px; }
 
+.menu-dropdown[hidden] { display: none; }   /* display:flex 가 [hidden] 을 덮지 않도록(닫힌 빈 상자 제거) */
 .menu-dropdown {
-  position: absolute; top: 100%; left: 0; z-index: 2100;
+  position: absolute; top: 100%; left: 0; z-index: var(--z-menu);
   min-width: 220px;
   background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-2);
   box-shadow: 0 6px 20px rgba(0,0,0,0.35);
@@ -409,3 +367,40 @@
 .menu-sep { height: 1px; background: var(--line2); margin: var(--sp-1) 0; }
 
 .app-title { font-size: var(--fs-2); color: var(--dim); white-space: nowrap; }
+
+/* ── R23d item 2: "새 장면" 창 ───────────────────────────────────────────
+   내보내기 창·설정 창과 같은 모양: 전체를 덮는 반투명 배경 + 가운데 상자.
+   Esc·바깥 클릭으로 닫기는 new-scene.js 가 맡는다. */
+.newscene-modal {
+  position: fixed; inset: 0; z-index: var(--z-modal);
+  background: rgba(0,0,0,0.5);
+  display: flex; align-items: center; justify-content: center;
+}
+.newscene-box {
+  width: 360px; max-width: calc(100vw - 32px);
+  max-height: calc(100vh - 48px); overflow-y: auto;
+  box-sizing: border-box;
+  background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-3);
+  box-shadow: 0 16px 48px rgba(0,0,0,0.5);
+  padding: var(--sp-5);
+  display: flex; flex-direction: column; gap: var(--sp-3);
+}
+.newscene-title { font-size: var(--fs-4); font-weight: 600; color: var(--text); }
+/* 줄: 라벨 칸(고정 폭) + 입력 칸(늘어남) */
+.newscene-row { display: flex; align-items: center; gap: var(--sp-3); }
+.newscene-label { flex: 0 0 84px; font-size: var(--fs-2); color: var(--text2); white-space: nowrap; }
+.newscene-row > *:not(.newscene-label) { flex: 1; min-width: 0; }
+.newscene-name {
+  height: 28px; box-sizing: border-box;
+  background: var(--input); color: var(--text);
+  border: 1px solid var(--btnline); border-radius: var(--r-1);
+  padding: 0 var(--sp-2); font-size: var(--fs-2); font-family: inherit;
+}
+.newscene-name:focus-visible { outline: 2px solid var(--acc); outline-offset: 1px; }
+.newscene-size, .newscene-len { display: flex; align-items: center; gap: var(--sp-2); }
+.newscene-size .newscene-num, .newscene-len .newscene-num { flex: 0 0 auto; }
+.newscene-x { color: var(--dim); }
+.newscene-unit { color: var(--dim); font-size: var(--fs-1); white-space: nowrap; }
+.newscene-bg { display: flex; align-items: center; gap: var(--sp-2); }
+.newscene-bg .dropdown { flex: 1; min-width: 0; }
+.newscene-btns { display: flex; justify-content: flex-end; gap: var(--sp-2); margin-top: var(--sp-2); }

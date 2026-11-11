@@ -396,8 +396,9 @@ test.describe('P6 — 재생 / 타임라인 / 레이어 추가 / 인스펙터', 
     expect(text).toContain('fps');
     expect(text).toContain('초');
     expect(text).not.toMatch(/%/);
-    // 확대율은 캔버스 오른쪽 아래 .stage-zoom 에만
-    await expect(page.locator('[data-region="canvas"] .stage-zoom')).toContainText('%');
+    // R23d item 6: 확대율 표시는 화면 위(.stage-zoom)를 지우고 화면 아래 줄로 옮겼다.
+    await expect(page.locator('[data-region="canvas"] .stage-zoom')).toHaveCount(0);
+    await expect(page.locator('.stage-bottombar .bb-unit', { hasText: '%' })).toBeVisible();
   });
 
   test('[상단바] 되돌리기 버튼 초기 비활성화', async ({ page }) => {

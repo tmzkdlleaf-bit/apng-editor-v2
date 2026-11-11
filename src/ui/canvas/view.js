@@ -1,20 +1,9 @@
-import { createDropdown } from '../controls/dropdown.js';
-
 const ZOOM_MIN = 0.1;
 const ZOOM_MAX = 16;
 const ZOOM_STEPS = [0.1, 0.125, 0.167, 0.25, 0.333, 0.5, 0.667, 1, 1.5, 2, 3, 4, 6, 8, 12, 16];
 
 function _clampZoom(z) {
   return Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, z));
-}
-
-function _nearestStep(z) {
-  let best = ZOOM_STEPS[0], bestDiff = Math.abs(z - best);
-  for (const s of ZOOM_STEPS) {
-    const d = Math.abs(z - s);
-    if (d < bestDiff) { bestDiff = d; best = s; }
-  }
-  return best;
 }
 
 function _nextStep(z, dir) {
@@ -26,94 +15,10 @@ function _nextStep(z, dir) {
 }
 
 export function initView(containerEl, overlayCanvas, store, editorState) {
-  // Zoom indicator
-  const zoomEl = document.createElement('span');
-  zoomEl.className = 'stage-zoom';
-  containerEl.appendChild(zoomEl);
+  // R23d item 6: 화면 위 확대 표시(.stage-zoom)·보기 버튼(.stage-view-btn/menu)은 지웠다.
+  //   배율·격자 간격·스냅·겹침은 화면 아래 줄(bottombar.js)과 "보기" 메뉴에서 다룬다.
+  //   여기선 확대/이동/휠/단축키와 도구별 커서만 맡는다.
 
-  // 보기 메뉴(item 7) — 확대 표시 옆. 그리드 켜기·간격·스냅은 화면 설정이라 여기로 모은다.
-  const viewBtn = document.createElement('button');
-  viewBtn.className = 'stage-view-btn';
-  viewBtn.textContent = '보기';
-  viewBtn.title = '보기 설정';
-  viewBtn.setAttribute('aria-label', '보기 설정');
-  containerEl.appendChild(viewBtn);
-
-  const viewMenu = document.createElement('div');
-  viewMenu.className = 'stage-view-menu';
-  viewMenu.hidden = true;
-
-  const gridCheck = document.createElement('label'); gridCheck.className = 'view-check';
-  const gridInput = document.createElement('input'); gridInput.type = 'checkbox';
-  gridCheck.append(gridInput, document.createTextNode('그리드 (G)'));
-
-  const stepRow = document.createElement('div'); stepRow.className = 'view-row';
-  const stepLabel = document.createElement('span'); stepLabel.className = 'view-row-label'; stepLabel.textContent = '간격';
-  const stepDd = createDropdown({
-    ariaLabel: '그리드 간격',
-    options: [8, 16, 32, 64, 128].map((v) => ({ value: String(v), label: `${v}px` })),
-    value: String(editorState.get().gridStep ?? 32),
-    onChange: (v) => editorState.set({ gridStep: parseInt(v, 10) }),
-  });
-  stepRow.append(stepLabel, stepDd.el);
-
-  const snapCheck = document.createElement('label'); snapCheck.className = 'view-check';
-  const snapInput = document.createElement('input'); snapInput.type = 'checkbox';
-  snapCheck.append(snapInput, document.createTextNode('스냅 (격자·가장자리·레이어)'));
-
-  // R12-2 앞뒤 프레임 겹쳐 보기(온니언) — 미리보기 전용.
-  const onionCheck = document.createElement('label'); onionCheck.className = 'view-check';
-  const onionInput = document.createElement('input'); onionInput.type = 'checkbox';
-  onionCheck.append(onionInput, document.createTextNode('앞뒤 프레임 겹쳐 보기 (O)'));
-
-  const onionBeforeRow = document.createElement('div'); onionBeforeRow.className = 'view-row';
-  const onionBeforeLabel = document.createElement('span'); onionBeforeLabel.className = 'view-row-label'; onionBeforeLabel.textContent = '앞 장수';
-  const onionBeforeDd = createDropdown({
-    ariaLabel: '앞 프레임 수',
-    options: [0, 1, 2, 3].map((v) => ({ value: String(v), label: `${v}장` })),
-    value: String(editorState.get().onionBefore ?? 1),
-    onChange: (v) => editorState.set({ onionBefore: parseInt(v, 10) }),
-  });
-  onionBeforeRow.append(onionBeforeLabel, onionBeforeDd.el);
-
-  const onionAfterRow = document.createElement('div'); onionAfterRow.className = 'view-row';
-  const onionAfterLabel = document.createElement('span'); onionAfterLabel.className = 'view-row-label'; onionAfterLabel.textContent = '뒤 장수';
-  const onionAfterDd = createDropdown({
-    ariaLabel: '뒤 프레임 수',
-    options: [0, 1, 2, 3].map((v) => ({ value: String(v), label: `${v}장` })),
-    value: String(editorState.get().onionAfter ?? 1),
-    onChange: (v) => editorState.set({ onionAfter: parseInt(v, 10) }),
-  });
-  onionAfterRow.append(onionAfterLabel, onionAfterDd.el);
-
-  viewMenu.append(gridCheck, stepRow, snapCheck, onionCheck, onionBeforeRow, onionAfterRow);
-  containerEl.appendChild(viewMenu);
-
-  onionInput.addEventListener('change', () => editorState.set({ onion: onionInput.checked }));
-
-  function _syncViewMenu() {
-    const es = editorState.get();
-    gridInput.checked = !!es.grid;
-    snapInput.checked = !!es.snap;
-    onionInput.checked = !!es.onion;
-    onionBeforeDd.setValue?.(String(es.onionBefore ?? 1));
-    onionAfterDd.setValue?.(String(es.onionAfter ?? 1));
-  }
-  gridInput.addEventListener('change', () => editorState.set({ grid: gridInput.checked }));
-  snapInput.addEventListener('change', () => editorState.set({ snap: snapInput.checked }));
-
-  function _closeViewMenu() { viewMenu.hidden = true; document.removeEventListener('pointerdown', _onViewOutside, true); }
-  function _onViewOutside(e) { if (e.target !== viewBtn && !viewMenu.contains(e.target)) _closeViewMenu(); }
-  viewBtn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    if (!viewMenu.hidden) { _closeViewMenu(); return; }
-    _syncViewMenu();
-    viewMenu.hidden = false;
-    setTimeout(() => document.addEventListener('pointerdown', _onViewOutside, true), 0);
-  });
-
-  // R23c: 도구 버튼은 메뉴 막대 아래 "도구 막대"(toolbar.js)로 옮겼다. 여기선 커서만 관리한다.
-  // 도구별 커서 (zoom/text/shape 는 tool-extras.js 가 관리).
   function _cursorFor(tool) {
     if (tool === 'hand') return 'grab';
     if (tool === 'edit') return 'crosshair';
@@ -122,11 +27,6 @@ export function initView(containerEl, overlayCanvas, store, editorState) {
     if (tool === 'zoom') return 'zoom-in';
     if (tool === 'text' || tool === 'shape') return 'crosshair';
     return '';
-  }
-
-  function _updateZoomEl() {
-    const { zoom } = editorState.get();
-    zoomEl.textContent = `${Math.round(zoom * 100)}%`;
   }
 
   function _setZoom(newZoom, pivotX, pivotY) {
@@ -152,7 +52,6 @@ export function initView(containerEl, overlayCanvas, store, editorState) {
   }
 
   function _fitToCanvas() {
-    const es = editorState.get();
     const doc = store.get();
     const W = overlayCanvas.width;
     const H = overlayCanvas.height;
@@ -187,8 +86,6 @@ export function initView(containerEl, overlayCanvas, store, editorState) {
     if ((e.ctrlKey || e.metaKey) && e.key === '0') { e.preventDefault(); _fitToCanvas(); }
     if ((e.ctrlKey || e.metaKey) && e.key === '1') {
       e.preventDefault();
-      const W = overlayCanvas.width;
-      const H = overlayCanvas.height;
       editorState.set({ zoom: 1, panX: 0, panY: 0 });
     }
     if ((e.ctrlKey || e.metaKey) && (e.key === '=' || e.key === '+')) {
@@ -240,13 +137,6 @@ export function initView(containerEl, overlayCanvas, store, editorState) {
   }
 
   editorState.subscribe((patch) => {
-    if ('zoom' in patch) _updateZoomEl();
-    if ('grid' in patch) gridInput.checked = !!editorState.get().grid;
-    if ('snap' in patch) snapInput.checked = !!editorState.get().snap;
-    if ('gridStep' in patch) stepDd.setValue?.(String(editorState.get().gridStep ?? 32));
-    if ('onion' in patch) onionInput.checked = !!editorState.get().onion;
-    if ('onionBefore' in patch) onionBeforeDd.setValue?.(String(editorState.get().onionBefore ?? 1));
-    if ('onionAfter' in patch) onionAfterDd.setValue?.(String(editorState.get().onionAfter ?? 1));
     if ('tool' in patch) overlayCanvas.style.cursor = _cursorFor(patch.tool);
   });
 
@@ -257,8 +147,6 @@ export function initView(containerEl, overlayCanvas, store, editorState) {
   document.addEventListener('keydown', _onKeyDownView);
   document.addEventListener('keyup', _onKeyUpView);
 
-  _updateZoomEl();
-
   return () => {
     overlayCanvas.removeEventListener('wheel', _onWheel);
     overlayCanvas.removeEventListener('pointerdown', _onPanDown);
@@ -266,9 +154,5 @@ export function initView(containerEl, overlayCanvas, store, editorState) {
     overlayCanvas.removeEventListener('pointerup', _onPanUp);
     document.removeEventListener('keydown', _onKeyDownView);
     document.removeEventListener('keyup', _onKeyUpView);
-    document.removeEventListener('pointerdown', _onViewOutside, true);
-    stepDd.destroy?.();
-    onionBeforeDd.destroy?.();
-    onionAfterDd.destroy?.();
   };
 }

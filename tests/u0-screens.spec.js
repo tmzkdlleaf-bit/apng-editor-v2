@@ -161,6 +161,28 @@ for (const theme of ['dark', 'light']) {
         await page.waitForTimeout(300);
       }
       await shot('13-projects');
+      await page.keyboard.press('Escape');   // 라이브러리 닫기
+      await page.waitForTimeout(120);
+    }
+
+    // 14 메뉴 막대 "파일" 열림 (R23d — 드롭다운이 도구 막대에 가려지지 않고 맨 위에 보이는지)
+    const fileTop = page.locator('.menu-top', { hasText: '파일' });
+    if (await fileTop.count()) {
+      await fileTop.click();
+      await page.waitForTimeout(120);
+      await shot('14-menu-open');
+
+      // 15 "새 장면" 창 (R23d — 가운데에 모양 갖춰 뜨는지)
+      const ns = page.locator('.menu-item', { hasText: '새 장면' });
+      if ((await ns.count()) && (await ns.isEnabled())) {
+        await ns.click();
+        await page.waitForSelector('.newscene-modal', { timeout: 3000 }).catch(() => {});
+        await page.waitForTimeout(150);
+        await shot('15-newscene');
+        await page.keyboard.press('Escape');
+      } else {
+        await page.keyboard.press('Escape');
+      }
     }
   });
 }

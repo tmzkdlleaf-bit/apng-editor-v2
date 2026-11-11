@@ -42,7 +42,9 @@ test('U0-2 — [+ 레이어]는 목록 머리 칸으로 옮겨졌다', async ({ 
 test('U0-5 — Space 재생/멈춤, 입력 칸에서는 무시', async ({ page }) => {
   await openApp(page);
   const playing = () => page.evaluate(() => !!window.__editorState.get().playing);
-  await page.locator('body').click();
+  // 입력이 아닌 중립 위치(좌상단)를 눌러 포커스를 비운다 — 화면 아래 줄 컨트롤 위를 눌러 체크박스에 포커스가
+  // 가면 Space 가 그 체크박스를 토글해 재생 토글이 무시된다(R23d: 아래 줄이 넓어짐).
+  await page.locator('body').click({ position: { x: 5, y: 5 } });
   expect(await playing()).toBe(false);
   await page.keyboard.press('Space');
   expect(await playing()).toBe(true);

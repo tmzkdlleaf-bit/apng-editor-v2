@@ -92,10 +92,11 @@ function _buildChildren(spec) {
       ? 'fill="currentColor" stroke="none"'
       : 'fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"';
     if (piece[0] === 'c') {
-      const [, cx, cy, r] = piece.split(/\s+/);
+      // 'c7 7 4' 처럼 글자 뒤 빈칸이 없다 — 앞 글자를 떼고 나머지를 나눈다.
+      const [cx, cy, r] = piece.slice(1).trim().split(/[\s,]+/);
       out.push(`<circle cx="${cx}" cy="${cy}" r="${r}" ${attrs}/>`);
     } else if (piece[0] === 'R') {
-      const [, x, y, w, h, r] = piece.split(/\s+/);
+      const [x, y, w, h, r] = piece.slice(1).trim().split(/[\s,]+/);
       out.push(`<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${r}" ${attrs}/>`);
     } else {
       out.push(`<path d="${piece}" ${attrs}/>`);
