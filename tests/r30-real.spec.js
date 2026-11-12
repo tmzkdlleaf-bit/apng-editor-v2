@@ -112,3 +112,11 @@ test('크리티컬 폭발(실사): 처음 보이는 프레임에 번쩍이 가�
   expect(lum[0]).toBeGreaterThan(lum[1]);
   expect(lum[1]).toBeGreaterThan(lum[3]);
 });
+
+test('R30e 실사: 도깨비불·창문 빗물 결정론·루프 이음매', async ({ page }) => {
+  for (const id of ['spirit-flame', 'window-rain']) {
+    const a = await frameLuma(page, id, { look: 'real', runFreq: 0.6 }, 12, 12, [0, 12, 5, 5]);
+    expect(a[0], `${id} 루프`).toBeCloseTo(a[1], 6);
+    expect(a[2], `${id} 결정론`).toBeCloseTo(a[3], 6);
+  }
+});
