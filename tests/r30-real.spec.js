@@ -92,3 +92,23 @@ test('반딧불(실사, J형): 빛나는 시간이 전체의 약 1/8(8~22%)', as
   expect(on).toBeGreaterThan(0.08);
   expect(on).toBeLessThan(0.22);
 });
+
+test('R30c 실사: 충격파·섬광·안개·구름 결정론·루프 이음매', async ({ page }) => {
+  for (const id of ['shockwave', 'impact-flash', 'fog', 'clouds']) {
+    const a = await frameLuma(page, id, { look: 'real' }, 12, 12, [0, 12, 5, 5]);
+    expect(a[0], `${id} 루프`).toBeCloseTo(a[1], 6);
+    expect(a[2], `${id} 결정론`).toBeCloseTo(a[3], 6);
+  }
+});
+
+test('섬광(실사): 첫 프레임이 가장 밝고 바로 다음 프레임에 크게 줄어든다', async ({ page }) => {
+  const lum = await frameLuma(page, 'impact-flash', { look: 'real', flashes: 1 }, 12, 12, [0, 1, 2, 6]);
+  expect(lum[0]).toBeGreaterThan(lum[1] * 3);
+  expect(lum[1]).toBeGreaterThanOrEqual(lum[2]);
+});
+
+test('크리티컬 폭발(실사): 처음 보이는 프레임에 번쩍이 가장 세다', async ({ page }) => {
+  const lum = await frameLuma(page, 'critical-burst', { look: 'real', grain: 0 }, 12, 24, [1, 2, 4, 10]);
+  expect(lum[0]).toBeGreaterThan(lum[1]);
+  expect(lum[1]).toBeGreaterThan(lum[3]);
+});
