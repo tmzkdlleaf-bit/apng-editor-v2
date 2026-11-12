@@ -41,13 +41,14 @@ test('R28 새 효과 — 결정론·루프·극값', async ({ page }) => {
     const out = {};
     for (const eff of getAllEffects().filter((e) => CATS.includes(e.category))) {
       const doc = buildDoc(eff, defP(eff));
+      const once = typeof eff.once === 'function' ? eff.once(defP(eff)) : !!eff.once;
       const determ = diffFrac(data(doc, 5), data(doc, 5)) === 0;
-      const loopFrac = eff.once ? 0 : diffFrac(data(doc, 0), data(doc, FC));
+      const loopFrac = once ? 0 : diffFrac(data(doc, 0), data(doc, FC));
       let extremesOk = true, err = '';
       try { for (const w of ['min', 'max']) { const d = buildDoc(eff, ext(eff, w)); data(d, 0); data(d, 3); data(d, 7); } }
       catch (e) { extremesOk = false; err = String(e); }
       const drew = data(doc, 6).some((v, i) => i % 4 === 3 && v > 0) || data(doc, 11).some((v, i) => i % 4 === 3 && v > 0);
-      out[eff.id] = { determ, loopFrac, extremesOk, err, drew, once: !!eff.once };
+      out[eff.id] = { determ, loopFrac, extremesOk, err, drew, once };
     }
     return out;
   }, CATS);

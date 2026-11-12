@@ -178,17 +178,33 @@ export function branchSegments(rng, o) {
 }
 
 // 가지 선 그리기: progress(0~1)까지 자란 부분만. width = 줄기 굵기(doc px).
+//   선분을 굵기 단계(10단계)로 묶어 단계마다 한 번에 그린다(선분마다 그리면 수백 번 그려 느렸다).
 export function drawSegments(ctx, segsList, progress, width, color, glow = 0) {
-  ctx.save();
-  ctx.lineCap = 'round';
-  ctx.strokeStyle = color;
+  const buckets = new Map();
   for (const s of segsList) {
     if (s.t0 >= progress) continue;
     const k = s.t1 <= progress ? 1 : (progress - s.t0) / (s.t1 - s.t0);
-    const x1 = s.x0 + (s.x1 - s.x0) * k, y1 = s.y0 + (s.y1 - s.y0) * k;
-    ctx.lineWidth = Math.max(0.5, width * s.w);
-    if (glow > 0) { ctx.globalAlpha = 0.25 * glow; ctx.lineWidth = Math.max(1, width * s.w * 3.5); ctx.beginPath(); ctx.moveTo(s.x0, s.y0); ctx.lineTo(x1, y1); ctx.stroke(); ctx.lineWidth = Math.max(0.5, width * s.w); ctx.globalAlpha = 1; }
-    ctx.beginPath(); ctx.moveTo(s.x0, s.y0); ctx.lineTo(x1, y1); ctx.stroke();
+    const key = Math.max(1, Math.round(s.w * 10));
+    let path = buckets.get(key);
+    if (!path) { path = []; buckets.set(key, path); }
+    path.push(s.x0, s.y0, s.x0 + (s.x1 - s.x0) * k, s.y0 + (s.y1 - s.y0) * k);
   }
+  if (!buckets.size) return;
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.strokeStyle = color;
+  const baseAlpha = ctx.globalAlpha;
+  const stroke = (lw, alpha) => {
+    for (const [key, pts] of buckets) {
+      ctx.lineWidth = Math.max(0.5, lw * key / 10);
+      ctx.globalAlpha = baseAlpha * alpha;
+      ctx.beginPath();
+      for (let i = 0; i < pts.length; i += 4) { ctx.moveTo(pts[i], pts[i + 1]); ctx.lineTo(pts[i + 2], pts[i + 3]); }
+      ctx.stroke();
+    }
+  };
+  if (glow > 0) stroke(width * 2.4, 0.3 * glow);
+  stroke(width, 1);
   ctx.restore();
 }

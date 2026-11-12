@@ -45,10 +45,15 @@ export function getExportWarnings(doc, { loops = 0, motions = null, effects = nu
       const names = new Set();
       for (const l of Object.values(doc.layers)) {
         if (!l || l.visible === false) continue;
-        const ids = [];
-        if (l.type === 'effect' && l.effectId) ids.push(l.effectId);
-        for (const fid of (l.fxOrder ?? [])) { const fx = l.fx?.[fid]; if (fx && fx.enabled !== false) ids.push(fx.effectId); }
-        for (const id of ids) { const def = effects.get?.(id); if (def?.once) names.add(def.name ?? id); }
+        const items = [];  // [effectId, params]
+        if (l.type === 'effect' && l.effectId) items.push([l.effectId, l.params ?? {}]);
+        for (const fid of (l.fxOrder ?? [])) { const fx = l.fx?.[fid]; if (fx && fx.enabled !== false) items.push([fx.effectId, fx.params ?? {}]); }
+        for (const [id, params] of items) {
+          const def = effects.get?.(id);
+          // once 는 참거짓 또는 파라미터를 받아 판단하는 함수(예: 흘러내림 '한 번' 방식일 때만).
+          const once = typeof def?.once === 'function' ? def.once(params) : def?.once;
+          if (once) names.add(def.name ?? id);
+        }
       }
       if (names.size) {
         warnings.push({
