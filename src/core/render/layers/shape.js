@@ -1,4 +1,5 @@
 // 도형 레이어 렌더러 — rect / ellipse / polygon / line
+import { hasChannels, drawWithChannels } from '../channels.js';
 import { applyTransform } from '../matrix.js';
 import { blendToComposite } from '../blend.js';
 import { hasActiveFx, drawLeafWithFx } from '../fx-stack.js';
@@ -153,10 +154,12 @@ export function renderShapeLayer(outputCtx, layer, worldTr, totalAlpha, rctx) {
   if (!hasMask) {
     // 마스크 없음: 직접 출력 (작업 캔버스 불필요)
     outputCtx.save();
-    applyTransform(outputCtx, worldTr);
+    applyTransform(outputCtx, worldTr, { top: -ch / 2, bottom: ch / 2 });
     outputCtx.globalAlpha = totalAlpha;
     outputCtx.globalCompositeOperation = blendToComposite(layer.blend);
-    outputCtx.drawImage(contentCanvas, -cw / 2, -ch / 2);
+    // R27: 띠 밀기·이어 그리기 채널(바람 흔들림 등)을 도형에도.
+    if (hasChannels(worldTr)) drawWithChannels(outputCtx, contentCanvas, cw, ch, 0.5, 0.5, worldTr);
+    else outputCtx.drawImage(contentCanvas, -cw / 2, -ch / 2);
     outputCtx.restore();
     return;
   }
@@ -167,7 +170,7 @@ export function renderShapeLayer(outputCtx, layer, worldTr, totalAlpha, rctx) {
 
   tmpC.save();
   tmpC.translate(-viewOffsetX, -viewOffsetY);  // view 일부만 그릴 때 마스크 캔버스와 좌표 일치
-  applyTransform(tmpC, worldTr);
+  applyTransform(tmpC, worldTr, { top: -ch / 2, bottom: ch / 2 });
   tmpC.drawImage(contentCanvas, -cw / 2, -ch / 2);
   tmpC.restore();
 

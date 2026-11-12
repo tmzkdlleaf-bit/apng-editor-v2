@@ -71,3 +71,29 @@ export function rgbSplit(ctx, src, pad, dxR, dyR, dxB, dyB, borrow, release) {
   ctx.restore();
   release(tmp);
 }
+
+// 칸 값 필드 그리기(R27) — cols×rows 칸마다 값을 정해 작은 캔버스(풀)에 한 번에 쓰고, 부드럽게 늘려
+// (0,0)~(w,h)에 그린다. 칸마다 fillRect 로 겹쳐 칠하면 반투명 칸이 겹친 자리가 밝은 격자 줄이 됐다(안개·코스틱).
+// cell(gx, gy) → [r, g, b, a(0~1)] 또는 null(투명). ctx 는 효과 좌표계(doc px) 그대로.
+export function drawField(ctx, w, h, cols, rows, borrow, release, cell) {
+  cols = Math.max(1, cols | 0); rows = Math.max(1, rows | 0);
+  const tmp = borrow(cols, rows);
+  const tc = tmp.getContext('2d');
+  const img = tc.createImageData(cols, rows);
+  const d = img.data;
+  for (let gy = 0; gy < rows; gy++) {
+    for (let gx = 0; gx < cols; gx++) {
+      const v = cell(gx, gy);
+      if (!v) continue;
+      const i = (gy * cols + gx) * 4;
+      d[i] = v[0]; d[i + 1] = v[1]; d[i + 2] = v[2]; d[i + 3] = Math.round(clamp(v[3], 0, 1) * 255);
+    }
+  }
+  tc.putImageData(img, 0, 0);
+  ctx.save();
+  ctx.imageSmoothingEnabled = true;
+  if ('imageSmoothingQuality' in ctx) ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(tmp, 0, 0, cols, rows, 0, 0, w, h);
+  ctx.restore();
+  release(tmp);
+}

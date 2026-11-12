@@ -52,14 +52,16 @@ const _testFloat = {
   },
 };
 
+// 시험용 3개는 앱 목록에서 뺐다(R27). 테스트만 globalThis.__APNG_TEST_REGISTRY 를 켜고 쓴다.
+const _TEST = [_testShake, _testFadeIn, _testFloat];
+
 const _ALL = [
-  // 시험용(S5-5 에서 제거)
-  _testShake, _testFadeIn, _testFloat,
   // S5-4 내용
   ...enterMotions, ...exitMotions, ...loopMotions, ...emphasisMotions,
 ];
 
 const _REGISTRY = new Map(_ALL.map((m) => [m.id, m]));
+if (globalThis.__APNG_TEST_REGISTRY) for (const m of _TEST) _REGISTRY.set(m.id, m);
 
 // 계약 하위호환: 일부 코드가 motion.group 을 읽을 수 있어 kind 를 group 으로도 노출.
 for (const m of _REGISTRY.values()) { if (m.group === undefined) m.group = m.kind; }

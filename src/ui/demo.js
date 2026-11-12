@@ -1,5 +1,6 @@
 import { createDoc, createLayer } from '../core/doc/schema.js';
 import { putAsset } from '../core/io/assets.js';
+import { getEffect } from '../effects/registry.js';
 
 // 단순 400×400 데모 (기존)
 export function createDemoDoc() {
@@ -128,14 +129,15 @@ export async function createLargeDemo() {
     doc.order.push(text.id);
   }
 
-  // effect 레이어 3개 (test-dots)
+  // effect 레이어 3개 — 시험용 test-dots(테스트 페이지에서만 등록, R27). 앱에서는 반짝임으로 대신한다.
+  const fxId = getEffect('test-dots') ? 'test-dots' : 'sparkle';
   for (let i = 0; i < 3; i++) {
     const eff = createLayer('effect');
     eff.name     = `이펙트${i + 1}`;
-    eff.effectId = 'test-dots';
+    eff.effectId = fxId;
     eff.seed     = i + 1;
     eff.scope    = 'full';
-    eff.params   = { count: 200, phase: true };
+    eff.params   = fxId === 'test-dots' ? { count: 200, phase: true } : {};
     doc.layers[eff.id] = eff;
     doc.order.push(eff.id);
   }

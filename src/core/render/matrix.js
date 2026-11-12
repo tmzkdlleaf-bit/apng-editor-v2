@@ -24,11 +24,25 @@ export function applyToCtx(ctx, m) {
 // ctx에 worldTr 변환 적용 (translate → rotate → scale(전체) → scaleX/scaleY(가로·세로 보정) 순)
 // x, y = 앵커 캔버스 좌표 (왼쪽 위 원점, px)
 // scaleX/scaleY 는 레이어 로컬 공간의 비균등 스트레치(회전 뒤 적용). 기본 1.
-export function applyTransform(ctx, worldTr) {
+// box(선택) = { top, bottom } 콘텐츠의 위·아래 끝 로컬 y. 기울기(skewX, R27 모션 채널)의 고정점 계산용.
+export function applyTransform(ctx, worldTr, box) {
   const s = worldTr.scale ?? 1;
   ctx.translate(worldTr.x ?? 0, worldTr.y ?? 0);
   ctx.rotate((worldTr.rotation ?? 0) * Math.PI / 180);
   ctx.scale(s * (worldTr.scaleX ?? 1), s * (worldTr.scaleY ?? 1));
+  if (worldTr.skewX) {
+    const k = skewK(worldTr);
+    const oy = skewOriginY(worldTr, box);
+    ctx.transform(1, 0, -k, 1, k * oy, 0); // x' = x + k·(oy − y): 고정점 줄은 그대로, 멀수록 옆으로
+  }
+}
+
+// 기울기(R27): skewX 도(+면 고정점 반대쪽 끝이 오른쪽으로). skewPivot = 고정점 세로 비율(0 위 ~ 1 아래, 기본 1).
+export function skewK(worldTr) { return Math.tan((worldTr.skewX ?? 0) * Math.PI / 180); }
+export function skewOriginY(worldTr, box) {
+  if (!box) return 0;
+  const p = worldTr.skewPivot ?? 1;
+  return box.top + (box.bottom - box.top) * p;
 }
 
 // 레이어 행렬: x, y = 캔버스 앵커 좌표 (왼쪽 위 원점)
@@ -89,6 +103,8 @@ export function composeTransforms(parent, child) {
     alpha:    (parent.alpha    ?? 1) * (child.alpha    ?? 1),
     // 렌더 전용 채널은 레이어 로컬 — 자식 값을 그대로 전달.
     brightness: child.brightness,
+    skewX:      child.skewX,
+    skewPivot:  child.skewPivot,
     slices:     child.slices,
     wrapX:      child.wrapX,
     wrapY:      child.wrapY,

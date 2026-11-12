@@ -1,5 +1,6 @@
 // 이펙트 레지스트리 — 정적 import Map (id → 모듈)
 // 새 효과 추가 = 파일 하나 + 아래에 import 한 줄 + Map 등록 한 줄.
+import { LIGHT_BG_PARAM } from '../core/render/fx-run.js';
 import testDots from './test-dots.js';
 import testLightRays from './test-light-rays.js';
 import testSourceMirror from './test-source-mirror.js';
@@ -28,6 +29,8 @@ import fog from './fog.js';
 import windowRain from './window-rain.js';
 import leaves from './leaves.js';
 import sandstorm from './sandstorm.js';
+import windBend from './wind-bend.js';
+import grass from './grass.js';
 
 // 파티클 (S5-2)
 import sparks from './sparks.js';
@@ -79,13 +82,15 @@ import curtain from './curtain.js';
 import spotlight from './spotlight.js';
 import focusSun from './focus-sun.js';
 
+// 시험용 효과 3개는 앱 목록에서 뺐다(R27). 테스트만 globalThis.__APNG_TEST_REGISTRY 를 켜고 쓴다
+// (tests/helpers/fixtures.js 가 모든 페이지에 켠다). 앱에서는 이 표시가 없어 등록되지 않는다.
+const _testFx = [testDots, testLightRays, testSourceMirror];
+
 const _all = [
-  // 시험용(S5-5에서 제거)
-  testDots, testLightRays, testSourceMirror,
   // 빛
   sparkle, glow, bokeh, lightBeams, sheen, wipe, lensFlare, caustics, lightLeak, candle, flashlight, stageLights, neon,
   // 날씨
-  smoke, rain, snow, petals, fog, windowRain, leaves, sandstorm,
+  smoke, rain, snow, petals, fog, windowRain, leaves, sandstorm, windBend, grass,
   // 파티클
   sparks, particles, bubbles, emotes,
   // 오버레이
@@ -98,7 +103,13 @@ const _all = [
   flame, fireworks, confetti, speedLines, comicFlash, impactFlash, ripple, shockwave, countdown, iris, letterbox, curtain, spotlight, focusSun,
 ];
 
+// "밝은 배경용"(R27): lightBg:true 인 효과에 고급 파라미터를 붙인다. 엔진(fx-run)이 값을 읽어 처리.
+for (const e of _all) {
+  if (e.lightBg && !(e.params ?? []).some((d) => d.key === 'lightBg')) e.params = [...(e.params ?? []), LIGHT_BG_PARAM];
+}
+
 export const effects = new Map(_all.map((e) => [e.id, e]));
+if (globalThis.__APNG_TEST_REGISTRY) for (const e of _testFx) effects.set(e.id, e);
 
 export function getEffect(id) { return effects.get(id); }
 export function getAllEffects() { return [...effects.values()]; }

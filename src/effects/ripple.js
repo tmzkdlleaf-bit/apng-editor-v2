@@ -5,6 +5,7 @@ export default {
   id: 'ripple',
   name: '파문',
   category: '연출',
+  lightBg: true, // R27 밝은 배경용(테두리·진하게) 지원
   description: '중심에서 퍼져 나가는 물결',
   thumbnail: { frame: 8, bg: '#071018' },
   bleed: 8,

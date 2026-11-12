@@ -1,4 +1,4 @@
-// S5-4 모션(등장 12 + 퇴장 11 + 반복 12 + 강조 8 = 43) — 수·계약·결정론·끝점·루프 이음매.
+// S5-4 모션(등장 12 + 퇴장 11 + 반복 14 + 강조 8 = 45, R27 바람 2종 추가) — 수·계약·결정론·끝점·루프 이음매.
 import { test, expect } from './helpers/fixtures.js';
 
 test('S5-4 — 모션 43종: 계약·결정론·끝점·루프 이음매', async ({ page }) => {
@@ -52,10 +52,10 @@ test('S5-4 — 모션 43종: 계약·결정론·끝점·루프 이음매', async
     return out;
   });
 
-  expect(r.total, '시험 제외 모션 수').toBe(43);
+  expect(r.total, '시험 제외 모션 수').toBe(45);
   expect(r.byKind.enter, '등장 수').toBe(12);
   expect(r.byKind.exit, '퇴장 수').toBe(11);
-  expect(r.byKind.loop, '반복 수').toBe(12);
+  expect(r.byKind.loop, '반복 수').toBe(14);
   expect(r.byKind.emphasis, '강조 수').toBe(8);
 
   for (const id of Object.keys(r.items)) {
@@ -89,7 +89,8 @@ test('S5-4 — 모션이 렌더에 반영된다(클립 적용 시 레이어가 �
         const v = evalClips(layer, f, ctx);
         moved = Math.abs(v.x) > 1e-6 || Math.abs(v.y) > 1e-6 || Math.abs(v.rotation) > 1e-6 ||
           Math.abs(v.scale - 1) > 1e-6 || Math.abs(v.scaleX - 1) > 1e-6 || Math.abs(v.scaleY - 1) > 1e-6 ||
-          Math.abs(v.alpha - 1) > 1e-6 || Math.abs(v.brightness) > 1e-6;
+          Math.abs(v.alpha - 1) > 1e-6 || Math.abs(v.brightness) > 1e-6 ||
+          Math.abs(v.skewX ?? 0) > 1e-6 || (v.slices ?? []).some((s) => Math.abs(s.dxPx ?? s.dx ?? 0) > 1e-6); // R27 기울기·띠 밀림
       }
       out[m.id] = moved;
     }

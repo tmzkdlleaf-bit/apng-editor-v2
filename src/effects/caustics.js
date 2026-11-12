@@ -1,10 +1,11 @@
 // 코스틱 — 물빛 일렁임 무늬. 결정론·루프(cos/sin 로 노이즈 좌표 순환).
-import { TAU, fbm, parseColor, clamp } from './_fx-util.js';
+import { TAU, fbm, parseColor, clamp, drawField } from './_fx-util.js';
 
 export default {
   id: 'caustics',
   name: '코스틱',
   category: '빛',
+  lightBg: true, // R27 밝은 배경용(테두리·진하게) 지원
   description: '물빛이 일렁이는 무늬',
   thumbnail: { frame: 8, bg: '#071018' },
   bleed: 0,
@@ -16,7 +17,7 @@ export default {
     { key: 'cells', label: '해상도', type: 'int', default: 40, min: 16, max: 96, advanced: true },
   ],
   scopes: ['full', 'box'],
-  render(ctx, { f, frameCount, w, h, rng }, p) {
+  render(ctx, { f, frameCount, w, h, rng, borrow, release }, p) {
     const freq = (p.size ?? 0.5) * 6;
     const speed = Math.max(1, Math.round(p.speed ?? 1));
     const intensity = clamp(p.intensity ?? 0.6, 0, 1);
@@ -28,18 +29,15 @@ export default {
     const ax = Math.cos(progress * TAU * speed) * 1.2;
     const ay = Math.sin(progress * TAU * speed) * 1.2;
 
-    const cw = w / cells, ch = h / cells;
-    for (let gy = 0; gy < cells; gy++) {
-      for (let gx = 0; gx < cells; gx++) {
-        const nx = (gx / cells) * freq + ax;
-        const ny = (gy / cells) * freq + ay;
-        let n = fbm(nx, ny, seed, 2);
-        // 밝은 능선만(코스틱 느낌): 가파른 대비
-        n = Math.pow(clamp((n - 0.45) / 0.3, 0, 1), 2.2);
-        if (n <= 0.02) continue;
-        ctx.fillStyle = `rgba(${col.r},${col.g},${col.b},${(intensity * n).toFixed(3)})`;
-        ctx.fillRect(gx * cw, gy * ch, cw + 1, ch + 1);
-      }
-    }
+    // 칸 값을 작은 캔버스에 쓰고 부드럽게 늘려 그린다(R27: 칸 겹침 격자 줄·계단 제거).
+    drawField(ctx, w, h, cells, cells, borrow, release, (gx, gy) => {
+      const nx = (gx / cells) * freq + ax;
+      const ny = (gy / cells) * freq + ay;
+      let n = fbm(nx, ny, seed, 2);
+      // 밝은 능선만(코스틱 느낌): 가파른 대비
+      n = Math.pow(clamp((n - 0.45) / 0.3, 0, 1), 2.2);
+      if (n <= 0.02) return null;
+      return [col.r, col.g, col.b, intensity * n];
+    });
   },
 };

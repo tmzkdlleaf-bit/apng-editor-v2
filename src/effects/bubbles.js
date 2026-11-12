@@ -5,6 +5,7 @@ export default {
   id: 'bubbles',
   name: '방울',
   category: '파티클',
+  lightBg: true, // R27 밝은 배경용(테두리·진하게) 지원
   description: '투명한 방울이 흔들리며 올라간다',
   thumbnail: { frame: 8, bg: '#07121a' },
   bleed: 6,

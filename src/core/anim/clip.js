@@ -13,6 +13,7 @@ export function evalClips(layer, f, ctx, opts = {}) {
   let dx = 0, dy = 0, dRotation = 0, mScale = 1, mAlpha = 1;
   let mScaleX = 1, mScaleY = 1, dBright = 0, dWrapX = 0, dWrapY = 0;
   let slices = null;
+  let dSkewX = 0, skewPivot;
 
   for (const clip of (layer.clips ?? [])) {
     const {
@@ -77,14 +78,17 @@ export function evalClips(layer, f, ctx, opts = {}) {
     dBright   += (result.brightness ?? 0) * gain;
     dWrapX    += (result.wrapX ?? 0) * gain;
     dWrapY    += (result.wrapY ?? 0) * gain;
+    if (result.skewX) { dSkewX += result.skewX * gain; if (result.skewPivot !== undefined) skewPivot = result.skewPivot; }
     if (result.slices && result.slices.length) {
       if (!slices) slices = [];
-      for (const s of result.slices) slices.push(s);
+      // R27: 진폭(gain)을 띠 밀림에도 곱한다(gain 1 이면 예전과 같음).
+      for (const s of result.slices) slices.push(gain === 1 ? s : { ...s, dx: (s.dx ?? 0) * gain, dxPx: s.dxPx !== undefined ? s.dxPx * gain : undefined });
     }
   }
 
   return {
     x: dx, y: dy, rotation: dRotation, scale: mScale, alpha: mAlpha,
     scaleX: mScaleX, scaleY: mScaleY, brightness: dBright, wrapX: dWrapX, wrapY: dWrapY, slices,
+    skewX: dSkewX, skewPivot,
   };
 }

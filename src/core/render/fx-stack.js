@@ -143,7 +143,7 @@ export function drawLeafWithFx(outputCtx, buildContent, geom, layer, worldTr, to
   }
 
   outputCtx.save();
-  applyTransform(outputCtx, worldTr);
+  applyTransform(outputCtx, worldTr, { top: -oy, bottom: dH - oy });
   outputCtx.scale(1 / k, 1 / k);
   outputCtx.globalAlpha = totalAlpha;
   outputCtx.globalCompositeOperation = blendToComposite(layer.blend);

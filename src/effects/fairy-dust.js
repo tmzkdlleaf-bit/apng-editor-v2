@@ -5,6 +5,7 @@ export default {
   id: 'fairy-dust',
   name: '요정 가루',
   category: '판타지',
+  lightBg: true, // R27 밝은 배경용(테두리·진하게) 지원
   description: '소용돌이치며 반짝이는 마법 가루',
   thumbnail: { frame: 8, bg: '#0a0618' },
   bleed: 16,

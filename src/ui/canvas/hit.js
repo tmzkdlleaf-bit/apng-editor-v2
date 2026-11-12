@@ -1,7 +1,7 @@
 import { evalCamera } from '../../core/anim/evaluate.js';
 import { localWithFollow, worldTr as worldTrOf } from '../../core/anim/world.js';
 import { localFrame } from '../../core/anim/time.js';
-import { composeTransforms, applyCamera, cameraScreenTr } from '../../core/render/matrix.js';
+import { composeTransforms, applyCamera, cameraScreenTr, skewK, skewOriginY } from '../../core/render/matrix.js';
 import { measureTextBounds } from '../../core/render/layers/text.js';
 import motionRegistry from '../../motions/registry.js';
 
@@ -152,6 +152,14 @@ export function worldToLocal(worldX, worldY, worldTr) {
 }
 const _worldToLocal = worldToLocal;
 
+// 기울기(R27 skewX 모션 채널)를 되돌린다 — 렌더(matrix.applyTransform)와 같은 고정점(콘텐츠 위/아래 끝).
+function _unskew(local, worldTr, bounds) {
+  if (!worldTr.skewX) return local;
+  const k = skewK(worldTr);
+  const oy = skewOriginY(worldTr, { top: (bounds.oy ?? 0) - bounds.hh, bottom: (bounds.oy ?? 0) + bounds.hh });
+  return { x: local.x - k * (oy - local.y), y: local.y };
+}
+
 function _hitGroupChildren(doc, groupId, docX, docY, f, assets) {
   const group = doc.layers[groupId];
   if (!group) return false;
@@ -169,7 +177,7 @@ function _hitGroupChildren(doc, groupId, docX, docY, f, assets) {
     if (!worldTr) continue;
     const bounds = getLayerBounds(child, assets);
     if (!bounds) continue;
-    const local = _worldToLocal(docX, docY, worldTr);
+    const local = _unskew(_worldToLocal(docX, docY, worldTr), worldTr, bounds);
     if (Math.abs(local.x - (bounds.ox ?? 0)) <= bounds.hw && Math.abs(local.y - (bounds.oy ?? 0)) <= bounds.hh) return true;
   }
   return false;
@@ -197,7 +205,7 @@ export function hitTest(doc, docX, docY, f, groupEditId = null, assets = null) {
     if (!worldTr) continue;
     const bounds = getLayerBounds(layer, assets);
     if (!bounds) continue;
-    const local = _worldToLocal(docX, docY, worldTr);
+    const local = _unskew(_worldToLocal(docX, docY, worldTr), worldTr, bounds);
     if (Math.abs(local.x - (bounds.ox ?? 0)) <= bounds.hw && Math.abs(local.y - (bounds.oy ?? 0)) <= bounds.hh) return id;
   }
   return null;

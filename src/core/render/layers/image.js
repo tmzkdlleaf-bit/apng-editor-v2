@@ -95,7 +95,7 @@ export function renderImageLayer(outputCtx, layer, worldTr, totalAlpha, rctx) {
 
   if (!hasOutline && !hasBlur && !layer.mask) {
     outputCtx.save();
-    applyTransform(outputCtx, worldTr);
+    applyTransform(outputCtx, worldTr, { top: -bH * ay, bottom: bH * (1 - ay) });
     outputCtx.globalAlpha = totalAlpha;
     outputCtx.globalCompositeOperation = blendToComposite(layer.blend);
     if (hasChannels(worldTr)) {
@@ -131,7 +131,7 @@ export function renderImageLayer(outputCtx, layer, worldTr, totalAlpha, rctx) {
     // sil: view 오프셋 + worldTr로 실루엣 그리기
     silC.save();
     silC.translate(-viewOffsetX, -viewOffsetY);
-    applyTransform(silC, worldTr);
+    applyTransform(silC, worldTr, { top: -bH * ay, bottom: bH * (1 - ay) });
     silC.drawImage(contentCanvas, -bW * ax, -bH * ay);
     silC.restore();  // identity로 복원
 
@@ -148,7 +148,7 @@ export function renderImageLayer(outputCtx, layer, worldTr, totalAlpha, rctx) {
   // 본체: view 오프셋 + worldTr 적용
   tmpC.save();
   tmpC.translate(-viewOffsetX, -viewOffsetY);
-  applyTransform(tmpC, worldTr);
+  applyTransform(tmpC, worldTr, { top: -bH * ay, bottom: bH * (1 - ay) });
   tmpC.drawImage(contentCanvas, -bW * ax, -bH * ay);
   tmpC.restore();  // identity로 복원
 

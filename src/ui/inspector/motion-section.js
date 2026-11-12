@@ -179,6 +179,17 @@ export function createMotionSection(store, editorState) {
     if (mot?.params?.length) {
       _sub(editWrap, '세부');
       for (const pd of mot.params) {
+        // R27: 고르기형 파라미터(예: 바람 흔들림의 고정할 쪽) — 드롭다운.
+        if (pd.type === 'select') {
+          const dd = createDropdown({
+            ariaLabel: pd.label, value: clip.params?.[pd.key] ?? pd.default,
+            options: pd.options ?? [],
+            onChange: (v) => store.apply({ type: 'setClip', id, clipId: clip.id, patch: { params: { ...clip.params, [pd.key]: v } } }),
+          });
+          editWrap.appendChild(_rowLabel(pd.label, dd.el));
+          _knobFields.push({ destroy: () => dd.destroy() });
+          continue;
+        }
         const f = createNumberField({
           label: pd.label, min: pd.min, max: pd.max, step: pd.step, defaultValue: pd.default,
           onBegin() { store.begin('모션 파라미터'); },

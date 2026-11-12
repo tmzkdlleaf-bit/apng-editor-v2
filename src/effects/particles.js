@@ -20,6 +20,7 @@ export default {
   id: 'particles',
   name: '입자',
   category: '파티클',
+  lightBg: true, // R27 밝은 배경용(테두리·진하게) 지원
   description: '먼지·빛가루·포자 같은 작은 입자',
   thumbnail: { frame: 8, bg: '#0a0c12' },
   bleed: 10,

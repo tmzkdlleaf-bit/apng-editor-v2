@@ -56,6 +56,7 @@ export function evalTransform(doc, layerId, f, motions, opts = {}) {
   if (clips.slices && clips.slices.length) out.slices = clips.slices;
   if (clips.wrapX) out.wrapX = clips.wrapX;
   if (clips.wrapY) out.wrapY = clips.wrapY;
+  if (clips.skewX) { out.skewX = clips.skewX; out.skewPivot = clips.skewPivot ?? 1; }
   return out;
 }
 

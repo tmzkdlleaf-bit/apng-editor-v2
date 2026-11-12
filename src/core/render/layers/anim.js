@@ -1,4 +1,5 @@
 import { applyAdjust, hasAdjust, applyBlur } from '../adjust.js';
+import { hasChannels, drawWithChannels } from '../channels.js';
 import { applyTransform } from '../matrix.js';
 import { blendToComposite } from '../blend.js';
 import { frameIndexAtTime } from '../../io/anim-decode.js';
@@ -90,10 +91,12 @@ export function renderAnimLayer(outputCtx, layer, worldTr, totalAlpha, rctx) {
 
   if (!blur && !layer.mask) {
     outputCtx.save();
-    applyTransform(outputCtx, worldTr);
+    applyTransform(outputCtx, worldTr, { top: -bH * ay, bottom: bH * (1 - ay) });
     outputCtx.globalAlpha = totalAlpha;
     outputCtx.globalCompositeOperation = blendToComposite(layer.blend);
-    outputCtx.drawImage(contentCanvas, -bW * ax, -bH * ay);
+    // R27: 띠 밀기·이어 그리기 채널(바람 흔들림 등)을 움직이는 이미지에도.
+    if (hasChannels(worldTr)) drawWithChannels(outputCtx, contentCanvas, bW, bH, ax, ay, worldTr);
+    else outputCtx.drawImage(contentCanvas, -bW * ax, -bH * ay);
     outputCtx.restore();
     return;
   }
@@ -106,7 +109,7 @@ export function renderAnimLayer(outputCtx, layer, worldTr, totalAlpha, rctx) {
 
   tmpC.save();
   tmpC.translate(-viewOffsetX, -viewOffsetY);
-  applyTransform(tmpC, worldTr);
+  applyTransform(tmpC, worldTr, { top: -bH * ay, bottom: bH * (1 - ay) });
   tmpC.drawImage(contentCanvas, -bW * ax, -bH * ay);
   tmpC.restore();  // identity로 복원
 

@@ -27,6 +27,7 @@ export default {
   id: 'sparkle',
   name: '반짝임',
   category: '빛',
+  lightBg: true, // R27 밝은 배경용(테두리·진하게) 지원
   description: '별 모양 반짝임이 생겼다 사라진다',
   thumbnail: { frame: 6, bg: '#101826' },
   bleed: 10,

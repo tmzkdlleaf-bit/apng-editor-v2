@@ -5,6 +5,7 @@ export default {
   id: 'rain',
   name: '비',
   category: '날씨',
+  lightBg: true, // R27 밝은 배경용(테두리·진하게) 지원
   description: '빗줄기(바닥 물보라 포함 가능)',
   thumbnail: { frame: 6, bg: '#0a0e14' },
   bleed: 10,

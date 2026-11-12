@@ -9,6 +9,12 @@
 import { test as base, expect } from '@playwright/test';
 
 export const test = base.extend({
+  // R27: 시험용 효과·모션(test-*)은 앱 레지스트리에서 빠졌다. 테스트 페이지에서만 켠다.
+  _testRegistry: [async ({ page }, use) => {
+    await page.addInitScript(() => { globalThis.__APNG_TEST_REGISTRY = true; });
+    await use();
+  }, { auto: true }],
+
   // page 를 건드리지 않고(덮어쓰지 않고) 자동으로 콘솔을 지켜본다.
   _consoleGuard: [async ({ page }, use, testInfo) => {
     const errors = [];

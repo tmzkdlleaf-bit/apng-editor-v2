@@ -321,7 +321,7 @@ export function renderTextLayer(outputCtx, layer, worldTr, totalAlpha, rctx) {
     const { cw, ch, anchorX, anchorY, step: st } = contentCanvas._layout;
 
     outputCtx.save();
-    applyTransform(outputCtx, worldTr);
+    applyTransform(outputCtx, worldTr, { top: -anchorY / st, bottom: (ch - anchorY) / st });
     outputCtx.scale(1 / st, 1 / st);                  // 단계로 키운 콘텐츠를 1/단계로 줄여 같은 크기로(선명하게)
     outputCtx.globalAlpha = totalAlpha;
     outputCtx.globalCompositeOperation = blendToComposite(layer.blend);

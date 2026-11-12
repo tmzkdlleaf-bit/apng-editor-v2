@@ -5,6 +5,7 @@ export default {
   id: 'sparks',
   name: '불티',
   category: '파티클',
+  lightBg: true, // R27 밝은 배경용(테두리·진하게) 지원
   description: '불티가 위로 날아오르며 식어 사라진다',
   thumbnail: { frame: 6, bg: '#0c0603' },
   bleed: 10,

@@ -5,6 +5,7 @@ export default {
   id: 'snow',
   name: '눈',
   category: '날씨',
+  lightBg: true, // R27 밝은 배경용(테두리·진하게) 지원
   description: '흔들리며 떨어지는 눈송이',
   thumbnail: { frame: 7, bg: '#0a0e18' },
   bleed: 10,

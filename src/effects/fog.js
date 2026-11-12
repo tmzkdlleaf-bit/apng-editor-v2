@@ -1,5 +1,5 @@
 // 안개 — 안개(안개·지면안개 합침). 결정론·루프(순환 노이즈 좌표).
-import { TAU, fbm, parseColor, clamp } from './_fx-util.js';
+import { TAU, fbm, parseColor, clamp, drawField } from './_fx-util.js';
 
 export default {
   id: 'fog',
@@ -22,7 +22,7 @@ export default {
     { id: 'ground', label: '지면 안개', values: { shape: 'ground', height: 0.4 } },
   ],
   scopes: ['full', 'box'],
-  render(ctx, { f, frameCount, w, h, rng }, p) {
+  render(ctx, { f, frameCount, w, h, rng, borrow, release }, p) {
     const ground = p.shape === 'ground';
     const height = clamp(p.height ?? 0.5, 0.1, 1);
     const density = clamp(p.density ?? 0.5, 0, 1);
@@ -34,23 +34,19 @@ export default {
     const ax = Math.cos(progress * TAU * speed) * 0.8;
     const ay = Math.sin(progress * TAU * speed) * 0.4;
     const freq = 2.2;
-    const cw = w / cells, ch = h / cells;
-
-    for (let gy = 0; gy < cells; gy++) {
+    // 칸 값을 작은 캔버스에 쓰고 부드럽게 늘려 그린다(R27: 칸 겹침 격자 줄·계단 제거).
+    drawField(ctx, w, h, cells, cells, borrow, release, (gx, gy) => {
       const yf = (gy + 0.5) / cells;
       let vFade = 1;
       if (ground) {
         const top = 1 - height;
         vFade = yf < top ? 0 : clamp((yf - top) / Math.max(0.01, height), 0, 1);
       }
-      if (vFade <= 0) continue;
-      for (let gx = 0; gx < cells; gx++) {
-        const n = fbm((gx / cells) * freq * (w / Math.max(w, h)) * 2 + ax, yf * freq + ay, seed, 3);
-        const a = density * vFade * clamp((n - 0.3) / 0.6, 0, 1) * 0.8;
-        if (a <= 0.01) continue;
-        ctx.fillStyle = `rgba(${col.r},${col.g},${col.b},${a.toFixed(3)})`;
-        ctx.fillRect(gx * cw, gy * ch, cw + 1, ch + 1);
-      }
-    }
+      if (vFade <= 0) return null;
+      const n = fbm((gx / cells) * freq * (w / Math.max(w, h)) * 2 + ax, yf * freq + ay, seed, 3);
+      const a = density * vFade * clamp((n - 0.3) / 0.6, 0, 1) * 0.8;
+      if (a <= 0.01) return null;
+      return [col.r, col.g, col.b, a];
+    });
   },
 };

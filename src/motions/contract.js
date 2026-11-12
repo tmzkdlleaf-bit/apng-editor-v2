@@ -11,6 +11,7 @@
 //     defaultLength: 24,                 // 적용 시 기본 길이(프레임)
 //     params: [                          // 노브(파라미터)
 //       { key, label, type:'number', default, min, max, step }
+//       { key, label, type:'select', default, options:[{value,label}] }   // R27
 //     ],
 //     description: '한 줄 설명',          // 갤러리 설명(선택)
 //     evaluate(t, params, env) -> { ...채널 }
@@ -28,6 +29,9 @@
 //   brightness  — 밝기(-1~1, 기본 0). +는 밝게, −는 어둡게(콘텐츠 알파 안에서).
 //   slices      — 조각 그리기: [{ y0, y1, dx, alpha }] (y0/y1=높이비율, dx=너비비율 가로밀기). 글리치용.
 //   wrapX, wrapY — 이어 그리기: 너비·높이 대비 밀림(0~1). 배경 무한 스크롤용.
+//   skewX       — 기울기(도, 기본 0, R27). 콘텐츠 아래(또는 위) 끝을 고정하고 반대쪽 끝을 옆으로 민다(+면 오른쪽).
+//   skewPivot   — 기울기 고정점 세로 비율(0 위 ~ 1 아래, 기본 1). 레이어 기준점(anchor)과 따로 계산한다.
+//   slices 의 dxPx(R27) — 콘텐츠 px 단위 가로 밀림(dx 비율 대신). clipX:false(R27) — 띠를 레이어 폭으로 자르지 않는다(바람에 휜 끝이 잘리지 않게). 없으면 예전처럼 자름.
 //
 // 규칙:
 //  - kind:'loop' 은 evaluate(0) === evaluate(1) 여야 한다(이음매 매끈). isLoopSeamOk 로 자동 검사.
@@ -52,7 +56,7 @@ export function isLoopSeamOk(motion, tol = 1e-6) {
   const env = { w: 100, h: 100, frameCount: motion.defaultLength ?? 24, fps: 12 };
   const a = motion.evaluate(0, p, env) ?? {};
   const b = motion.evaluate(1, p, env) ?? {};
-  const keys = ['x', 'y', 'scale', 'scaleX', 'scaleY', 'rotation', 'alpha', 'brightness', 'wrapX', 'wrapY'];
+  const keys = ['x', 'y', 'scale', 'scaleX', 'scaleY', 'rotation', 'alpha', 'brightness', 'wrapX', 'wrapY', 'skewX'];
   for (const k of keys) {
     // wrapX/wrapY 는 0 과 1 이 같은 위치(이어 그리기) → 모듈로 1 로 비교.
     if (k === 'wrapX' || k === 'wrapY') {
@@ -63,8 +67,12 @@ export function isLoopSeamOk(motion, tol = 1e-6) {
     }
     if (Math.abs(_ch(a, k) - _ch(b, k)) > tol) return false;
   }
-  // slices 는 같은 개수·위치면 OK(간단 비교)
+  // slices 는 같은 개수·위치·밀림이면 OK
   const as = a.slices ?? [], bs = b.slices ?? [];
   if (as.length !== bs.length) return false;
+  for (let i = 0; i < as.length; i++) {
+    if (Math.abs((as[i].dx ?? 0) - (bs[i].dx ?? 0)) > tol) return false;
+    if (Math.abs((as[i].dxPx ?? 0) - (bs[i].dxPx ?? 0)) > tol) return false;
+  }
   return true;
 }

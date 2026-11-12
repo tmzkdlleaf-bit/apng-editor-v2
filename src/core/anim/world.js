@@ -24,7 +24,7 @@ export function followCompose(P, c) {
     scaleY: (P.scaleY ?? 1) * (c.scaleY ?? 1),
     rotation: (P.rotation ?? 0) + (c.rotation ?? 0),
     alpha: (c.alpha ?? 1),            // 따라가지 않는 것: 불투명도
-    brightness: c.brightness, slices: c.slices, wrapX: c.wrapX, wrapY: c.wrapY,
+    brightness: c.brightness, skewX: c.skewX, skewPivot: c.skewPivot, slices: c.slices, wrapX: c.wrapX, wrapY: c.wrapY,
   };
 }
 

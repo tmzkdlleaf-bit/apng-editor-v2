@@ -14,14 +14,29 @@ export function drawWithChannels(ctx, content, cw, ch, ax, ay, tr) {
   const top  = -ch * ay;
 
   if (tr.slices && tr.slices.length) {
-    for (const s of tr.slices) {
-      const y0 = top + (s.y0 ?? 0) * ch;
-      const y1 = top + (s.y1 ?? 1) * ch;
+    // R27: 바람용 띠(clipX:false)는 경계를 화면 픽셀에 맞춰 띠 사이 틈·줄을 없앤다(회전이 없을 때).
+    //   회전·기울기가 있으면 픽셀 정렬이 안 되므로 아래로 1 로컬 px 겹친다. 글리치 등 기존 띠는 예전 그대로.
+    const m = ctx.getTransform ? ctx.getTransform() : null;
+    const axisAligned = !!m && Math.abs(m.b) < 1e-9 && Math.abs(m.c) < 1e-9 && Math.abs(m.d) > 1e-9;
+    const snapY = (y) => axisAligned ? (Math.round(m.d * y + m.f) - m.f) / m.d : y;
+    const last = tr.slices.length - 1;
+    for (let i = 0; i <= last; i++) {
+      const s = tr.slices[i];
+      const wind = s.clipX === false;
+      let y0 = top + (s.y0 ?? 0) * ch;
+      let y1 = top + (s.y1 ?? 1) * ch;
+      if (wind) {
+        y0 = snapY(y0); y1 = snapY(y1);
+        if (!axisAligned && i < last) y1 += 1;
+      }
       const bh = y1 - y0;
       if (bh <= 0) continue;
-      const dx = (s.dx ?? 0) * cw;
+      const dx = s.dxPx !== undefined ? s.dxPx : (s.dx ?? 0) * cw;
       ctx.save();
-      ctx.beginPath(); ctx.rect(left, y0, cw, bh); ctx.clip(); // 띠의 세로 범위만
+      ctx.beginPath();
+      if (wind) ctx.rect(left - cw - Math.abs(dx), y0, cw * 3 + Math.abs(dx) * 2, bh); // 가로로 자르지 않음(휜 끝 유지)
+      else ctx.rect(left, y0, cw, bh);  // 띠의 세로 범위만
+      ctx.clip();
       ctx.globalAlpha *= (s.alpha ?? 1);
       ctx.drawImage(content, left + dx, top);                   // 콘텐츠 전체를 가로로 민다
       ctx.restore();

@@ -1,4 +1,6 @@
-// 반복(loop) 모션 12종 — evaluate(0) === evaluate(1)(이음매 매끈). 속도는 정수 바퀴.
+// 반복(loop) 모션 14종(R27: 바람 흔들림·기울기 흔들림 추가) — evaluate(0) === evaluate(1)(이음매 매끈). 속도는 정수 바퀴.
+import { windBend } from '../core/anim/wind.js';
+
 const TAU = Math.PI * 2;
 
 const CYC = { key: 'cycles', label: '횟수', type: 'number', default: 1, min: 1, max: 8, step: 1 };
@@ -161,4 +163,57 @@ const drift = {
   },
 };
 
-export default [bob, sway, pulse, heartbeat, spinLoop, wobble, breathe, jellyLoop, blink, glowPulse, orbit, drift];
+// R27 — 풀·수풀용. 고정할 쪽(아래: 풀·꽃 / 위: 등불·덩굴처럼 매달린 것).
+const ANCHOR = { key: 'anchor', label: '고정할 쪽', type: 'select', default: 'bottom',
+  options: [{ value: 'bottom', label: '아래(풀·꽃)' }, { value: 'top', label: '위(매달린 것)' }] };
+const GUST = { key: 'gust', label: '돌풍', type: 'number', default: 0, min: 0, max: 1, step: 0.05 };
+const SEED = { key: 'seed', label: '시드', type: 'number', default: 1, min: 1, max: 999, step: 1 };
+
+// 바람 흔들림 — 레이어를 가로 띠로 나눠 띠마다 밀어 휜다(뿌리는 그대로, 끝만 휜다). 이미지 레이어에서 동작.
+const windSway = {
+  id: 'wind-sway', name: '바람 흔들림', category: '반복', kind: 'loop', defaultLength: 36,
+  description: '뿌리는 그대로, 끝으로 갈수록 휘며 흔들린다(풀·꽃·덩굴). 그림 레이어 하나에 바로',
+  params: [
+    { key: 'strength', label: '세기', type: 'number', default: 16, min: 0, max: 200, step: 1 },
+    { key: 'curve', label: '휘는 정도', type: 'number', default: 1.6, min: 0.5, max: 4, step: 0.1 },
+    { key: 'lag', label: '엇박자', type: 'number', default: 0.4, min: 0, max: 2, step: 0.05 },
+    GUST,
+    ANCHOR,
+    CYC,
+    { key: 'bands', label: '띠 수', type: 'number', default: 48, min: 8, max: 128, step: 1 },
+    SEED,
+  ],
+  evaluate(t, p) {
+    const n = Math.max(8, Math.min(128, Math.round(p.bands ?? 48)));
+    const top = (p.anchor ?? 'bottom') === 'top';
+    const o = { cycles: p.cycles ?? 1, curve: p.curve ?? 1.6, lag: p.lag ?? 0.4, gust: p.gust ?? 0, seed: p.seed ?? 1 };
+    const amp = p.strength ?? 16;
+    const slices = [];
+    for (let i = 0; i < n; i++) {
+      const mid = (i + 0.5) / n;
+      const h = top ? mid : 1 - mid;
+      slices.push({ y0: i / n, y1: (i + 1) / n, dx: 0, dxPx: amp * windBend(h, t, o), clipX: false });
+    }
+    return { slices };
+  },
+};
+
+// 기울기 흔들림 — 고정점(아래/위 끝)을 기준으로 비스듬히 기울었다 돌아온다. 가장 가볍다(모든 레이어 종류).
+const windSkew = {
+  id: 'wind-skew', name: '기울기 흔들림', category: '반복', kind: 'loop', defaultLength: 36,
+  description: '아래(또는 위) 끝을 고정하고 비스듬히 기울며 흔들린다. 가장 가볍고 단순',
+  params: [
+    { key: 'strength', label: '세기(도)', type: 'number', default: 8, min: 0, max: 45, step: 0.5 },
+    GUST,
+    ANCHOR,
+    CYC,
+    SEED,
+  ],
+  evaluate(t, p) {
+    const top = (p.anchor ?? 'bottom') === 'top';
+    const v = (p.strength ?? 8) * windBend(1, t, { cycles: p.cycles ?? 1, curve: 1, lag: 0, gust: p.gust ?? 0, seed: p.seed ?? 1 });
+    return { skewX: top ? -v : v, skewPivot: top ? 0 : 1 };
+  },
+};
+
+export default [bob, sway, pulse, heartbeat, spinLoop, wobble, breathe, jellyLoop, blink, glowPulse, orbit, drift, windSway, windSkew];

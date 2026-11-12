@@ -17,6 +17,7 @@ export default {
   id: 'runes',
   name: '룬 문자',
   category: '판타지',
+  lightBg: true, // R27 밝은 배경용(테두리·진하게) 지원
   description: '빛나는 룬 글리프가 떠오른다',
   thumbnail: { frame: 8, bg: '#0a0618' },
   bleed: 10,

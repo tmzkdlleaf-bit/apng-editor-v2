@@ -107,7 +107,7 @@ export function renderEffectLayer(outputCtx, layer, worldTr, totalAlpha, rctx) {
       const ch = Math.round(eh * renderScale);
       tmpC.save();
       tmpC.translate(-viewOffsetX, -viewOffsetY);
-      applyTransform(tmpC, worldTr);
+      applyTransform(tmpC, worldTr, { top: -eh / 2, bottom: eh / 2 });
       tmpC.drawImage(contentCanvas, 0, 0, cw, ch, -ew / 2, -eh / 2, ew, eh);
       tmpC.restore();
     }
@@ -146,7 +146,7 @@ export function renderEffectLayer(outputCtx, layer, worldTr, totalAlpha, rctx) {
       const cw = Math.round(ew * renderScale);
       const ch = Math.round(eh * renderScale);
       outputCtx.translate(-viewOffsetX, -viewOffsetY);
-      applyTransform(outputCtx, worldTr);
+      applyTransform(outputCtx, worldTr, { top: -eh / 2, bottom: eh / 2 });
       outputCtx.drawImage(contentCanvas, 0, 0, cw, ch, -ew / 2, -eh / 2, ew, eh);
     }
     outputCtx.restore();

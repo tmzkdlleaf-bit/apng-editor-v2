@@ -5,6 +5,7 @@ export default {
   id: 'magic-circle',
   name: '마법진',
   category: '판타지',
+  lightBg: true, // R27 밝은 배경용(테두리·진하게) 지원
   description: '회전하는 마법진',
   thumbnail: { frame: 6, bg: '#0a0618' },
   bleed: 12,
