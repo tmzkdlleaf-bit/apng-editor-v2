@@ -1,43 +1,17 @@
 // 타임라인 트랙 캔버스 — 키프레임, 클립, 플레이헤드, 하위 속성 행
-import { computeRows, animatedProps, TRANSFORM_PROPS } from './rows.js';
+//   그리기·기하(그림만 그리는 함수)는 track-draw.js 로 나눴다(R23d item 12). 여기는 상호작용·드래그 상태.
+import { computeRows, animatedProps } from './rows.js';
 import { getProp } from '../../core/anim/props.js';
 import { outerFrame, localSpeed, hasTimedAncestor } from '../../core/anim/time.js';
-import { EASE_LABELS } from '../../core/anim/easing.js';
-import { easeCurveSvg } from '../controls/ease-preview.js';
-import { createBezierEditor } from '../controls/bezier-editor.js';
-import motionRegistry from '../../motions/registry.js';
+import {
+  ROW_H, HEAD_H, HANDLE_W,
+  selKey, selSet, mergedKeyFrames, drawHeader, drawBody,
+} from './track-draw.js';
+import { createTrackMenus } from './track-menus.js';
+import { hitTest, handleRectForRow, KF_HIT } from './track-hit.js';
 
-function _motionsGet(id) { return motionRegistry.get(id); }
-
-const ROW_H    = 28;  // C3: 28px
-const HEAD_H   = 24;
 const PX_PER_F_DEFAULT = 20; // 기본 프레임당 픽셀
-const KF_HIT   = 7;   // 키프레임 히트 반경 (px)
-const CLIP_HIT = 6;   // 클립 끝단 히트 폭 (px)
-const HANDLE_W = 10;  // 스트레치 핸들 폭 (px)
 const DRAG_THRESH = 4; // 드래그 판정 임계 (px)
-
-function _cssVar(name) {
-  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-}
-
-// 레이어의 키 있는 속성 프레임 전부 (합집합) — 변형 + 효과 수치(paramAnim)
-function _mergedKeyFrames(layer) {
-  const set = new Set();
-  for (const p of animatedProps(layer)) {
-    if (p.remap) continue; // 다시 매기기 키는 레이어 병합 줄에 섞지 않는다(끌 수 없음)
-    for (const kf of (getProp(layer, p.path)?.keys ?? [])) set.add(kf.f);
-  }
-  return set;
-}
-
-function _camKeyFrames(doc) {
-  const set = new Set();
-  for (const k of ['x', 'y', 'zoom']) {
-    for (const kf of (doc.camera?.[k]?.keys ?? [])) set.add(kf.f);
-  }
-  return set;
-}
 
 export function initTrackCanvas(tracksEl, layersEl, store, editorState, playback) {
   const headWrap = document.createElement('div');
@@ -137,86 +111,14 @@ export function initTrackCanvas(tracksEl, layersEl, store, editorState, playback
     return computeRows(store.get(), editorState.get().expanded);
   }
 
-  // ── 히트 테스트 ───────────────────────────────────────────────────────
-  // 반환: { kind:'keyframe'|'clip-start'|'clip-end'|'handle'|'empty', ... }
-  function _hit(x, y) {
-    const doc  = store.get();
-    const es   = editorState.get();
-    const rows = _rows();
-    const rowI = Math.floor(y / ROW_H);
-    const fc   = doc.meta.frameCount ?? 1;
-    if (rowI < 0 || rowI >= rows.length) return { kind: 'empty', f: _xToFrame(x), rowI };
-    const row = rows[rowI];
-    const y0  = rowI * ROW_H;
+  // ── 히트 테스트 — track-hit.js (R23d item 12) ──
+  function _geom() { return { pxPerF: _pxPerF, frameToX: _frameToX, xToFrame: _xToFrame, keyX: _keyX }; }
+  function _hit(x, y) { return hitTest(x, y, store.get(), editorState.get(), _rows(), _geom()); }
+  function _handleRectForRow(row, es) { return handleRectForRow(row, es, _geom()); }
 
-    // 스트레치 핸들 (선택 키가 이 행에 2개 이상일 때)
-    const handle = _handleRectForRow(row, es);
-    if (handle && x >= handle.x && x <= handle.x + HANDLE_W
-        && y >= y0 + 4 && y <= y0 + ROW_H - 4) {
-      return { kind: 'handle', row, minF: handle.minF, maxF: handle.maxF };
-    }
-
-    // 키프레임
-    if (row.kind === 'layer') {
-      const layer = doc.layers[row.id];
-      if (layer) {
-        // 클립 끝단 → 트림, 가운데 → 몸통(선택/메뉴)
-        if (layer.clips?.length) {
-          for (const clip of layer.clips) {
-            const ws = clip.winStart ?? clip.start;
-            const we = clip.winEnd ?? (clip.start + clip.length);
-            const x0 = ws * _pxPerF;
-            const x1 = we * _pxPerF;
-            if (Math.abs(x - x0) <= CLIP_HIT) return { kind: 'clip-start', id: row.id, clipId: clip.id, origStart: clip.start, origLength: clip.length };
-            if (Math.abs(x - x1) <= CLIP_HIT) return { kind: 'clip-end',   id: row.id, clipId: clip.id, origStart: clip.start, origLength: clip.length };
-            if (x > x0 && x < x1) return { kind: 'clip-body', id: row.id, clipId: clip.id };
-          }
-        }
-        for (const f of _mergedKeyFrames(layer)) {
-          if (f < 0 || f >= fc) continue;
-          if (Math.abs(x - _keyX(doc, row.id, f, false)) <= KF_HIT) {
-            // 이 프레임의 모든 키 있는 속성 ref(다시 매기기 줄은 제외 — 끌 수 없음)
-            const refs = animatedProps(layer)
-              .filter(p => !p.remap && (getProp(layer, p.path)?.keys ?? []).some(k => k.f === f))
-              .map(p => ({ id: row.id, path: p.path, f }));
-            if (refs.length) return { kind: 'keyframe', refs, f, row };
-          }
-        }
-      }
-    } else if (row.kind === 'prop') {
-      if (row.remap) return { kind: 'empty', f: _xToFrame(x), rowI, row }; // 다시 매기기 키는 끌 수 없음
-      const layer = doc.layers[row.id];
-      for (const kf of (getProp(layer, row.path)?.keys ?? [])) {
-        if (kf.f < 0 || kf.f >= fc) continue;
-        if (Math.abs(x - _keyX(doc, row.id, kf.f, false)) <= KF_HIT) {
-          return { kind: 'keyframe', refs: [{ id: row.id, path: row.path, f: kf.f }], f: kf.f, row };
-        }
-      }
-    }
-
-    return { kind: 'empty', f: _xToFrame(x), rowI, row };
-  }
-
-  // 선택 키가 있는 행의 스트레치 핸들 위치 (키 2개 이상)
-  function _handleRectForRow(row, es) {
-    if (!row || (row.kind !== 'layer' && row.kind !== 'prop')) return null;
-    const frames = [];
-    for (const r of es.kfSelection) {
-      if (r.id !== row.id) continue;
-      if (row.kind === 'prop' && r.path !== row.path) continue;
-      frames.push(r.f);
-    }
-    if (frames.length < 2) return null;
-    const minF = Math.min(...frames), maxF = Math.max(...frames);
-    return { x: _frameToX(maxF) + KF_HIT, minF, maxF };
-  }
-
-  function _selKey(id, path, f) { return `${id}|${path}|${f}`; }
-  function _selSet(es) {
-    const s = new Set();
-    for (const r of es.kfSelection) s.add(_selKey(r.id, r.path, r.f));
-    return s;
-  }
+  // selKey·selSet 은 track-draw.js 와 공유(같은 선택 키 형식). 아래 상호작용 코드는 예전 이름 그대로 쓴다.
+  const _selKey = selKey;
+  const _selSet = selSet;
 
   // ── 포인터 상호작용 ───────────────────────────────────────────────────
   let _drag = null;      // 진행 중 드래그
@@ -403,36 +305,11 @@ export function initTrackCanvas(tracksEl, layersEl, store, editorState, playback
     }
   });
 
-  // ── 클립 메뉴(F3-3): 루프 토글·자르기·복제·삭제 ───────────────────────
-  let _clipMenu = null;
-  function _closeClipMenu() { if (_clipMenu) { _clipMenu.remove(); _clipMenu = null; document.removeEventListener('pointerdown', _onClipMenuDown, true); } }
-  function _onClipMenuDown(ev) { if (_clipMenu && !_clipMenu.contains(ev.target)) _closeClipMenu(); }
-  function _showClipMenu(clientX, clientY, layerId, clipId) {
-    _closeClipMenu();
-    const doc = store.get();
-    const clip = (doc.layers[layerId]?.clips ?? []).find(c => c.id === clipId);
-    if (!clip) return;
-    const f = editorState.get().f;
-    const items = [
-      [clip.loop ? '루프 끄기' : '루프 켜기', () => store.apply({ type: 'setClip', id: layerId, clipId, patch: { loop: !clip.loop } })],
-      ['재생선에서 자르기', () => store.apply({ type: 'splitClip', id: layerId, clipId, f })],
-      ['복제', () => store.apply({ type: 'duplicateClip', id: layerId, clipId })],
-      ['삭제', () => store.apply({ type: 'removeClip', id: layerId, clipId })],
-    ];
-    const menu = document.createElement('div');
-    menu.className = 'kf-ease-menu';
-    for (const [label, fn] of items) {
-      const b = document.createElement('button');
-      b.className = 'kf-ease-item'; b.textContent = label;
-      b.addEventListener('click', (ev) => { ev.stopPropagation(); _closeClipMenu(); fn(); });
-      menu.appendChild(b);
-    }
-    document.body.appendChild(menu);
-    menu.style.left = Math.min(clientX, window.innerWidth - menu.offsetWidth - 8) + 'px';
-    menu.style.top  = Math.min(clientY, window.innerHeight - menu.offsetHeight - 8) + 'px';
-    _clipMenu = menu;
-    setTimeout(() => document.addEventListener('pointerdown', _onClipMenuDown, true), 0);
-  }
+  // ── 클립 메뉴·이징 메뉴·베지어 편집은 track-menus.js (R23d item 12) ──
+  const _menus = createTrackMenus({ store, editorState, applyEase: (refs, ease, bz) => _applyEase(refs, ease, bz) });
+  const _showClipMenu = _menus.showClipMenu;
+  const _showEaseMenu = _menus.showEaseMenu;
+  const _closeEaseMenu = _menus.closeAll;
 
   // ── 키프레임 조작 ─────────────────────────────────────────────────────
   function _snapKeyDelta(anchorF, delta) {
@@ -611,69 +488,6 @@ export function initTrackCanvas(tracksEl, layersEl, store, editorState, playback
     editorState.set({ kfSelection: refs });
   }
 
-  // ── 이징 메뉴 ─────────────────────────────────────────────────────────
-  let _easeMenu = null;
-  function _closeEaseMenu() { if (_easeMenu) { _easeMenu.remove(); _easeMenu = null; } }
-
-  let _bezier = null;
-  function _showEaseMenu(clientX, clientY, targets) {
-    _closeEaseMenu();
-    const menu = document.createElement('div');
-    menu.className = 'kf-ease-menu';
-    for (const [name, label] of Object.entries(EASE_LABELS)) {
-      const item = document.createElement('button');
-      item.className = 'kf-ease-item';
-      // 작은 곡선 그림 + 이름
-      item.innerHTML = `<span class="kf-ease-curve">${easeCurveSvg(name)}</span><span>${label}</span>`;
-      item.addEventListener('click', (ev) => {
-        ev.stopPropagation();
-        if (name === 'cubicBezier') { _openBezierEditor(targets); return; }
-        _applyEase(targets, name);
-        _closeEaseMenu();
-      });
-      menu.appendChild(item);
-    }
-    document.body.appendChild(menu);
-    menu.style.left = Math.min(clientX, window.innerWidth  - menu.offsetWidth  - 8) + 'px';
-    menu.style.top  = Math.min(clientY, window.innerHeight - menu.offsetHeight - 8) + 'px';
-    _easeMenu = menu;
-    setTimeout(() => document.addEventListener('pointerdown', _onDocDown, { once: true }), 0);
-  }
-
-  // 커스텀 베지어 편집 — 그래프에서 제어점 끌기 + 숫자 입력. 바깥 클릭/적용 시 커밋.
-  function _openBezierEditor(targets) {
-    _closeEaseMenu();
-    if (_bezier) { _bezier.destroy(); _bezier.wrap.remove(); _bezier = null; }
-    const wrap = document.createElement('div');
-    wrap.className = 'kf-ease-menu bezier-popover';
-    const title = document.createElement('div'); title.className = 'bezier-title'; title.textContent = '커스텀 베지어';
-    wrap.appendChild(title);
-    const editor = createBezierEditor({
-      value: [0.25, 0.1, 0.25, 1.0],
-      onCommit: (v) => _applyEase(targets, 'cubicBezier', v),
-    });
-    wrap.appendChild(editor.el);
-    const applyBtn = document.createElement('button'); applyBtn.className = 'accent sm'; applyBtn.textContent = '적용';
-    applyBtn.addEventListener('click', (ev) => { ev.stopPropagation(); _applyEase(targets, 'cubicBezier', editor.getValue()); _closeBezier(); });
-    wrap.appendChild(applyBtn);
-    document.body.appendChild(wrap);
-    const r = { innerWidth: window.innerWidth, innerHeight: window.innerHeight };
-    wrap.style.left = Math.min(200, r.innerWidth - wrap.offsetWidth - 8) + 'px';
-    wrap.style.top  = Math.min(120, r.innerHeight - wrap.offsetHeight - 8) + 'px';
-    _bezier = { wrap, editor, destroy: editor.destroy };
-    const onDown = (e) => { if (!wrap.contains(e.target)) _closeBezier(); };
-    setTimeout(() => document.addEventListener('pointerdown', onDown, true), 0);
-    _bezier.onDown = onDown;
-  }
-  function _closeBezier() {
-    if (!_bezier) return;
-    document.removeEventListener('pointerdown', _bezier.onDown, true);
-    _bezier.editor.destroy(); _bezier.wrap.remove(); _bezier = null;
-  }
-  function _onDocDown(e) {
-    if (_easeMenu && !_easeMenu.contains(e.target)) _closeEaseMenu();
-  }
-
   function _applyEase(refs, ease, bezier = null) {
     const groups = _groupByLayerPath(refs);
     const cmds = groups.map(g => ({ type: 'setKeysEase', id: g.id, path: g.path, frames: g.frames, ease, ...(bezier ? { bezier } : {}) }));
@@ -716,195 +530,13 @@ export function initTrackCanvas(tracksEl, layersEl, store, editorState, playback
     hCtx.scale(dpr, dpr);
     bCtx.scale(dpr, dpr);
 
-    _drawHeader(hCtx, fc, es.f, Math.max(wrapW, totalW));
-    _drawBody(bCtx, doc, rows, es, fc, totalW, bodyH);
+    drawHeader(hCtx, { fc, curF: es.f, totalW: Math.max(wrapW, totalW), pxPerF: _pxPerF });
+    drawBody(bCtx, {
+      doc, rows, es, fc, totalW, totalH: bodyH, pxPerF: _pxPerF,
+      boxSel: _boxSel, keyX: _keyX, handleRectForRow: _handleRectForRow,
+    });
   }
 
-  function _drawHeader(ctx, fc, curF, totalW) {
-    const bgColor   = _cssVar('--tl')    || '#1a1c1f';
-    const textColor = _cssVar('--dim')   || '#9a9ea6';
-    const accColor  = _cssVar('--acc')   || '#f0a35e';
-    const lineColor = _cssVar('--line2') || '#2b2e33';
-
-    ctx.fillStyle = bgColor;
-    ctx.fillRect(0, 0, totalW, HEAD_H);
-    ctx.font = '10px monospace';
-    ctx.textAlign = 'center';
-
-    // 눈금 간격 — 칸 폭(_pxPerF)에 맞춰 라벨이 겹치지 않는 가장 촘촘한 단계. (item 5)
-    let step = 1;
-    for (const s of [1, 2, 5, 10, 20, 50, 100]) { if (s * _pxPerF >= 32) { step = s; break; } step = s; }
-    for (let f = 0; f < fc; f += step) {
-      const x = _frameToX(f);
-      ctx.fillStyle = lineColor;
-      ctx.fillRect(x, HEAD_H - 6, 1, 6);
-      ctx.fillStyle = textColor;
-      ctx.fillText(String(f), x, HEAD_H - 8);
-    }
-
-    const px = _frameToX(curF);
-    ctx.fillStyle = accColor;
-    ctx.fillRect(px - 1, 0, 2, HEAD_H);
-    ctx.beginPath();
-    ctx.moveTo(px - 5, 0); ctx.lineTo(px + 5, 0); ctx.lineTo(px, 8);
-    ctx.closePath(); ctx.fill();
-  }
-
-  function _diamond(ctx, cx, cy, s) {
-    ctx.beginPath();
-    ctx.moveTo(cx, cy - s); ctx.lineTo(cx + s, cy);
-    ctx.lineTo(cx, cy + s); ctx.lineTo(cx - s, cy);
-    ctx.closePath();
-  }
-
-  // R19-3: 키 모양으로 이징 종류 구분 — 일정(linear)=마름모, 곡선(cubicBezier)=모래시계,
-  //   정지(hold)=네모, 이름 이징=원.
-  function _keyShape(ctx, cx, cy, s, ease) {
-    if (ease === 'hold') { ctx.beginPath(); ctx.rect(cx - s, cy - s, s * 2, s * 2); return; }
-    if (ease === 'cubicBezier') { // 모래시계(bowtie)
-      ctx.beginPath();
-      ctx.moveTo(cx - s, cy - s); ctx.lineTo(cx + s, cy - s);
-      ctx.lineTo(cx - s, cy + s); ctx.lineTo(cx + s, cy + s);
-      ctx.closePath(); return;
-    }
-    if (ease && ease !== 'linear') { ctx.beginPath(); ctx.arc(cx, cy, s, 0, Math.PI * 2); return; }
-    _diamond(ctx, cx, cy, s);
-  }
-
-  function _drawBody(ctx, doc, rows, es, fc, totalW, totalH) {
-    const bgColor   = _cssVar('--tl')      || '#1a1c1f';
-    const lineColor = _cssVar('--rowline') || '#24272b';
-    const line2     = _cssVar('--line2')   || '#2b2e33';
-    const accColor  = _cssVar('--acc')     || '#f0a35e';
-    const clipBg    = _cssVar('--clipbg')  || '#4a3524';
-    const clipTextColor = _cssVar('--cliptext') || '#f5d3b0';
-    const selRow    = _cssVar('--selrow')  || '#2a241e';
-    const dimColor  = _cssVar('--dim')     || '#9a9ea6';
-
-    ctx.fillStyle = bgColor;
-    ctx.fillRect(0, 0, totalW, totalH);
-
-    const sel    = new Set(es.selection);
-    const selSet = _selSet(es);
-
-    ctx.fillStyle = line2;
-    for (let f = 0; f < fc; f++) {
-      if (f % 5 === 0) ctx.fillRect(f * _pxPerF, 0, 1, totalH);
-    }
-
-    for (let i = 0; i < rows.length; i++) {
-      const row = rows[i];
-      const y0  = i * ROW_H;
-      const cy  = y0 + ROW_H / 2;
-
-      if (row.kind === 'camera') {
-        for (const f of _camKeyFrames(doc)) {
-          if (f < 0 || f >= fc) continue;
-          ctx.fillStyle = dimColor;
-          _diamond(ctx, _frameToX(f), cy, 5); ctx.fill();
-        }
-        ctx.fillStyle = lineColor;
-        ctx.fillRect(0, y0 + ROW_H - 1, totalW, 1);
-        continue;
-      }
-
-      const layer = doc.layers[row.id];
-      if (!layer) continue;
-
-      if (row.kind === 'layer' && sel.has(row.id)) {
-        ctx.fillStyle = selRow;
-        ctx.fillRect(0, y0, totalW, ROW_H);
-      }
-
-      // 클립 (레이어 행만) — 창(winStart/winEnd) 기준 막대 + 프리셋 이름 + 루프 표시
-      if (row.kind === 'layer' && layer.clips?.length) {
-        for (const clip of layer.clips) {
-          const ws = clip.winStart ?? clip.start;
-          const we = clip.winEnd ?? (clip.start + clip.length);
-          const x  = ws * _pxPerF;
-          const cw = (we - ws) * _pxPerF;
-          ctx.fillStyle = clipBg;
-          ctx.fillRect(x + 1, y0 + 4, cw - 2, ROW_H - 8);
-          ctx.fillStyle = accColor;
-          ctx.globalAlpha = 0.5;
-          ctx.fillRect(x, y0 + 4, 3, ROW_H - 8);
-          ctx.fillRect(x + cw - 3, y0 + 4, 3, ROW_H - 8);
-          ctx.globalAlpha = 1;
-          // 프리셋 이름 + 루프(↻)
-          const mot = _motionsGet(clip.motionId);
-          const label = (clip.loop ? '↻ ' : '') + (mot?.name ?? clip.motionId ?? '');
-          if (label && cw > 24) {
-            ctx.save();
-            ctx.beginPath(); ctx.rect(x + 4, y0, cw - 8, ROW_H); ctx.clip();
-            ctx.fillStyle = clipTextColor;
-            ctx.font = '10px ' + (_cssVar('--font-ui') || 'sans-serif');
-            ctx.textBaseline = 'middle';
-            ctx.fillText(label, x + 6, cy);
-            ctx.restore();
-          }
-        }
-      }
-
-      // 키프레임 — 속성 행은 이징 종류로 모양을 구분(R19-3), 레이어 병합 행은 마름모.
-      if (row.kind === 'prop') {
-        // 다시 매기기 줄은 바깥 f 로 바로 그리고 흐리게(끌 수 없음). 그 밖은 바깥 위치로 변환.
-        ctx.globalAlpha = row.remap ? 0.4 : 1;
-        for (const k of (getProp(layer, row.path)?.keys ?? [])) {
-          if (k.f < 0 || k.f >= fc) continue;
-          const isSel = !row.remap && selSet.has(_selKey(row.id, row.path, k.f));
-          _keyShape(ctx, _keyX(doc, row.id, k.f, row.remap), cy, 4, k.ease);
-          ctx.fillStyle = isSel ? '#ffffff' : accColor;
-          ctx.fill();
-          if (isSel) { ctx.strokeStyle = accColor; ctx.lineWidth = 1.5; ctx.stroke(); }
-        }
-        ctx.globalAlpha = 1;
-      } else {
-        for (const f of _mergedKeyFrames(layer)) {
-          if (f < 0 || f >= fc) continue;
-          const isSel = animatedProps(layer).some(p => !p.remap && selSet.has(_selKey(row.id, p.path, f)));
-          _diamond(ctx, _keyX(doc, row.id, f, false), cy, 5);
-          ctx.fillStyle = isSel ? '#ffffff' : accColor;
-          ctx.fill();
-          if (isSel) { ctx.strokeStyle = accColor; ctx.lineWidth = 1.5; ctx.stroke(); }
-        }
-      }
-
-      // 스트레치 핸들
-      const handle = _handleRectForRow(row, es);
-      if (handle) {
-        ctx.fillStyle = accColor;
-        ctx.fillRect(handle.x, y0 + 6, HANDLE_W, ROW_H - 12);
-      }
-
-      ctx.fillStyle = lineColor;
-      ctx.fillRect(0, y0 + ROW_H - 1, totalW, 1);
-    }
-
-    // 재생선
-    const px = _frameToX(es.f);
-    ctx.fillStyle = accColor;
-    ctx.globalAlpha = 0.8;
-    ctx.fillRect(px - 1, 0, 2, totalH);
-    ctx.globalAlpha = 1;
-
-    // 박스 선택 사각형
-    if (_boxSel) {
-      const bx = Math.min(_boxSel.x0, _boxSel.x1);
-      const by = Math.min(_boxSel.y0, _boxSel.y1);
-      const bw = Math.abs(_boxSel.x1 - _boxSel.x0);
-      const bh = Math.abs(_boxSel.y1 - _boxSel.y0);
-      ctx.strokeStyle = accColor;
-      ctx.globalAlpha = 0.8;
-      ctx.lineWidth = 1;
-      ctx.strokeRect(bx + 0.5, by + 0.5, bw, bh);
-      ctx.globalAlpha = 0.12;
-      ctx.fillStyle = accColor;
-      ctx.fillRect(bx, by, bw, bh);
-      ctx.globalAlpha = 1;
-    }
-  }
-
-  const unsubStore = store.subscribe({ any: true }, requestDraw);
   const unsubES    = editorState.subscribe(requestDraw);
   const ro = new ResizeObserver(() => requestDraw());
   ro.observe(tracksEl);

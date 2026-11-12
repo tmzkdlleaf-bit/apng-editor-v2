@@ -264,3 +264,27 @@ test('화면 아래 줄에 프레임 위치 0개, 배율 표시 화면 전체에
   // 확대 배율을 보여주는 칸은 화면 전체에서 하나(아래 줄 배율 입력).
   await expect(page.locator('.bb-zoom-input')).toHaveCount(1);
 });
+
+// R23d-3: 아래 줄 드롭다운(해상도·격자 간격)이 칸 밖으로 나가 옆 체크박스를 덮던 문제.
+for (const width of [1440, 1280, 1024]) {
+  test(`화면 아래 줄 요소끼리 겹침 0 (${width})`, async ({ page }) => {
+    await openApp(page, { width, height: 800 });
+    const overlaps = await page.evaluate(() => {
+      const bar = document.querySelector('.stage-bottombar');
+      const els = [...bar.querySelectorAll('button, input, label, .bb-label')]
+        .filter((e) => e.getBoundingClientRect().width > 2);
+      const out = [];
+      for (let i = 0; i < els.length; i++) {
+        for (let j = i + 1; j < els.length; j++) {
+          if (els[i].contains(els[j]) || els[j].contains(els[i])) continue;
+          const a = els[i].getBoundingClientRect(), c = els[j].getBoundingClientRect();
+          const ox = Math.min(a.right, c.right) - Math.max(a.left, c.left);
+          const oy = Math.min(a.bottom, c.bottom) - Math.max(a.top, c.top);
+          if (ox > 1 && oy > 1) out.push(`${els[i].className || els[i].tagName} x ${els[j].className || els[j].tagName}`);
+        }
+      }
+      return out;
+    });
+    expect(overlaps).toEqual([]);
+  });
+}

@@ -2,10 +2,10 @@
 import { computeRows, isSelfOrDescendant } from './rows.js';
 import { createLayerAddMenu } from '../layer-add.js';
 import { createThumbnailer } from './thumbnail.js';
-import { groupSelection, ungroupSelection } from '../group-ops.js';
-import { makeComponent, addInstance, hasInstancesOf } from '../component-ops.js';
 import { iconMarkup } from '../icons.js';
 import { hasDrag, readDrag } from '../shell/panel-dnd.js';
+import { startRename } from './layer-rename.js';
+import { createLayerRowMenu } from './layer-row-menu.js';
 import { addFxToLayer, addEffectLayer, addMotionToLayers, addAssetLayer } from '../layer-ops.js';
 
 const ROW_H  = 28; // C3: 28px
@@ -229,37 +229,8 @@ export function initLayerList(containerEl, store, editorState, deps = {}) {
       .filter(r => r.kind === 'layer').map(r => r.id);
   }
 
-  function _startRename(id, nameEl) {
-    const layer = store.get().layers[id];
-    if (!layer) return;
-    const input = document.createElement('input');
-    input.className = 'tl-name-edit';
-    input.value = layer.name || '';
-    input.style.cssText = 'width:100%; font:inherit; background:var(--bg2); color:var(--fg); border:1px solid var(--acc); padding:0 2px; font-size:12px;';
-    nameEl.replaceWith(input);
-    input.select();
-    // Enter 와 blur 양쪽에서 불려도 한 번만 적용(되돌리기 1건). 이름이 같으면 적용하지 않는다.
-    let _done = false;
-    function _commit() {
-      if (_done) return;
-      _done = true;
-      const newName = input.value.trim() || layer.name;
-      if (newName !== layer.name) store.apply({ type: 'setLayer', id, patch: { name: newName } });
-      else _rebuild(); // 변경 없음 — 입력 칸만 정리
-    }
-    input.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') {
-        // 한글 조합(IME) 중 Enter 는 글자 확정용이므로 무시(마지막 글자 유실·중복 방지).
-        if (e.isComposing || e.keyCode === 229) return;
-        e.preventDefault(); input.blur(); // 확정은 blur 한 경로로 통일
-      } else if (e.key === 'Escape') {
-        if (e.isComposing || e.keyCode === 229) return;
-        _done = true; _rebuild();
-      }
-      e.stopPropagation();
-    });
-    input.addEventListener('blur', _commit);
-  }
+  // 이름 편집 — layer-rename.js (R23d item 12)
+  function _startRename(id, nameEl) { startRename(store, id, nameEl, _rebuild); }
 
   // ── 끌어 놓기 (G2) ─────────────────────────────────────────────────────
   function _siblingOrder(parentId) {
@@ -359,71 +330,10 @@ export function initLayerList(containerEl, store, editorState, deps = {}) {
     }
   }
 
-  // ── 행 우클릭 메뉴(F2-8) ───────────────────────────────────────────────
-  let _rowMenu = null;
-  function _closeRowMenu() { if (_rowMenu) { _rowMenu.remove(); _rowMenu = null; document.removeEventListener('pointerdown', _onMenuOutside, true); } }
-  function _onMenuOutside(e) { if (_rowMenu && !_rowMenu.contains(e.target)) _closeRowMenu(); }
-
-  function _openRowMenu(x, y, layerId) {
-    _closeRowMenu();
-    const doc = store.get();
-    const layer = doc.layers[layerId];
-    if (!layer) return;
-    const sel = editorState.get().selection;
-    const items = [];
-    items.push(['이름 바꾸기', 'F2', () => { const el = containerEl.querySelector(`.tl-row[data-id="${layerId}"] .tl-name`); if (el) _startRename(layerId, el); }]);
-    items.push(['복제', 'Ctrl+D', () => store.apply({ type: 'duplicateLayers', ids: sel.length ? sel : [layerId] })]);
-    items.push(['삭제', 'Del', () => _deleteWithConfirm(sel.length ? sel : [layerId])]);
-    items.push(['sep']);
-    items.push(['그룹으로 묶기', 'Ctrl+G', () => groupSelection(store, editorState)]);
-    items.push(['그룹 풀기', 'Ctrl+Shift+G', () => ungroupSelection(store, editorState)]);
-    if (layer.type === 'group') {
-      items.push([layer.isComponent ? '컴포넌트 (설정됨)' : '컴포넌트로 만들기', '', () => { makeComponent(store, editorState); }, layer.isComponent]);
-      items.push(['인스턴스 추가', '', () => { addInstance(store, editorState, layerId); }]);
-      // 내 부품으로 저장(R14-3) — 선택이 아니라 이 그룹을 저장하도록 선택을 맞춘 뒤 저장.
-      items.push(['내 부품으로 저장', '', () => {
-        editorState.set({ selection: [layerId] });
-        import('../library-parts.js').then((m) => m.saveGroupAsPart(store, editorState));
-      }]);
-    }
-    items.push(['sep']);
-    items.push([layer.locked ? '잠금 해제' : '잠금', '', () => store.apply({ type: 'setLayer', id: layerId, patch: { locked: !layer.locked } })]);
-    items.push([layer.visible === false ? '표시' : '숨기기', '', () => store.apply({ type: 'setLayer', id: layerId, patch: { visible: layer.visible === false } })]);
-    items.push(['sep']);
-    items.push(['맨 위로', '', () => store.apply({ type: 'moveLayer', id: layerId, parentId: layer.parentId ?? null, index: _siblingOrder(layer.parentId ?? null).length })]);
-    items.push(['맨 아래로', '', () => store.apply({ type: 'moveLayer', id: layerId, parentId: layer.parentId ?? null, index: 0 })]);
-
-    const menu = document.createElement('div');
-    menu.className = 'row-menu';
-    for (const it of items) {
-      if (it[0] === 'sep') { const s = document.createElement('div'); s.className = 'row-menu-sep'; menu.appendChild(s); continue; }
-      const [label, key, fn, disabled] = it;
-      const b = document.createElement('button');
-      b.className = 'row-menu-item' + (disabled ? ' disabled' : '');
-      b.innerHTML = `<span>${label}</span>${key ? `<span class="row-menu-key">${key}</span>` : ''}`;
-      if (disabled) b.disabled = true;
-      else b.addEventListener('click', (e) => { e.stopPropagation(); _closeRowMenu(); fn(); });
-      menu.appendChild(b);
-    }
-    document.body.appendChild(menu);
-    // 화면 안으로 위치 보정
-    const mw = menu.offsetWidth, mh = menu.offsetHeight;
-    menu.style.left = Math.min(x, window.innerWidth - mw - 4) + 'px';
-    menu.style.top  = Math.min(y, window.innerHeight - mh - 4) + 'px';
-    _rowMenu = menu;
-    setTimeout(() => document.addEventListener('pointerdown', _onMenuOutside, true), 0);
-  }
-
-  function _deleteWithConfirm(idsToDelete) {
-    const doc = store.get();
-    // 마스터(컴포넌트) 삭제 시 인스턴스가 있으면 확인
-    const masters = idsToDelete.filter((id) => doc.layers[id]?.type === 'group' && hasInstancesOf(doc, id));
-    if (masters.length && typeof confirm === 'function') {
-      if (!confirm('이 컴포넌트를 쓰는 인스턴스가 있습니다. 그래도 삭제할까요?')) return;
-    }
-    store.apply({ type: 'removeLayers', ids: idsToDelete });
-    editorState.set({ selection: [] });
-  }
+  // ── 행 우클릭 메뉴(F2-8) — layer-row-menu.js (R23d item 12) ──
+  const _rowMenuApi = createLayerRowMenu({ store, editorState, containerEl, startRename: _startRename, siblingOrder: (pid) => _siblingOrder(pid) });
+  const _openRowMenu = _rowMenuApi.open;
+  const _closeRowMenu = _rowMenuApi.close;
 
   // R23b: 왼쪽 "효과"/"프로젝트" 패널에서 끌어 온 효과·모션·에셋을 레이어 줄에 놓기.
   //   레이어 순서 바꾸기는 pointer 이벤트라 이 HTML5 끌어 놓기와 겹치지 않는다.

@@ -114,7 +114,7 @@ select.ex-ctl, input[type="number"].ex-ctl {
 }
 
 .ex-warn {
-  background: #8a6d0033; border: 1px solid #c9a227; color: var(--text);
+  background: var(--warn-bg); border: 1px solid var(--warn-line); color: var(--text);
   border-radius: var(--r-1); padding: var(--sp-2) var(--sp-3); font-size: var(--fs-1);
 }
 .ex-warn > div { margin: 2px 0; }
@@ -217,7 +217,7 @@ select.ex-ctl, input[type="number"].ex-ctl {
 .ccf-head-right { display: flex; align-items: center; gap: var(--sp-2); }
 .ccf-close { background: none; border: none; color: var(--text2); font-size: var(--fs-5); cursor: pointer; line-height: 1; padding: 0 var(--sp-2); }
 .ccf-close:hover { color: var(--text); }
-.ccf-stage { position: relative; flex: 1; margin: var(--sp-3); overflow: hidden; background: #26282c; border-radius: var(--r-2); }
+.ccf-stage { position: relative; flex: 1; margin: var(--sp-3); overflow: hidden; background: var(--ccf-stage-bg); border-radius: var(--r-2); }
 .ccf-bg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; display: none; }
 .ccf-bg-hint { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: var(--text2); font-size: var(--fs-3); }
 .ccf-overlay { position: absolute; cursor: move; user-select: none; -webkit-user-drag: none; image-rendering: auto; }

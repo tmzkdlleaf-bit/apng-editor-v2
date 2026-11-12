@@ -283,6 +283,12 @@ if (!isDemo) {
   });
   window.__autosave = autosave;
   window.__project  = projectApi;
+
+  // R23d item 14: 탭 숨김/페이지 떠남에서 즉시 저장(썸네일 건너뜀) — DOM 감지는 core 밖(여기)에서.
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') autosave.flush({ withThumb: false });
+  });
+  window.addEventListener('pagehide', () => autosave.flush({ withThumb: false }));
 }
 
 // ── 오프라인 설치(PWA, F5-5) ──────────────────────────────────────────────

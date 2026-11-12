@@ -1,6 +1,7 @@
 // 자동 저장 — 기록(apply/commit/undo/redo) 후 디바운스 저장. preview 중에는 저장하지 않는다.
 // 저장 자체(IndexedDB 쓰기)와 썸네일 생성은 주입받는다(DOM/캔버스 의존 분리).
-// 탭 숨김/닫힘 리스너는 document가 있을 때만 건다(워커/테스트 안전).
+// R23d item 14: 탭 숨김/닫힘 감지는 DOM 이라 여기(core)서 하지 않는다 — 호출 측(app.js)이
+//   visibilitychange/pagehide 에서 flush({ withThumb:false }) 를 부른다.
 
 export function createAutosave(opts) {
   const {
@@ -77,27 +78,9 @@ export function createAutosave(opts) {
     _arm();
   });
 
-  // 탭 전환/닫힘 시 즉시 flush (썸네일은 건너뛴다)
-  function _onHide() {
-    if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
-      flush({ withThumb: false });
-    }
-  }
-  function _onPageHide() { flush({ withThumb: false }); }
-
-  const _hasDom = typeof document !== 'undefined';
-  if (_hasDom) {
-    document.addEventListener('visibilitychange', _onHide);
-    window.addEventListener('pagehide', _onPageHide);
-  }
-
   function destroy() {
     clearTimeout(_timer);
     _unsub();
-    if (_hasDom) {
-      document.removeEventListener('visibilitychange', _onHide);
-      window.removeEventListener('pagehide', _onPageHide);
-    }
   }
 
   return { flush, destroy, _isPending: () => _pending };

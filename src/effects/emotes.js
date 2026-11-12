@@ -36,7 +36,7 @@ function drawSymbol(ctx, kind) {
     ctx.moveTo(-0.2, -0.9); ctx.lineTo(0.2, -0.9); ctx.lineTo(0.1, 0.25); ctx.lineTo(-0.1, 0.25);
     ctx.closePath(); ctx.fill();
     ctx.beginPath(); ctx.arc(0, 0.62, 0.19, 0, TAU); ctx.fill();
-  } else { // anger (💢 느낌의 성남 표시)
+  } else { // anger (핏줄 선 느낌의 성남 표시)
     ctx.lineWidth = 0.22; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
     for (let k = 0; k < 4; k++) {
       const an = (k / 4) * TAU + Math.PI / 4;

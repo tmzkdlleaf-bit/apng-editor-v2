@@ -56,7 +56,7 @@
   min-width: 48px;
 }
 .save-status[data-status="saving"] { color: var(--faint); }
-.save-status[data-status="error"]  { color: var(--danger, #e06c6c); }
+.save-status[data-status="error"]  { color: var(--danger); }
 
 /* 프로젝트 이름 메뉴 (임시) */
 .project-menu {
@@ -157,6 +157,9 @@
   overflow: hidden;
 }
 .stage-bottombar .bb-group { display: flex; align-items: center; gap: var(--sp-1); }
+/* 아래 줄 칸은 내용 폭보다 줄어들지 않는다 — 줄어들면 드롭다운이 칸 밖으로 나가 옆 체크박스를 덮었다(R23d-3).
+   남는 공간은 .bb-spacer 만 늘고 줄어든다. */
+.stage-bottombar > :not(.bb-spacer) { flex-shrink: 0; }
 /* 짧은 라벨은 글자 단위 줄바꿈 금지("해상 / 도"처럼 쪼개지지 않게). (R23d item 6) */
 .stage-bottombar .bb-label { color: var(--dim); white-space: nowrap; }
 .stage-bottombar .bb-unit { color: var(--dim); white-space: nowrap; }
@@ -164,7 +167,8 @@
 .stage-bottombar .bb-check { display: flex; align-items: center; gap: var(--sp-1); cursor: pointer; white-space: nowrap; }
 .stage-bottombar .bb-check input { margin: 0; }
 .stage-bottombar .bb-spacer { flex: 1; }
-.stage-bottombar .dropdown { min-width: 64px; }
+/* .dropdown 기본 width:100% 는 칸(.bb-group) 폭을 기준으로 잡혀, 라벨 몫만큼 칸 밖으로 나갔다(R23d-3). 아래 줄에서는 내용 폭. */
+.stage-bottombar .dropdown { min-width: 64px; width: auto; }
 
 /* 배율 = 입력+목록 하나(R23d item 11) — 숫자 칸/드롭다운을 합친다. */
 .stage-bottombar .bb-zoom { gap: 0; }
