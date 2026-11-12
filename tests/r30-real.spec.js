@@ -74,3 +74,21 @@ test('실사 4종: 결정론·0프레임 = N프레임·무언가 그림', async 
   const fl = await frameLuma(page, 'flame', { look: 'real' }, 12, 12, [3]);
   expect(fl[0]).toBeGreaterThan(1);
 });
+
+test('R30b 실사: 눈·불티·불꽃놀이·반딧불·촛불·연기·오로라 결정론·루프 이음매', async ({ page }) => {
+  for (const id of ['snow', 'sparks', 'fireworks', 'fireflies', 'candle', 'smoke', 'aurora']) {
+    const a = await frameLuma(page, id, { look: 'real' }, 12, 12, [0, 12, 5, 5]);
+    expect(a[0], `${id} 루프`).toBeCloseTo(a[1], 6);
+    expect(a[2], `${id} 결정론`).toBeCloseTo(a[3], 6);
+  }
+});
+
+test('반딧불(실사, J형): 빛나는 시간이 전체의 약 1/8(8~22%)', async ({ page }) => {
+  const fc = 72, frames = Array.from({ length: fc }, (_, i) => i);
+  const lum = await frameLuma(page, 'fireflies', { look: 'real', count: 1, grain: 0, bloom: 0 }, 12, fc, frames);
+  const peak = Math.max(...lum);
+  const on = lum.filter((v) => v > peak * 0.15).length / fc;
+  expect(peak).toBeGreaterThan(0);
+  expect(on).toBeGreaterThan(0.08);
+  expect(on).toBeLessThan(0.22);
+});
