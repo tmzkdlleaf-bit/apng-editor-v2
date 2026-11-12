@@ -1,7 +1,7 @@
 // 연기 — 피어오르는 연기. 결정론·루프(frac 상승).
 import { TAU, frac, parseColor, rgba, clamp, mix } from './_fx-util.js';
 import { LOOK_PARAM, lookOf } from './_fx-style.js';
-import { world, emit, integrate, overLife, camera, WORLD_PARAMS } from './_fx-real.js';
+import { erodeMask, world, emit, integrate, overLife, camera, WORLD_PARAMS } from './_fx-real.js';
 
 export default {
   id: 'smoke',
@@ -18,6 +18,7 @@ export default {
     { key: 'color', label: '색', type: 'color', default: '#b9bcc6' },
     { key: 'opacity', label: '불투명도', type: 'float', default: 0.5, min: 0, max: 1, step: 0.01 },
     LOOK_PARAM('real'),
+    { key: 'wisps', label: '실 같은 결(실사)', type: 'float', default: 0.6, min: 0, max: 1, step: 0.05 },
     { key: 'light', label: '빛 방향(실사)', type: 'select', default: 'back',
       options: [{ value: 'back', label: '뒤에서(역광)' }, { value: 'top', label: '위에서' }, { value: 'left', label: '왼쪽에서' }, { value: 'right', label: '오른쪽에서' }] },
     ...WORLD_PARAMS.map((q) => (q.key === 'bloom' ? { ...q, default: 0 } : q)),
@@ -74,7 +75,12 @@ function renderReal(ctx, env, p) {
   const L = (c, a) => rgba(c, a);
   const seed = Math.floor(rng() * 1e6);
   const dir = lightM === 'top' ? [0, -1] : lightM === 'left' ? [-1, 0] : lightM === 'right' ? [1, 0] : null;
-  camera(ctx, env, p, (c) => {
+  const fil = clamp(p.wisps ?? 0.6, 0, 1);
+  camera(ctx, env, p, (c0) => {
+    // R31: 덩어리를 임시 캔버스에 그린 뒤 흐르는 노이즈로 부드럽게 침식 → 솜뭉치 대신 실 같은 결
+    const tmp = fil > 0 ? env.borrow(c0.canvas.width, c0.canvas.height) : null;
+    const c = tmp ? tmp.getContext('2d') : c0;
+    if (tmp) c.setTransform(c0.getTransform());
     emit({ count: n, life: [3, 6], seed }, W.t, W.L, (i, age, u, R) => {
       const x0 = (R(1) * 1.1 - 0.05) * w, y0 = h * (1.05 - 0.08 * R(2));
       const m = integrate(0, 0, wind * (0.6 + 0.8 * R(3)), -(0.25 + 0.35 * R(4)) * riseK, wind * 0.15, 0, 0.35, age);
@@ -82,7 +88,7 @@ function renderReal(ctx, env, p) {
       const x = x0 + (m.x + curl) * W.pxPerM, y = y0 + m.y * W.pxPerM;
       const r0 = (0.25 + 0.3 * R(7)) * spread * W.pxPerM;
       const r = r0 * (1 + 2 * u);                            // 2~3배로 커짐
-      const a = op * 0.5 * overLife([[0, 0], [0.12, 1], [0.55, 0.65], [1, 0]], u) * (0.6 + 0.4 * R(8));
+      const a = op * 0.5 * (1 + 0.8 * fil) * overLife([[0, 0], [0.12, 1], [0.55, 0.65], [1, 0]], u) * (0.6 + 0.4 * R(8));
       if (a < 0.004) return;
       let g;
       if (dir) {
@@ -98,5 +104,14 @@ function renderReal(ctx, env, p) {
       c.globalAlpha = 1; c.fillStyle = g;
       c.beginPath(); c.arc(x, y, r, 0, TAU); c.fill();
     });
+    if (tmp) {
+      const cyc = Math.max(1, Math.round(W.L / 1.5));      // 결 흐름 위상: 루프 안 정수 번
+      const m = erodeMask(env, w, h, { cell: 6, freq: 5, thr: 0.5 - 0.25 * (1 - fil), soft: 0.35, fil: 0.35 * fil, flow: (W.t / W.L) * cyc, drift: 0.5 * (W.L / cyc) * riseK, seed: seed % 997, warp: 0.8 });
+      c.save(); c.globalCompositeOperation = 'destination-in'; c.imageSmoothingEnabled = true;
+      c.drawImage(m, 0, 0, m.width, m.height, 0, 0, w, h); c.restore();
+      env.release(m);
+      c0.save(); c0.setTransform(1, 0, 0, 1, 0, 0); c0.globalAlpha = 1; c0.drawImage(tmp, 0, 0); c0.restore();
+      env.release(tmp);
+    }
   }, { bloomK: 1 });
 }

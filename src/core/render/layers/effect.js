@@ -75,7 +75,13 @@ export function renderEffectLayer(outputCtx, layer, worldTr, totalAlpha, rctx) {
         canvas = rctx.renderMask(src, f, width, height, { mode: 'alpha', ignoreVisible: true });
         if (canvas) _sourceCanvases.push(canvas);
       }
-      sourcesForRender.push({ key: def.key, canvas });
+      // R31 실사 소재: 이미지·움직이는 이미지 레이어면 원본(프레임 목록)도 함께 넘긴다 — 시트 자르기·루프용.
+      let asset = null;
+      if (src && sid !== layer.id && rctx.assets) {
+        if (src.type === 'image') { const bm = rctx.assets.getBitmap?.(src.assetId); if (bm) asset = { kind: 'image', id: src.assetId, bitmap: bm }; }
+        else if (src.type === 'anim') { const an = rctx.assets.getAnimFrames?.(src.assetId); if (an?.frames?.length) asset = { kind: 'anim', id: src.assetId, frames: an.frames, delays: an.delays }; }
+      }
+      sourcesForRender.push({ key: def.key, canvas, asset });
     }
   }
 

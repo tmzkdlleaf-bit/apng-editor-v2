@@ -13,6 +13,8 @@ function renderReal(ctx, env, p) {
   const seed = 1 + Math.floor(rng() * 9999);
   const n = Math.max(1, Math.round(p.strikes ?? 2));
   const col = parseColor(p.color ?? '#d9e6ff');
+  // R31: 사진 측정 — 줄기 둘레 빛과 번쩍인 하늘은 약간 보랏빛(평균 (147,138,158)~(184,168,183)).
+  const air = { r: Math.round(col.r * 0.45 + 190 * 0.55), g: Math.round(col.g * 0.45 + 168 * 0.55), b: Math.round(col.b * 0.45 + 205 * 0.55) };
   const area = clamp(p.area ?? 0.8, 0.1, 1);
   const wd = Math.max(0.5, p.width ?? 3);
   const shutterT = Math.max(0.001, W.dt * W.blurK);
@@ -52,13 +54,13 @@ function renderReal(ctx, env, p) {
       c.globalCompositeOperation = 'lighter';
       const a = Math.min(1, B);
       c.globalAlpha = a;
-      drawSegments(c, segs, 1, wd * 3, rgba(col, 0.12), 1);           // 공기 중 퍼진 빛
+      drawSegments(c, segs, 1, wd * 3, rgba(air, 0.14), 1);           // 공기 중 퍼진 빛(보랏빛)
       drawSegments(c, segs, 1, wd * 1.2, rgba(col, 0.55));
       drawSegments(c, segs, 1, Math.max(0.8, wd * 0.45), 'rgba(255,255,255,1)'); // 아주 뜨거운 통로는 흰색
       c.restore();
     }
     const fl = clamp(p.flash ?? 0.5, 0, 1) * Math.min(1, flash);
-    if (fl > 0) { c.fillStyle = rgba(col, 0.5 * fl); c.fillRect(0, 0, w, h); }
+    if (fl > 0) { c.fillStyle = rgba(air, 0.5 * fl); c.fillRect(0, 0, w, h); }
   }, { bloomK: 1, bloomRad: Math.max(w, h) * 0.06 });
 }
 

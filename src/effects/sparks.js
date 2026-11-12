@@ -2,7 +2,7 @@
 import { TAU, frac, mix, rgba, clamp } from './_fx-util.js';
 import { LOOK_PARAM, lookOf } from './_fx-style.js';
 import { world, emit, integrate, overLife, rgbStr, streak, camera, WORLD_PARAMS } from './_fx-real.js';
-import { exposeTemp } from './flame.js';
+import { fireTemp } from './_fx-real.js';
 
 export default {
   id: 'sparks',
@@ -21,6 +21,10 @@ export default {
     { key: 'color2', label: '색 2', type: 'color', default: '#ff4a1e' },
     { key: 'opacity', label: '불투명도', type: 'float', default: 1, min: 0, max: 1, step: 0.01 },
     LOOK_PARAM('real'),
+    { key: 'mode', label: '종류(실사)', type: 'select', default: 'embers', options: [{ value: 'embers', label: '피어오르는 불씨' }, { value: 'grinder', label: '그라인더·용접 불티' }] },
+    { key: 'origin', label: '튀는 곳(그라인더)', type: 'coord', default: { x: 0.5, y: 0.6 } },
+    { key: 'angle', label: '튀는 방향(도)', type: 'int', default: 200, min: 0, max: 360 },
+    { key: 'spread', label: '퍼짐(도)', type: 'int', default: 40, min: 5, max: 120 },
     { key: 'palette', label: '색(실사)', type: 'select', default: 'temp', options: [{ value: 'temp', label: '실제 온도색' }, { value: 'custom', label: '지정한 색' }] },
     ...WORLD_PARAMS.map((q) => (q.key === 'bloom' ? { ...q, default: 0.5 } : q)),
   ],
@@ -61,6 +65,41 @@ export default {
 // R30 실사(지침 4-1 불티, 자료집 2-2): 처음 1500~1950 K 로 태어나 위로 튀었다가 저항으로 느려지고 식는다
 //   (흰 → 노랑 → 주황 → 빨강 → 사라짐). 뜨겁고 빠른 무리 30% / 덜 뜨겁고 느린 무리 70%.
 //   일부(20%)는 중간에 터져 2~3조각으로 갈라진다. 꼬리 = 셔터 흐림.
+// R31 그라인더·용접 불티(사진 관찰): 한 점에서 부채꼴로 빠르게(10~20 m/s) 뿜어 중력으로 휜다.
+//   셔터 동안 긴 가는 줄. 발생점 근처는 흰노랑, 멀어질수록 호박색. 일부는 끝에서 여러 갈래로 터진다.
+function renderGrinder(ctx, env, p, o) {
+  const { w, h } = env;
+  const { W, n, sizeK, op, seed, drawOne } = o;
+  const ox = (p.origin?.x ?? 0.5) * w, oy = (p.origin?.y ?? 0.6) * h;
+  const dir = ((p.angle ?? 200) * Math.PI) / 180, spr = ((p.spread ?? 40) * Math.PI) / 180;
+  camera(ctx, env, p, (c) => {
+    c.save();
+    c.globalCompositeOperation = 'lighter';
+    // 발생점의 작은 빛 덩어리
+    const g = c.createRadialGradient(ox, oy, 0, ox, oy, 10 * sizeK);
+    g.addColorStop(0, `rgba(255,250,225,${op})`); g.addColorStop(0.4, `rgba(255,190,90,${op * 0.5})`); g.addColorStop(1, 'rgba(255,120,30,0)');
+    c.fillStyle = g; c.globalAlpha = 1; c.beginPath(); c.arc(ox, oy, 10 * sizeK, 0, TAU); c.fill();
+    emit({ count: n * 3, life: [0.15, 0.6], seed: seed + 9 }, W.t, W.L, (i, age, u, R) => {
+      const ang = dir + (R(1) + R(2) - 1) * spr;
+      const v0 = 9 + 11 * R(3);
+      const mo = integrate(0, 0, Math.cos(ang) * v0, Math.sin(ang) * v0, 0, 9.8, 1.2, age);
+      const x = ox + mo.x * W.pxPerM, y = oy + mo.y * W.pxPerM;
+      const T0 = 1900 - 300 * R(4);
+      const wd = Math.max(0.8, 1.2 * sizeK * (0.7 + 0.6 * R(5)));
+      if (R(6) < 0.12 && u > 0.6) { // 끝 갈래 터짐(탄소 폭발)
+        for (let j = 0; j < 4; j++) {
+          const a2 = R(7 + j) * TAU, da = (u - 0.6) * (age / u);
+          const ms = integrate(0, 0, Math.cos(a2) * 3, Math.sin(a2) * 3, 0, 9.8, 3, da);
+          drawOne(c, x + ms.x * W.pxPerM, y + ms.y * W.pxPerM, (mo.vx + ms.vx) * W.pxPerM, (mo.vy + ms.vy) * W.pxPerM, T0, u, R, wd * 0.7);
+        }
+        return;
+      }
+      drawOne(c, x, y, mo.vx * W.pxPerM, mo.vy * W.pxPerM, T0, Math.sqrt(u), R, wd);
+    });
+    c.restore();
+  }, { bloomK: 1.2 });
+}
+
 function renderReal(ctx, env, p) {
   const { w, h, rng } = env;
   const W = world(env, p);
@@ -73,7 +112,7 @@ function renderReal(ctx, env, p) {
   const seed = Math.floor(rng() * 1e6);
   const c1 = p.color ?? '#fff0a8', c2 = p.color2 ?? '#ff4a1e';
   const colorAt = (T0, u) => {
-    if (useTemp) return exposeTemp(T0 - (T0 - 850) * u);
+    if (useTemp) return fireTemp(T0 - (T0 - 900) * u * u, 1.15); // R31: 사진 기준 — 갓 튄 불티는 크림빛 흰색
     const m = mix(c1, c2, u); return [m.r, m.g, m.b, 1 - u * 0.6];
   };
   const drawOne = (c, x, y, vx, vy, T0, u, R, wd) => {
@@ -82,6 +121,7 @@ function renderReal(ctx, env, p) {
     if (a < 0.01) return;
     streak(c, x, y, vx, vy, W, wd, rgbStr(col), a);
   };
+  if ((p.mode ?? 'embers') === 'grinder') { renderGrinder(ctx, env, p, { W, n, sizeK, op, seed, drawOne }); return; }
   camera(ctx, env, p, (c) => {
     c.save();
     c.globalCompositeOperation = 'lighter';
@@ -94,7 +134,7 @@ function renderReal(ctx, env, p) {
       const mo = integrate(0, 0, vx0, -v0, 0, -0.5, hot ? 0.9 : 1.6, age);
       const sway = Math.sin(age * (2 + 2 * R(7)) + R(8) * TAU) * 0.06 * wob;
       const x = x0 + (mo.x + sway) * W.pxPerM, y = y0 + mo.y * W.pxPerM;
-      const wd = Math.max(0.7, 1.5 * sizeK * (hot ? 1.1 : 0.9));
+      const wd = Math.max(1, 1.6 * sizeK * (hot ? 1.1 : 0.9));
       // 터짐: 20% 는 수명 45% 지점에서 2~3조각으로
       const splitU = 0.45;
       if (R(9) < 0.2 && u > splitU) {

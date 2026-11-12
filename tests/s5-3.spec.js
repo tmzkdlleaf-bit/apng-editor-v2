@@ -7,6 +7,7 @@ const NO_SEED = new Set([
   'magic-circle', 'aura', 'energy-orb', 'magic-shield',
   'comic-flash', 'impact-flash', 'ripple', 'shockwave', 'countdown',
   'iris', 'letterbox', 'curtain', 'spotlight', 'focus-sun',
+  'footage', // R31 실사 소재: 연결한 소재를 그대로 재생(소재 없으면 아무것도 안 그림)
 ]);
 
 test('S5-3 — 효과 결정론·루프·시드·극값', async ({ page }) => {
@@ -80,8 +81,8 @@ test('S5-3 — 효과 결정론·루프·시드·극값', async ({ page }) => {
     return out;
   }, [...CATS]);
 
-  // 판타지 7 + 연출 14 = 21종이 전부 등록됐는지
-  expect(Object.keys(res).length, '판타지+연출 효과 수').toBe(21);
+  // 판타지 7 + 연출 15(R31 실사 소재 포함) = 22종이 전부 등록됐는지
+  expect(Object.keys(res).length, '판타지+연출 효과 수').toBe(22);
 
   for (const id of Object.keys(res)) {
     const r = res[id];

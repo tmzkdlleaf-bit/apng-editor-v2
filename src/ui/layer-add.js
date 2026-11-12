@@ -9,6 +9,7 @@ import { reduceAnim, planReduce, estAnimMemory, ANIM_MEM_LIMIT } from './anim-re
 import { openEffectsPanel } from './shell/panel-actions.js';
 import { importPsdFile } from './psd-import.js';
 import { openMyParts } from './library-parts.js';
+import { getEffect } from '../effects/registry.js';
 
 // AddMenu 설계: 이미지 / 움직이는 이미지 / 글자 / 도형(격자) / 이펙트 / 그룹 / 조정 / PSD
 // 이번에 안 되는 항목은 disabled + "준비 중"
@@ -17,6 +18,10 @@ const _MENU = [
   { kind: 'anim',     label: '움직이는 이미지 (GIF·APNG·WebP)', type: 'anim' },
   { kind: 'text',     label: '글자',                  type: 'text'  },
   { group: '도형', grid: 'shapes' },
+  { group: '실사 소재(시뮬레이션)' },
+  { kind: 'footage', label: '불길', footage: 'fire' },
+  { kind: 'footage', label: '연기 기둥', footage: 'smoke' },
+  { kind: 'footage', label: '폭발(한 번)', footage: 'explosion' },
   { group: '기타' },
   { kind: 'effect',   label: '이펙트',   type: 'effect' },
   { kind: 'group',    label: '그룹',     type: 'group' },
@@ -24,6 +29,12 @@ const _MENU = [
   { kind: 'myparts',  label: '내 부품',  type: 'myparts' },
   { kind: 'psd',      label: 'PSD 가져오기', type: 'psd' },
 ];
+
+const FOOTAGE_PRESET = {
+  fire: { cols: 8, rows: 8, size: 0.75, position: { x: 0.5, y: 1 }, loop: 'crossfade' },
+  smoke: { cols: 8, rows: 8, size: 1.1, position: { x: 0.5, y: 1 }, loop: 'crossfade', opacity: 0.85 },
+  explosion: { cols: 8, rows: 4, size: 1, position: { x: 0.5, y: 0.95 }, loop: 'once', speed: 1.5 },
+};
 
 export function createLayerAddMenu(store, editorState, containerEl) {
   const btn  = document.createElement('button');
@@ -160,6 +171,10 @@ export function createLayerAddMenu(store, editorState, containerEl) {
       psdInput.click();
       return;
     }
+    if (item.kind === 'footage') {
+      _addFootage(item.footage, item.label).catch(() => showToast('실사 소재를 불러오지 못했습니다.'));
+      return;
+    }
     if (item.kind === 'myparts') {
       openMyParts(store, editorState);
       return;
@@ -212,6 +227,37 @@ export function createLayerAddMenu(store, editorState, containerEl) {
     layer.shape = { ...shapeObj };
     store.apply({ type: 'addLayer', layer, index: doc.order.length });
     editorState.set({ selection: [layer.id] });
+  }
+
+  // R31: 내장 실사 소재(vendor/footage/*.webp — scripts/gen-footage.py 로 만든 유체 시뮬레이션 시트, 검은 배경).
+  //   숨긴 이미지 레이어(시트) + 그것을 '소재'로 쓰는 실사 소재 효과 레이어를 한 번에(되돌리기 1건).
+  async function _addFootage(kind, label) {
+    const res = await fetch(`vendor/footage/${kind}.webp`);
+    if (!res.ok) throw new Error('fetch');
+    const blob = await res.blob();
+    const file = new File([blob], `${kind}.webp`, { type: 'image/webp' });
+    const { id: assetId, meta } = await putAsset(file, `실사-${label}`);
+    if (!meta.width || !meta.height) throw new Error('decode');
+    const doc = store.get();
+    const src = createLayer('image', { name: `실사 소재 시트(${label})`, assetId });
+    src.visible = false;
+    src.transform.x.value = Math.round(doc.meta.width / 2);
+    src.transform.y.value = Math.round(doc.meta.height / 2);
+    const def = getEffect('footage');
+    const params = {};
+    for (const q of (def?.params ?? [])) params[q.key] = q.default;
+    Object.assign(params, FOOTAGE_PRESET[kind] ?? {});
+    const fx = createLayer('effect', { name: `실사 ${label}`, effectId: 'footage' });
+    fx.params = params;
+    fx.seed = Math.floor(Math.random() * 1e6);
+    fx.transform.x.value = 0; fx.transform.y.value = 0;
+    fx.sources = [{ key: 'clip', sourceId: src.id }];
+    const cmds = [];
+    if (!doc.assets?.[assetId]) cmds.push({ type: 'addAsset', id: assetId, asset: meta });
+    cmds.push({ type: 'addLayer', layer: src, index: doc.order.length });
+    cmds.push({ type: 'addLayer', layer: fx, index: doc.order.length + 1 });
+    store.apply({ type: 'batch', cmds });
+    editorState.set({ selection: [fx.id] });
   }
 
   // A4+P7: 바이트는 IndexedDB(내용 주소)로, 문서에는 메타만. addAsset+addLayer를 batch 한 건으로.

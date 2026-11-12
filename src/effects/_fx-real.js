@@ -4,6 +4,7 @@
 //   기둥 C 촬영: 셔터 흐림(streak) · 빛 번짐 + 입자감(camera)
 // 전부 결정론: 입자 성질은 hash(입자 번호, 세대, 시드)로만 뽑는다(rng 소비 순서에 기대지 않음). DOM 없음.
 import { clamp, hash2 } from './_fx-util.js';
+import { loopNoise, loopFbm } from './_fx-style.js';
 import { blurToSmall } from '../core/render/blur.js';
 
 // ── 기둥 A: 장면 크기·시간 ──────────────────────────────
@@ -207,4 +208,76 @@ function applyGrain(lc, cw, ch, env, amt, borrow, release) {
   }
   lc.restore();
   release(g);
+}
+
+// ── R31: 실제 사진 측정 기반 도구(docs/vfx-research-2.md) ───────────────────────
+
+// 불 사진 10장의 밝기 칸별 평균 색(검은 배경 위, 0~255). v=0 어두움 → v=1 가장 밝음.
+//   R 이 먼저 꽉 차고 G 가 천천히, B 는 작지만 0 이 아니다. 가장 밝아도 순백이 아니라 크림색.
+export const FIRE_PHOTO = [
+  [0, 0, 0, 0], [0.12, 70, 18, 4], [0.22, 115, 32, 7], [0.34, 165, 58, 15], [0.46, 208, 90, 25],
+  [0.58, 235, 125, 43], [0.7, 250, 165, 68], [0.82, 253, 207, 100], [0.94, 253, 240, 168], [1, 255, 248, 214],
+];
+// 검은 배경 사진 색 → 투명 배경용(언멀트): 가장 밝은 채널을 불투명도로, 색은 그만큼 나눠 되살린다.
+export function unmultPx(r, g, b) {
+  const m = Math.max(r, g, b);
+  if (m <= 0) return [0, 0, 0, 0];
+  const k = 255 / m;
+  return [Math.min(255, r * k), Math.min(255, g * k), Math.min(255, b * k), m / 255];
+}
+function rampAt(tbl, v) {
+  v = clamp(v, 0, 1);
+  let i = 1; while (i < tbl.length - 1 && tbl[i][0] < v) i++;
+  const a = tbl[i - 1], b = tbl[i], t = (v - a[0]) / Math.max(1e-6, b[0] - a[0]);
+  return [a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t, a[3] + (b[3] - a[3]) * t];
+}
+// 밝기 위치 v(0~1) → [r,g,b,a](투명 배경용). 256칸 표로 미리 만들어 둔다.
+const _FIRE_LUT = Array.from({ length: 256 }, (_, i) => { const c = rampAt(FIRE_PHOTO, i / 255); return unmultPx(c[0], c[1], c[2]).map((x, j) => (j < 3 ? Math.round(x) : x)); });
+export const firePhoto = (v) => _FIRE_LUT[Math.round(clamp(v, 0, 1) * 255)];
+// 온도(K) → 사진 기준 불 색. 약 850 K 어두운 빨강 ~ 2100 K 크림빛 흰색.
+export const fireTemp = (T, exposure = 1) => firePhoto(Math.pow(clamp((T - 850) / 1250, 0, 1), 0.85) * exposure);
+
+// 침식(현업 'erosion'): 값이 문턱을 넘는 좁은 폭(soft) 안에서만 0→1. 불은 좁게(단단), 연기는 넓게(부드럽게).
+export function erode(v, thr, soft) {
+  const t = clamp((v - thr) / Math.max(1e-6, soft), 0, 1);
+  return t * t * (3 - 2 * t);
+}
+// 능선 노이즈: 0.5 근처가 가장 밝은 가는 선 → 불 띠의 접힘선, 연기의 실 같은 결.
+export const ridge = (n) => 1 - Math.abs(2 * n - 1);
+
+// 흐르는 노이즈 침식 마스크(현업 '모양 × 흐르는 노이즈 2겹 → 침식'): 그린 덩어리를 이것으로 갉아
+//   솜뭉치 대신 실 같은 결·찢긴 가장자리를 만든다. 반환 캔버스는 호출한 쪽이 release 한다.
+//   o: { cell(작은 칸 px), freq, thr, soft, fil(능선 비중), flow(위상: 루프 끝에서 정수), drift(위상 한 번에 흐르는 양), seed, warp }
+export function erodeMask(env, w, h, o) {
+  const { borrow, scale = 1 } = env;
+  const cs = Math.max(2, o.cell ?? 4);
+  const cols = Math.max(8, Math.min(220, Math.round((w * scale) / cs)));
+  const rows = Math.max(8, Math.min(220, Math.round((h * scale) / cs)));
+  const cv = borrow(cols, rows);
+  const cx = cv.getContext('2d');
+  const img = cx.createImageData(cols, rows);
+  const d = img.data;
+  const fq = o.freq ?? 4, fl = o.flow ?? 0, sd = o.seed ?? 0, wp = o.warp ?? 0.6;
+  const thr = o.thr ?? 0.4, soft = o.soft ?? 0.3, fil = o.fil ?? 0.3;
+  const asp = w / Math.max(w, h), asp2 = h / Math.max(w, h);
+  // 흐름 지도식 반복: 두 위상(반 주기 어긋남)을 번갈아 섞는다 — 위상이 정수 번 돌면 0프레임 = N프레임.
+  const dr = o.drift ?? 0.6;
+  const ph0 = fl - Math.floor(fl), ph1 = (fl + 0.5) - Math.floor(fl + 0.5);
+  const w0 = 1 - Math.abs(1 - 2 * ph0), w1 = 1 - w0;
+  const val = (u, v, off) => {
+    const vv = v + off;
+    const wx = loopNoise(u * 0.5, vv * 0.5, 0, 0, sd + 3) - 0.5;
+    const n = loopFbm(u + wx * wp * 3, vv, 0, 0, sd, 3);
+    const r = Math.pow(ridge(loopNoise(u * 1.7 + wx * 2, vv * 1.7, 0, 0, sd + 9)), 5);
+    return clamp(erode(n, thr, soft) + fil * r, 0, 1);
+  };
+  for (let gy = 0; gy < rows; gy++) {
+    for (let gx = 0; gx < cols; gx++) {
+      const u = (gx / cols) * fq * asp, v = (gy / rows) * fq * asp2;
+      const a = w0 * val(u, v, ph0 * dr) + w1 * val(u + 17.3, v, ph1 * dr);
+      d[(gy * cols + gx) * 4 + 3] = Math.round(a * 255);
+    }
+  }
+  cx.putImageData(img, 0, 0);
+  return cv;
 }

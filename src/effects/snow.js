@@ -154,9 +154,11 @@ function renderReal(ctx, env, p) {
         const a = op * glint * env * (li === 0 ? 0.55 : 1);
         if (dof) {
           // 초점 밖: 크고 옅은 동그란 빛(가장자리가 살짝 진한 원판)
-          const R = r * 4;
+          // R31: 렌즈 앞 거리마다 크기·밝기가 크게 다르다(사진 관찰) — 같은 회색 원판이 되지 않게
+          const R = r * (2.5 + 3.5 * H(9));
+          const bk = 0.55 + 0.8 * H(10);
           const g = c.createRadialGradient(x, y, 0, x, y, R);
-          g.addColorStop(0, withAlpha(color, a * 0.22)); g.addColorStop(0.8, withAlpha(color, a * 0.28)); g.addColorStop(1, withAlpha(color, 0));
+          g.addColorStop(0, withAlpha(color, a * 0.2 * bk)); g.addColorStop(0.72, withAlpha(color, a * 0.26 * bk)); g.addColorStop(0.9, withAlpha(color, a * 0.34 * bk)); g.addColorStop(1, withAlpha(color, 0));
           c.globalAlpha = 1; c.fillStyle = g; c.beginPath(); c.arc(x, y, R, 0, TAU); c.fill();
         } else {
           streak(c, x, y, vx, vy, W, r * 2, color, a);

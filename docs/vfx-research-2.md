@@ -249,3 +249,19 @@ Unity Labs·Brackeys CC0 소재 몇 개(작은 불꽃, 연기, 폭발)를 에디
 - S36 Wild & Free Tools — Seamless loop video: https://wildandfreetools.com/blog/seamless-loop-video-how-to-create-free
 - S37 FootageCrate — Loopable fire: https://footagecrate.com/video-effects/FootageCrate-4K_Loopable_Wall_Fire_13
 - 사진 측정: Wikimedia Commons 검색 결과(campfire night, bonfire flames, grinding sparks, fireworks, lightning bolt night, candle flame dark) — 파일 이름은 측정 기록에 남김
+
+---
+
+## 6. 반영 결과 (R31 — 선택지 A~E 전부)
+
+| 항목 | 반영 전 | 반영 후 | 사진 |
+|---|---|---|---|
+| 불 64~95 칸 색 | 139,69,4 (G/R 0.50) | 160,62,20 (G/R 0.39) | 162,59,12 / 167,56,19 |
+| 불 96~127 칸 색 | 178,103,3 (G/R 0.58) | 205,93,29 (G/R 0.45) | 200,92,26 / 216,87,25 |
+| 불 가장 밝은 칸 | 240,214,84 | 244,231,173 | 254,240,164 |
+| 불 전환 폭(빛 번짐 끔) | 18.2 px | 약 15.5 px | 약 3 px(가까이 찍은 사진) |
+| 불티 가장 밝은 점 | 18 | 200 이상 | 246~255 |
+
+- 불 전환 폭은 줄었지만 사진 수준(3px)은 아니다. 사진은 가까이서 찍은 큰 불이고, 우리 불은 화면 아래 작은 혀들이라 같은 기준으로 맞추기 어렵다. 더 실제에 가까운 불이 필요하면 C·D(실사 소재)를 쓴다.
+- 상시 검사(E)는 `tests/r31-photo.spec.js`. 기준을 벗어나면 실패한다.
+- 내장 소재(D)는 외부 CC0 소재를 받을 수 없는 환경이라 `scripts/gen-footage.py` 2D 유체 시뮬레이션으로 직접 만들었다. Unity Labs·Brackeys CC0 소재는 사용자가 받아 `실사 소재` 효과의 '소재' 칸에 연결하면 같은 방식(검은 배경 지우기·이어 붙이기)으로 쓸 수 있다.

@@ -3,8 +3,8 @@
 // R29 손그림 개편(docs/vfx-reference-guide.md 4장 "불"):
 //   S자로 휘는 혀 모양 불길을 3단 색(속·몸통·가장자리)으로 겹쳐 그리는 셀 방식,
 //   크기 3단계, 위로 떨어져 나가는 물방울 불씨, 2프레임 홀드, 은은한 빛 번짐.
-import { TAU, frac, clamp, parseColor, mix, drawField } from './_fx-util.js';
-import { world, cyclesInLoop, emit, integrate, overLife, blackbody, rgbStr, streak, camera, WORLD_PARAMS } from './_fx-real.js';
+import { TAU, frac, clamp, parseColor, mix, drawField, hash2 } from './_fx-util.js';
+import { world, cyclesInLoop, emit, integrate, overLife, rgbStr, streak, camera, WORLD_PARAMS, fireTemp, firePhoto, erode, ridge } from './_fx-real.js';
 import { sizeTier, gauss, holdFrame, HOLD_PARAM, LOOK_PARAM, lookOf, holdOf, loopFbm, loopNoise, makeRamp, teardropPath, withDiffusion, DIFFUSION_PARAM } from './_fx-style.js';
 
 // 불길 혀 하나: 바닥(x, base) 에서 위로 th 만큼. sway 는 끝의 옆 흔들림(S자·갈고리 모양을 만든다).
@@ -25,12 +25,30 @@ function tongue(ctx, x, base, wd, th, sway, lean) {
 // 온도 → 카메라에 찍힌 색. 흑체 색 × 복사량(∝T⁴)을 노출 곡선(1-e^-x)에 넣는다.
 //   뜨거운 바닥은 노출이 넘쳐 노랑빛 흰색으로 날아가고, 식은 끝은 어두운 빨강(실제 사진과 같은 모습).
 export function exposeTemp(T, exposure = 1.2) {
-  const bb = blackbody(T);
-  const I = Math.pow(T / 1800, 4) * 1.6 * exposure;
-  const o = bb.rgb.map((c) => 1 - Math.exp(-(c / 255) * I));
-  // 불은 스스로 빛난다: 어두운 것은 '검게'가 아니라 '투명하게'. 가장 밝은 채널을 불투명도로, 색은 그만큼 키운다.
-  const m = Math.max(1e-3, o[0], o[1], o[2]);
-  return [Math.round(255 * o[0] / m), Math.round(255 * o[1] / m), Math.round(255 * o[2] / m), clamp(m, 0, 1)];
+  // R31: 흑체 근사 대신 실제 불 사진 10장의 밝기별 색(FIRE_PHOTO)에 맞춘다(docs/vfx-research-2.md 1-2).
+  return fireTemp(T, exposure / 1.2);
+}
+
+function drawLogs(c, w, h, T, seed) {
+  const big = T.slice().sort((a, b) => b.k - a.k).slice(0, Math.min(4, T.length));
+  const n = Math.max(2, big.length);
+  const thick = Math.max(8, Math.min(w, h) * 0.05);
+  for (let i = 0; i < n; i++) {
+    const t = big[i % big.length];
+    const r1 = hash2(i, 3, seed), r2 = hash2(i, 7, seed);
+    const cx = t.bx * w + (r1 - 0.5) * t.wd, cy = h - thick * (0.6 + r2 * 0.8);
+    const len = Math.max(w * 0.18, t.wd * 3) * (0.8 + r2 * 0.5);
+    const ang = (i % 2 ? 1 : -1) * (0.12 + 0.25 * r1);
+    c.save();
+    c.translate(cx, cy); c.rotate(ang);
+    c.globalCompositeOperation = 'source-over';
+    c.fillStyle = '#0d0705';
+    c.beginPath(); c.roundRect(-len / 2, -thick / 2, len, thick, thick / 2); c.fill();
+    const g = c.createLinearGradient(0, -thick / 2, 0, thick * 0.1);
+    g.addColorStop(0, 'rgba(255,110,30,0.55)'); g.addColorStop(0.35, 'rgba(150,40,10,0.25)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+    c.fillStyle = g; c.fill();
+    c.restore();
+  }
 }
 
 function renderReal(ctx, env, p, o) {
@@ -50,8 +68,8 @@ function renderReal(ctx, env, p, o) {
   const P = 3;
   const flow = prog * P * cycles;              // 깜빡임 한 번에 노이즈 한 주기 위로 — 정수배라 루프 이음매 없음
   const seed = Math.floor(T[0].ph[0] * 1000);
-  const cols = Math.max(24, Math.min(140, Math.round(w * scale / 4)));
-  const rows = Math.max(24, Math.min(150, Math.round(h * scale / 4)));
+  const cols = Math.max(24, Math.min(170, Math.round(w * scale / 3)));
+  const rows = Math.max(24, Math.min(180, Math.round(h * scale / 3)));
   const puff = 1 + 0.14 * amp * Math.sin(prog * Math.PI * 2 * cycles + seed); // 불 전체가 오르내림(퍼핑)
   const hf = (height * puff) / h;
   const base = new Float32Array(cols);
@@ -59,33 +77,42 @@ function renderReal(ctx, env, p, o) {
     const u = (gx + 0.5) / cols;
     let b = 0;
     for (const t of T) { const d = (u - t.bx) / Math.max(0.015, (t.wd / w) * 0.9); b = Math.max(b, t.k * Math.exp(-d * d)); }
-    base[gx] = Math.max(b, 0.22);
+    base[gx] = Math.max(b, 0.12);
   }
   let maxB = 0; for (const v of base) maxB = Math.max(maxB, v);
   // 온도색 표(256칸) — 칸마다 흑체·노출 계산을 반복하지 않게
-  const LUT = useTemp ? Array.from({ length: 256 }, (_, i) => exposeTemp(900 + 1250 * Math.pow(i / 255, 1.1))) : null;
   const ramp = useTemp ? null : makeRamp([[0, cEdge], [0.25, cEdge], [0.55, cBody], [0.9, cCore], [1, cCore]]);
+  // R31 셀: 사진 측정 반영 — ① 가장자리 침식으로 몇 px 만에 끊기게(사진 전환 폭 ≈3px)
+  //   ② 몸통은 밝게, 끝으로 갈수록 식는다 ③ 능선 노이즈로 접힌 띠의 밝은 선 ④ 높이 따라 커지는 옆 비틀림.
+  const soft = 0.07;
   const cell = (gx, gy) => {
     const u = (gx + 0.5) / cols, vy = (gy + 0.5) / rows;
     const hy = (1 - vy) / hf;
     if (hy > maxB * 1.6) return null;
     const wx = loopNoise(u * 3, hy * 2 + flow * 0.5, 0, P * 2, seed + 7) - 0.5;
-    const ux = clamp(Math.round((u + wx * 0.12 * hy * turb) * cols - 0.5), 0, cols - 1);
+    const wx2 = loopNoise(u * 7 + 3, hy * 4 + flow, 0, P * 2, seed + 13) - 0.5;
+    const ux = clamp(Math.round((u + (wx * 0.16 + wx2 * 0.05) * hy * turb) * cols - 0.5), 0, cols - 1);
     const b = base[ux];
-    const n = loopFbm(u * 10 * (w / Math.max(w, h)) + wx * 2, hy * 1.5 + flow, 0, P, seed, 3);
+    const sx = u * 15 * (w / Math.max(w, h)) + wx * 3 + wx2 * 2;
+    const n = loopFbm(sx, hy * 2 + flow, 0, P, seed, 4);
     const r = hy / b;
-    const heat = 1 - Math.pow(r, 1.3) + (n - 0.5) * (0.7 + 1.1 * turb) * (0.25 + r);
+    // 갈라짐: 오를수록 가는 어두운 틈이 띠를 쪼갠다 → 떨어져 나가는 혀
+    const crack = Math.pow(ridge(loopNoise(sx * 1.3 + 5, hy * 3 + flow * 2, 0, P * 2, seed + 31)), 8);
+    const heat = 1 - Math.pow(r, 1.3) + (n - 0.5) * (0.7 + 1.1 * turb) * (0.25 + r) - crack * 0.55 * clamp(r * 1.4, 0, 1);
     if (heat <= 0) return null;
-    const v = clamp(heat * 1.1, 0, 1);
-    let a = clamp(heat / 0.08, 0, 1) * op;
+    const e = erode(heat, 0.02, soft);                       // 가장자리: 좁은 폭에서 0→1
+    if (e <= 0) return null;
+    const fold = Math.pow(ridge(loopNoise(sx * 0.8 + 11, hy * 2.2 + flow * 1.5, 0, P * 2, seed + 21)), 6);
+    const core = clamp(heat * 1.15, 0, 1);
+    const cool = clamp(r * 0.9 - 0.25, 0, 0.55);             // 혀 끝일수록 식는다(주황→빨강)
+    let v = e * (0.42 + 0.5 * Math.pow(core, 0.9)) * (1 - cool) + fold * 0.22 * e;
+    const a0 = op * e;
     if (useTemp) {
-      // 온도: 바닥 중심 약 2100 K(노랑빛 흰색) → 끝 약 900 K(어두운 빨강). 자료집 2-1 온도표.
-      const ex = LUT[(v * 255) | 0];
-      a *= ex[3];
-      return [ex[0], ex[1], ex[2], a];
+      const ex = firePhoto(v);
+      return [ex[0], ex[1], ex[2], a0 * ex[3]];
     }
-    const col = ramp(v);
-    return [col[0], col[1], col[2], a];
+    const col = ramp(clamp(v, 0, 1));
+    return [col[0], col[1], col[2], a0];
   };
   const tw = (t) => t.bx * w;
   camera(ctx, env, p, (c) => {
@@ -104,6 +131,8 @@ function renderReal(ctx, env, p, o) {
     });
     // 2) 불길(온도 필드)
     drawField(c, w, h, cols, rows, borrow, release, cell);
+    // 2-1) R31 장작: 앞을 가리는 검은 실루엣이 깊이감을 만든다(사진 관찰). 윗면만 불빛을 받아 붉게.
+    if ((p.fuel ?? 'none') === 'logs') drawLogs(c, w, h, T, seed);
     // 3) 불티: 위로 튀었다가 저항으로 느려지고, 식으며 흰 → 노랑 → 주황 → 빨강. 셔터 흐림 꼬리.
     c.save();
     c.globalCompositeOperation = 'lighter';
@@ -145,7 +174,7 @@ function renderField(ctx, env, p, o) {
     const u = (gx + 0.5) / cols;
     let b = 0;
     for (const t of T) { const d = (u - t.bx) / Math.max(0.015, (t.wd / w) * 0.9); b = Math.max(b, t.k * Math.exp(-d * d)); }
-    base[gx] = Math.max(b, 0.22); // 바닥은 이어지고 끝만 갈라지게
+    base[gx] = Math.max(b, 0.12); // 바닥은 이어지고 끝만 갈라지게
   }
   let maxB = 0; for (const v of base) maxB = Math.max(maxB, v);
   const field = (c) => drawField(c, w, h, cols, rows, borrow, release, (gx, gy) => {
@@ -214,6 +243,7 @@ export default {
     { key: 'embers', label: '불씨', type: 'float', default: 0.6, min: 0, max: 1, step: 0.05 },
     LOOK_PARAM('real'),
     { key: 'palette', label: '불 색(실사)', type: 'select', default: 'temp', options: [{ value: 'temp', label: '실제 온도색' }, { value: 'custom', label: '지정한 색' }] },
+    { key: 'fuel', label: '장작(실사)', type: 'select', default: 'none', options: [{ value: 'none', label: '없음' }, { value: 'logs', label: '앞을 가리는 장작' }] },
     { key: 'turbulence', label: '일렁임', type: 'float', default: 0.6, min: 0, max: 1, step: 0.05 },
     HOLD_PARAM('auto'),
     DIFFUSION_PARAM(0.45),

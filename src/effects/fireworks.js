@@ -16,6 +16,7 @@ export default {
     { key: 'bursts', label: '터지는 횟수', type: 'int', default: 2, min: 1, max: 8 },
     { key: 'size', label: '퍼짐', type: 'float', default: 0.25, min: 0.05, max: 0.6, step: 0.01 },
     { key: 'color', label: '색', type: 'color', default: '#ffd36a' },
+    { key: 'palette', label: '색(실사)', type: 'select', default: 'metal', options: [{ value: 'metal', label: '실제 금속 발색' }, { value: 'custom', label: '지정한 색' }] },
     { key: 'color2', label: '색 2', type: 'color', default: '#ff5ab0' },
     { key: 'gravity', label: '중력', type: 'float', default: 0.4, min: 0, max: 1, step: 0.01 },
     { key: 'opacity', label: '불투명도', type: 'float', default: 0.95, min: 0, max: 1, step: 0.01 },
@@ -63,6 +64,9 @@ export default {
 // R30 실사(지침 4-1 불꽃·불티 + 4-2 렌즈): 별(파편)은 한순간 사방으로 튀어나가 공기 저항으로 곧 멈추고
 //   중력으로 처지며 1.5~2.5초 탄다. 꼬리는 셔터 흐림(불꽃놀이 촬영은 셔터를 길게 → 기본 270°).
 //   터지는 순간 1프레임 번쩍, 끝은 반짝이며(글리터) 꺼진다. 단위는 화면 비율(퍼짐 = 화면 대비 반지름).
+// R31 금속 발색(자료집 2 §1-4): 스트론튬 빨강, 바륨 초록, 구리 파랑, 나트륨 노랑, 숯·철 금색, 마그네슘 흰색
+const METAL = ['#ff2e1f', '#42ff6a', '#3a74ff', '#ffc93a', '#ffab4a', '#fff4e6'];
+
 function renderReal(ctx, env, p) {
   const { w, h, rng } = env;
   const W = world(env, p);
@@ -86,8 +90,13 @@ function renderReal(ctx, env, p) {
     for (let sI = 0; sI < shells; sI++) {
       const H = (q) => hash2(sI, q, seed);
       const cx = (0.12 + 0.76 * H(1)) * w, cy = (0.12 + 0.45 * H(2)) * h;
-      const cm = mix(p.color ?? '#ffd36a', p.color2 ?? '#ff5ab0', H(3));
-      const col = '#' + [cm.r, cm.g, cm.b].map((v) => (v | 0).toString(16).padStart(2, '0')).join('');
+      let col;
+      if ((p.palette ?? 'metal') === 'metal') {
+        col = METAL[Math.floor(H(3) * METAL.length) % METAL.length];
+      } else {
+        const cm = mix(p.color ?? '#ffd36a', p.color2 ?? '#ff5ab0', H(3));
+        col = '#' + [cm.r, cm.g, cm.b].map((v) => (v | 0).toString(16).padStart(2, '0')).join('');
+      }
       const life = 1.6 + 0.9 * H(4);
       const tt = W.t + H(5) * period;
       const g0 = Math.floor(tt / period);
@@ -108,6 +117,13 @@ function renderReal(ctx, env, p) {
           }
           if (a < 0.01) continue;
           const hot = mix('#ffffff', col, Math.min(1, u * 3));  // 막 터졌을 땐 흰빛
+          // R31 꼬리: 별이 지나온 길에 남는 옅은 잔광(영상 한 프레임에도 짧은 꼬리가 보인다)
+          if (age > 0.05) {
+            const tau = Math.min(age, 0.18);
+            const mb = integrate(cx, cy, Math.cos(ang) * sp, Math.sin(ang) * sp * 0.92, 0, g, k, age - tau);
+            c.globalAlpha = a * 0.28; c.strokeStyle = col; c.lineWidth = Math.max(0.6, 1.2 * (1 - u * 0.5)); c.lineCap = 'round';
+            c.beginPath(); c.moveTo(mb.x, mb.y); c.lineTo(m.x, m.y); c.stroke();
+          }
           streak(c, m.x, m.y, m.vx, m.vy, W, Math.max(0.8, 2 * (1 - u * 0.5)), rgba(hot, 1), a);
         }
       }

@@ -99,7 +99,8 @@ function renderReal(ctx, env, p) {
     for (let gx = 0; gx < CX; gx++) {
       const u = (gx + 0.5) / CX;
       const yc = hy + B.yo + Math.sin(u * TAU * B.fq * 0.5 + B.ph1) * 0.06 + Math.sin(u * TAU * B.fq * 1.3 + B.ph2) * 0.022
-        + amp * Math.sin(TAU * prog + u * 5 + B.ph1);
+        + amp * Math.sin(TAU * prog + u * 5 + B.ph1)
+        + (real ? 0.014 * Math.sin(u * TAU * B.fq * 4.7 + B.ph2 * 3) * Math.sin(u * TAU * 1.7 + B.ph1) : 0); // R31 주름(아래 끝이 매끈한 능선이 되지 않게)
       // 광선: 가로로 촘촘한 노이즈가 커튼을 따라 천천히 흐른다(루프 동안 한 칸 → 이음매 없음)
       const ray = loopNoise(u * 90 + prog * act, 0.5, 90, 0, B.sd) * 0.65 + loopNoise(u * 23 - prog * act, 1.5, 23, 0, B.sd + 1) * 0.35;
       const st = 1 - streak + streak * Math.pow(ray, 1.6) * 1.6;
@@ -120,9 +121,11 @@ function renderReal(ctx, env, p) {
       const green = Math.max(0, 1 - up * 1.6) ** 1.3;         // 초록: 아래 끝이 가장 진함
       const red = Math.max(0, Math.min(up * 1.4, 1.6 - up)) * 0.35;  // 빨강: 높은 곳에 옅게
       const pink = K > 0.8 && d < th * 0.08 ? (K - 0.8) * 3 * lower : 0;
-      const ag = ci.a * green * lower, ar = ci.a * red, ap = ci.a * pink;
-      sa += ag + ar + ap;
-      sr += G.r * ag + Rd.r * ar + Pk.r * ap; sg += G.g * ag + Rd.g * ar + Pk.g * ap; sb += G.b * ag + Rd.b * ar + Pk.b * ap;
+      // R31: 밝은 줄기의 아래 가장자리는 보랏빛(질소). 밝은 곳(ci.a 큼)일수록 진하다.
+      const vio = real && d < th * 0.05 ? Math.min(1, ci.a * 3) * 0.9 * lower * (1 - d / (th * 0.05)) : 0;
+      const ag = ci.a * green * lower * (1 - vio * 0.6), ar = ci.a * red, ap = ci.a * pink, av = ci.a * vio;
+      sa += ag + ar + ap + av;
+      sr += G.r * ag + Rd.r * ar + Pk.r * ap + 150 * av; sg += G.g * ag + Rd.g * ar + Pk.g * ap + 70 * av; sb += G.b * ag + Rd.b * ar + Pk.b * ap + 235 * av;
     }
     if (sa <= 0.003) return null;
     return [sr / sa, sg / sa, sb / sa, Math.min(1, sa)];

@@ -22,6 +22,7 @@ import neon from './neon.js';
 
 // 날씨 (S5-1)
 import smoke from './smoke.js';
+import footage from './footage.js';
 import rain from './rain.js';
 import snow from './snow.js';
 import petals from './petals.js';
@@ -118,7 +119,7 @@ const _all = [
   // 빛
   sparkle, glow, bokeh, lightBeams, sheen, wipe, lensFlare, caustics, lightLeak, candle, flashlight, stageLights, neon,
   // 날씨
-  smoke, rain, snow, petals, fog, windowRain, leaves, sandstorm, windBend, grass,
+  smoke, footage, rain, snow, petals, fog, windowRain, leaves, sandstorm, windBend, grass,
   lightning, fireflies, aurora, clouds, frost,   // R28e
   // 파티클
   sparks, particles, bubbles, emotes,
