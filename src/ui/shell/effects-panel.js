@@ -1,4 +1,4 @@
-// R23b — 왼쪽 "효과" 탭. 검색 + 분류 접기 목록(효과 7종 + 모션 클립 4종).
+// R23b — 왼쪽 "효과" 탭. (R32: 효과/모션 탭, 줄마다 + 버튼, 더블클릭은 늘 새 효과 레이어) 검색 + 분류 접기 목록(효과 7종 + 모션 클립 4종).
 //   줄을 화면/타임라인 레이어에 끌어 놓거나 더블클릭해 효과를 더한다(가운데 갤러리 창을 대신한다).
 //   줄에 마우스를 올리면 작은 미리보기를 띄운다. 분류 이름·목록은 레지스트리에서 읽는다.
 import { getAllEffects, effects as effectsMap } from '../../effects/registry.js';
@@ -30,11 +30,24 @@ export function createEffectsPanel(store, editorState) {
   searchWrap.appendChild(search);
   el.appendChild(searchWrap);
 
+  // R32: 효과 / 모션을 탭으로 나눈다(검색 중에는 둘 다 보여 준다).
+  let _mode = 'fx';
+  const modeBar = document.createElement('div'); modeBar.className = 'side-mode-bar';
+  const _modeBtns = {};
+  for (const [m, label] of [['fx', '효과'], ['motion', '모션']]) {
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'side-mode-btn'; b.dataset.mode = m; b.textContent = label;
+    b.addEventListener('click', () => { _mode = m; _syncMode(); _render(); });
+    _modeBtns[m] = b; modeBar.appendChild(b);
+  }
+  function _syncMode() { for (const [m, b] of Object.entries(_modeBtns)) b.classList.toggle('is-active', m === _mode); }
+  _syncMode();
+  el.appendChild(modeBar);
+
   const listEl = document.createElement('div'); listEl.className = 'side-list';
   el.appendChild(listEl);
 
   let _query = '';
-  const _open = new Set();   // 펼친 분류 이름
+  const _open = new Set(['빛', '날씨', '연출', '등장']);   // 펼친 분류 이름 — 자주 쓰는 묶음은 처음부터 펼침
 
   search.addEventListener('input', () => { _query = search.value.trim().toLowerCase(); _render(); });
 
@@ -63,7 +76,7 @@ export function createEffectsPanel(store, editorState) {
   function _render() {
     _stopPreview();
     listEl.textContent = '';
-    const groups = [..._fxGroups(), ..._motionGroups()];
+    const groups = _query ? [..._fxGroups(), ..._motionGroups()] : (_mode === 'fx' ? _fxGroups() : _motionGroups());
     let shown = 0;
     for (const g of groups) {
       const items = g.items.filter(_matches);
@@ -108,27 +121,58 @@ export function createEffectsPanel(store, editorState) {
     row.title = item.name;
     const name = document.createElement('span'); name.className = 'side-item-name'; name.textContent = item.name;
     row.appendChild(name);
+    // R32: 줄마다 추가 버튼 — 효과는 새 레이어로, 모션은 선택한 레이어에.
+    const add = document.createElement('button');
+    add.type = 'button'; add.className = 'side-item-add'; add.textContent = '+';
+    add.title = kind === 'fx' ? '새 레이어로 추가' : '선택한 레이어에 적용';
+    add.setAttribute('aria-label', `${item.name} ${add.title}`);
+    add.addEventListener('click', (e) => { e.stopPropagation(); _apply(kind, item.id); });
+    add.addEventListener('dblclick', (e) => e.stopPropagation());
+    row.appendChild(add);
+    if (kind === 'fx') row.addEventListener('contextmenu', (e) => { e.preventDefault(); _rowMenu(e, item); });
 
     row.addEventListener('dragstart', (e) => {
       if (kind === 'fx') setDrag(e, DND_FX, item.id); else setDrag(e, DND_MOTION, item.id);
       _stopPreview();
     });
-    row.addEventListener('dblclick', () => _applyDouble(kind, item.id));
+    row.addEventListener('dblclick', () => _apply(kind, item.id));
     row.addEventListener('mouseenter', () => _showPreview(row, kind, item));
     row.addEventListener('mouseleave', () => _stopPreview());
     return row;
   }
 
-  // 더블클릭 — 효과: 단일 선택이면 쌓기 추가, 아니면 효과 레이어. 모션: 선택 레이어에 적용.
-  function _applyDouble(kind, id) {
+  // 더블클릭·+ 버튼 — 효과: 언제나 새 효과 레이어(R32 — 선택 레이어 안에 숨어 들어가지 않게).
+  //   레이어 안에 넣기는 줄 오른쪽 클릭 메뉴로만. 모션: 선택 레이어에 적용.
+  function _apply(kind, id) {
     const sel = editorState.get().selection;
     if (kind === 'fx') {
-      if (sel.length === 1 && store.get().layers[sel[0]]) addFxToLayer(store, sel[0], id);
-      else addEffectLayer(store, editorState, id);
+      addEffectLayer(store, editorState, id);
     } else {
       if (!sel.length) { showToast('레이어를 먼저 선택하세요.'); return; }
       addMotionToLayers(store, editorState, sel, id);
     }
+  }
+
+  // 효과 줄 오른쪽 클릭 메뉴: 새 레이어 / 선택한 레이어 안에 넣기
+  let _menu = null;
+  function _closeMenu() { if (_menu) { _menu.remove(); _menu = null; document.removeEventListener('pointerdown', _outside, true); } }
+  function _outside(e) { if (_menu && !_menu.contains(e.target)) _closeMenu(); }
+  function _rowMenu(e, item) {
+    _closeMenu(); _stopPreview();
+    const m = document.createElement('div'); m.className = 'side-row-menu';
+    m.style.left = e.clientX + 'px'; m.style.top = e.clientY + 'px';
+    const sel = editorState.get().selection;
+    const target = sel.length === 1 ? store.get().layers[sel[0]] : null;
+    const mk = (label, fn, disabled) => {
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'side-row-menu-item'; b.textContent = label; b.disabled = !!disabled;
+      b.addEventListener('click', () => { _closeMenu(); fn(); });
+      m.appendChild(b);
+    };
+    mk('새 레이어로 추가', () => addEffectLayer(store, editorState, item.id));
+    mk(target ? `선택한 레이어(${target.name ?? '레이어'}) 안에 넣기` : '선택한 레이어 안에 넣기(레이어를 먼저 선택)', () => addFxToLayer(store, sel[0], item.id), !target);
+    document.body.appendChild(m);
+    _menu = m;
+    setTimeout(() => document.addEventListener('pointerdown', _outside, true), 0);
   }
 
   // ── 마우스 올림 미리보기 ─────────────────────────────────────────────
@@ -185,7 +229,9 @@ export function createEffectsPanel(store, editorState) {
 
   // 효과 탭이 열릴 때 호출 — 검색 칸에 초점. mode 'motion' 이면 모션 분류를 펼쳐 보인다.
   function focusSearch(mode = 'fx') {
-    if (mode === 'motion') { for (const [, label] of MOTION_KINDS) _open.add(label); _render(); }
+    _mode = mode === 'motion' ? 'motion' : 'fx'; _syncMode();          // R32: 탭도 맞춘다
+    if (mode === 'motion') for (const [, label] of MOTION_KINDS) _open.add(label);
+    _render();
     try { search.focus(); search.select(); } catch {}
   }
 

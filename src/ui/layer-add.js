@@ -23,7 +23,7 @@ const _MENU = [
   { kind: 'footage', label: '연기 기둥', footage: 'smoke' },
   { kind: 'footage', label: '폭발(한 번)', footage: 'explosion' },
   { group: '기타' },
-  { kind: 'effect',   label: '이펙트',   type: 'effect' },
+  { kind: 'effect',   label: '이펙트 (효과 목록 열기)',   type: 'effect' },
   { kind: 'group',    label: '그룹',     type: 'group' },
   { kind: 'adjust',   label: '조정',     type: 'adjust' },
   { kind: 'myparts',  label: '내 부품',  type: 'myparts' },
@@ -256,6 +256,8 @@ export function createLayerAddMenu(store, editorState, containerEl) {
     if (!doc.assets?.[assetId]) cmds.push({ type: 'addAsset', id: assetId, asset: meta });
     cmds.push({ type: 'addLayer', layer: src, index: doc.order.length });
     cmds.push({ type: 'addLayer', layer: fx, index: doc.order.length + 1 });
+    // R32: 시트와 효과를 그룹 하나로 묶어 목록을 깔끔하게(되돌리기 1건)
+    cmds.push({ type: 'group', ids: [src.id, fx.id], name: `실사 ${label}` });
     store.apply({ type: 'batch', cmds });
     editorState.set({ selection: [fx.id] });
   }

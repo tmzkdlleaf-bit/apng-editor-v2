@@ -77,7 +77,7 @@ test('왼쪽 패널: 경계 끌기로 폭이 바뀌고, 접기, 새로고침 후
   await expect(page.locator('.panel-dock-left.is-collapsed')).toHaveCount(1);
 });
 
-test('효과 탭: "빛무리" 검색 → 이미지 레이어 줄에 끌어 놓으면 fx +1, 되돌리기 1번에 원복', async ({ page }) => {
+test('효과 탭: "빛무리" 검색 → 이미지 레이어 줄에 끌어 놓으면 그 바로 위에 새 효과 레이어(R32), 되돌리기 1번에 원복', async ({ page }) => {
   await openApp(page);
   // 이미지 레이어(에셋 메타만) 하나.
   const id = await page.evaluate(async () => {
@@ -96,14 +96,19 @@ test('효과 탭: "빛무리" 검색 → 이미지 레이어 줄에 끌어 놓�
   const d0 = await page.evaluate(() => window.__store.undoDepth());
   await dnd(page, '.fx-row[data-fx-id="glow"]', { targetSel: `.tl-row[data-id="${id}"]` });
   await page.waitForTimeout(60);
-  const n1 = await page.evaluate((i) => (window.__store.get().layers[i].fxOrder ?? []).length, id);
-  expect(n1).toBe(1);
+  const r1 = await page.evaluate((i) => {
+    const d = window.__store.get();
+    const k = d.order.indexOf(i);
+    return { inLayer: (d.layers[i].fxOrder ?? []).length, above: d.layers[d.order[k + 1]]?.effectId, len: d.order.length };
+  }, id);
+  expect(r1.inLayer).toBe(0);
+  expect(r1.above).toBe('glow');   // 그 레이어 바로 위
   const d1 = await page.evaluate(() => window.__store.undoDepth());
   expect(d1 - d0).toBe(1);
 
   await page.evaluate(() => window.__store.undo());
-  const n0 = await page.evaluate((i) => (window.__store.get().layers[i].fxOrder ?? []).length, id);
-  expect(n0).toBe(0);
+  const n0 = await page.evaluate(() => window.__store.get().order.length);
+  expect(n0).toBe(r1.len - 1);
 });
 
 test('에셋 우클릭 메뉴가 맨 위에 보인다(가려짐·잘림 없음)', async ({ page }) => {
@@ -117,7 +122,7 @@ test('에셋 우클릭 메뉴가 맨 위에 보인다(가려짐·잘림 없음)'
   await expectOnTop(page, menu);
 });
 
-test('효과를 빈 곳(화면 모서리)에 놓으면 효과 레이어가 생긴다; 더블클릭은 선택 레이어에 추가', async ({ page }) => {
+test('효과를 빈 곳(화면 모서리)에 놓으면 효과 레이어가 생긴다; 더블클릭도 늘 새 효과 레이어(R32)', async ({ page }) => {
   await openApp(page);
   await page.locator('.panel-dock-left .panel-tab', { hasText: '효과' }).click();
   await page.fill('.effects-search', '빛무리');
@@ -138,12 +143,13 @@ test('효과를 빈 곳(화면 모서리)에 놓으면 효과 레이어가 생�
   expect(created.effectId).toBe('glow');
   expect(created.grew).toBe(before + 1);
 
-  // 더블클릭 → 선택 레이어(도형)에 addFx.
+  // R32: 도형을 선택한 채 더블클릭해도 도형 안에 들어가지 않고 새 효과 레이어가 생긴다.
   const sid = await addShape(page);
   await page.locator('.fx-row[data-fx-id="glow"]').dblclick();
   await page.waitForTimeout(60);
-  const n = await page.evaluate((i) => (window.__store.get().layers[i].fxOrder ?? []).length, sid);
-  expect(n).toBe(1);
+  const r2 = await page.evaluate((i) => ({ inShape: (window.__store.get().layers[i].fxOrder ?? []).length, sel: window.__store.get().layers[window.__editorState.get().selection[0]]?.type }), sid);
+  expect(r2.inShape).toBe(0);
+  expect(r2.sel).toBe('effect');
 });
 
 test('프로젝트 탭: 에셋을 화면에 끌어 놓으면 이미지 레이어가 놓은 자리(문서 좌표 ±1)에 생긴다', async ({ page }) => {

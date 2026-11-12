@@ -159,7 +159,7 @@ export const layerCommands = {
 
     // 그룹 레이어 생성
     const groupLayer = createLayer('group', {
-      name: '그룹',
+      name: cmd.name || '그룹',   // R32: 이름을 함께 줄 수 있다(실사 소재 묶음 등)
       parentId: insertParentId ?? null,
       childOrder: [...filteredIds],
     });

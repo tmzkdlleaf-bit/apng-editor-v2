@@ -75,7 +75,7 @@ export function rgbSplit(ctx, src, pad, dxR, dyR, dxB, dyB, borrow, release) {
 // 칸 값 필드 그리기(R27) — cols×rows 칸마다 값을 정해 작은 캔버스(풀)에 한 번에 쓰고, 부드럽게 늘려
 // (0,0)~(w,h)에 그린다. 칸마다 fillRect 로 겹쳐 칠하면 반투명 칸이 겹친 자리가 밝은 격자 줄이 됐다(안개·코스틱).
 // cell(gx, gy) → [r, g, b, a(0~1)] 또는 null(투명). ctx 는 효과 좌표계(doc px) 그대로.
-export function drawField(ctx, w, h, cols, rows, borrow, release, cell) {
+export function drawField(ctx, w, h, cols, rows, borrow, release, cell, quality = 'low') {
   cols = Math.max(1, cols | 0); rows = Math.max(1, rows | 0);
   const tmp = borrow(cols, rows);
   const tc = tmp.getContext('2d');
@@ -92,7 +92,7 @@ export function drawField(ctx, w, h, cols, rows, borrow, release, cell) {
   tc.putImageData(img, 0, 0);
   ctx.save();
   ctx.imageSmoothingEnabled = true;
-  if ('imageSmoothingQuality' in ctx) ctx.imageSmoothingQuality = 'low';
+  if ('imageSmoothingQuality' in ctx) ctx.imageSmoothingQuality = quality; // R32: 날카로운 가장자리는 'high'(계단 방지)
   ctx.drawImage(tmp, 0, 0, cols, rows, 0, 0, w, h);
   ctx.restore();
   release(tmp);

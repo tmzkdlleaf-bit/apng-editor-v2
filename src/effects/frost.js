@@ -16,7 +16,7 @@ export default {
   params: [
     { key: 'mode', label: '방식', type: 'select', default: 'loop',
       options: [{ value: 'loop', label: '반복(살짝 반짝임)' }, { value: 'once', label: '한 번(서서히 끼기)' }] },
-    { key: 'cover', label: '덮는 정도', type: 'float', default: 0.45, min: 0.05, max: 1, step: 0.01 },
+    { key: 'cover', label: '덮는 정도', type: 'float', default: 0.3, min: 0.05, max: 1, step: 0.01 },
     { key: 'grain', label: '결정 결 크기', type: 'float', default: 0.5, min: 0.1, max: 1, step: 0.05 },
     { key: 'color', label: '색', type: 'color', default: '#e8f4ff' },
     { key: 'clear', label: '닦인 자리', type: 'bool', default: true },
@@ -32,7 +32,7 @@ export default {
     const t = once ? progressOf(f, p, ease) : 1;
     if (t <= 0) return;
     const col = parseColor(p.color ?? '#e8f4ff');
-    const cover = clamp(p.cover ?? 0.45, 0.05, 1) * t;
+    const cover = clamp(p.cover ?? 0.3, 0.05, 1) * t;
     const grain = clamp(p.grain ?? 0.5, 0.1, 1);
     const prog = f / Math.max(1, frameCount);
     const cyc = Math.max(1, Math.round(p.cycles ?? 1));

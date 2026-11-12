@@ -126,6 +126,34 @@
 }
 .side-item:hover { background: var(--selrow); }
 .side-item-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-2); }
+/* R32: 줄마다 추가 버튼 — 줄에 마우스를 올리거나 초점이 가면 또렷하게 */
+.side-item-add {
+  flex-shrink: 0; width: 20px; height: 18px; padding: 0;
+  border: 1px solid var(--btnline); border-radius: var(--r-1);
+  background: var(--btn); color: var(--dim); font: inherit; font-size: var(--fs-2); line-height: 1;
+  cursor: pointer; opacity: 0.55;
+}
+.side-item:hover .side-item-add, .side-item-add:focus-visible { opacity: 1; color: var(--text); }
+.side-item-add:hover { border-color: var(--acc); color: var(--acctext); }
+/* R32: 효과 / 모션 탭 */
+.side-mode-bar { display: flex; gap: var(--sp-1); padding: var(--sp-1) var(--sp-3); border-bottom: 1px solid var(--line2); }
+.side-mode-btn {
+  flex: 1; height: 24px; border: 1px solid var(--btnline); border-radius: var(--r-1);
+  background: var(--btn); color: var(--text2); font: inherit; font-size: var(--fs-2); cursor: pointer;
+}
+.side-mode-btn.is-active { background: var(--toolon); border-color: var(--acc); color: var(--acctext); }
+/* R32: 효과 줄 오른쪽 클릭 메뉴 */
+.side-row-menu {
+  position: fixed; z-index: 9500; min-width: 200px; padding: 3px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-2);
+  box-shadow: 0 6px 20px rgba(0,0,0,0.35); display: flex; flex-direction: column;
+}
+.side-row-menu-item {
+  text-align: left; padding: 6px var(--sp-3); border: none; border-radius: var(--r-1);
+  background: transparent; color: var(--text); font: inherit; font-size: var(--fs-2); cursor: pointer;
+}
+.side-row-menu-item:hover:not(:disabled) { background: var(--selrow); }
+.side-row-menu-item:disabled { color: var(--faint); cursor: default; }
 
 /* 마우스 올림 미리보기 */
 .side-preview {

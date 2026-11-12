@@ -84,7 +84,7 @@ function renderReal(ctx, env, p, o) {
   const ramp = useTemp ? null : makeRamp([[0, cEdge], [0.25, cEdge], [0.55, cBody], [0.9, cCore], [1, cCore]]);
   // R31 셀: 사진 측정 반영 — ① 가장자리 침식으로 몇 px 만에 끊기게(사진 전환 폭 ≈3px)
   //   ② 몸통은 밝게, 끝으로 갈수록 식는다 ③ 능선 노이즈로 접힌 띠의 밝은 선 ④ 높이 따라 커지는 옆 비틀림.
-  const soft = 0.07;
+  const soft = 0.15; // R32: 칸 2개쯤에 걸쳐 끊겨야 계단이 안 보인다(0.07 은 계단 생김)
   const cell = (gx, gy) => {
     const u = (gx + 0.5) / cols, vy = (gy + 0.5) / rows;
     const hy = (1 - vy) / hf;
@@ -97,8 +97,8 @@ function renderReal(ctx, env, p, o) {
     const n = loopFbm(sx, hy * 2 + flow, 0, P, seed, 4);
     const r = hy / b;
     // 갈라짐: 오를수록 가는 어두운 틈이 띠를 쪼갠다 → 떨어져 나가는 혀
-    const crack = Math.pow(ridge(loopNoise(sx * 1.3 + 5, hy * 3 + flow * 2, 0, P * 2, seed + 31)), 8);
-    const heat = 1 - Math.pow(r, 1.3) + (n - 0.5) * (0.7 + 1.1 * turb) * (0.25 + r) - crack * 0.55 * clamp(r * 1.4, 0, 1);
+    const crack = Math.pow(ridge(loopNoise(sx * 1.3 + 5, hy * 3 + flow * 2, 0, P * 2, seed + 31)), 12);
+    const heat = 1 - Math.pow(r, 1.3) + (n - 0.5) * (0.7 + 1.1 * turb) * (0.25 + r) - crack * 0.4 * clamp(r * 1.6 - 0.3, 0, 1);
     if (heat <= 0) return null;
     const e = erode(heat, 0.02, soft);                       // 가장자리: 좁은 폭에서 0→1
     if (e <= 0) return null;
@@ -130,7 +130,7 @@ function renderReal(ctx, env, p, o) {
       c.beginPath(); c.arc(x, y, rad, 0, Math.PI * 2); c.fill();
     });
     // 2) 불길(온도 필드)
-    drawField(c, w, h, cols, rows, borrow, release, cell);
+    drawField(c, w, h, cols, rows, borrow, release, cell, 'high');
     // 2-1) R31 장작: 앞을 가리는 검은 실루엣이 깊이감을 만든다(사진 관찰). 윗면만 불빛을 받아 붉게.
     if ((p.fuel ?? 'none') === 'logs') drawLogs(c, w, h, T, seed);
     // 3) 불티: 위로 튀었다가 저항으로 느려지고, 식으며 흰 → 노랑 → 주황 → 빨강. 셔터 흐림 꼬리.

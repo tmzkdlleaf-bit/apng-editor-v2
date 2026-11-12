@@ -125,6 +125,17 @@ export function init(store, editorState, projectApi = null) {
   });
   rightDock.el.style.gridArea = 'inspector';
   app.appendChild(rightDock.el);
+  // R32: 효과 레이어를 새로 고르면 설정이 있는 "효과 컨트롤" 탭을 바로 보여 준다(같은 레이어를 다시 고를 땐 그대로).
+  let _lastSel = '', _autoFx = false;
+  editorState.subscribe?.((patch) => {
+    if (!patch || !('selection' in patch)) return;
+    const sel = editorState.get().selection;
+    const key = (sel ?? []).join(',');
+    if (key === _lastSel) return;
+    _lastSel = key;
+    if (sel?.length === 1 && store.get().layers[sel[0]]?.type === 'effect') { rightDock.setActive?.('fx'); _autoFx = true; }
+    else if (_autoFx) { rightDock.setActive?.('props'); _autoFx = false; }   // 저절로 바꿨던 탭은 다른 레이어를 고르면 되돌린다
+  });
 
   // R23b: 왼쪽 도킹 패널 — 프로젝트 · 효과. 본문은 뒤에서 채운다(화면 stage 준비 후).
   const leftProjectBody = document.createElement('div');
@@ -386,7 +397,7 @@ export function init(store, editorState, projectApi = null) {
         const d = _docAt(e);
         const id = _hitAt(d);
         if (data.kind === 'asset') addAssetLayer(store, editorState, data.id, { x: d.x, y: d.y });
-        else if (data.kind === 'fx') { if (id) addFxToLayer(store, id, data.id); else addEffectLayer(store, editorState, data.id); }
+        else if (data.kind === 'fx') addEffectLayer(store, editorState, data.id, { at: { x: d.x, y: d.y } }); // R32: 늘 새 레이어(놓은 자리에)
         else if (data.kind === 'motion') { if (id) addMotionToLayers(store, editorState, [id], data.id); else showToast('모션은 레이어 위에 놓아 주세요.'); }
         return;
       }

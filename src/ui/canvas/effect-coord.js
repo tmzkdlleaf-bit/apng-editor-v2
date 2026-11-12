@@ -76,7 +76,7 @@ export function initEffectCoordEdit(overlayCanvas, store, editorState) {
 
   function _selectedEffect() {
     const es = editorState.get();
-    if (es.tool !== 'edit' || es.selection.length !== 1) return null;
+    if ((es.tool !== 'edit' && es.tool !== 'select') || es.selection.length !== 1) return null; // R32: 옮기기 도구에서도 위치 점을 끈다
     const doc = store.get();
     const layer = doc.layers[es.selection[0]];
     return (layer && layer.type === 'effect') ? layer : null;

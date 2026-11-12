@@ -354,7 +354,10 @@ export function initLayerList(containerEl, store, editorState, deps = {}) {
     const rowEl = e.target.closest?.('.tl-row[data-kind="layer"]');
     const layerId = rowEl?.dataset.id;
     if (data.kind === 'fx') {
-      if (layerId) addFxToLayer(store, layerId, data.id); else addEffectLayer(store, editorState, data.id);
+      // R32: 늘 새 효과 레이어 — 줄 위에 놓으면 그 레이어 바로 위에(레이어 안에 넣기는 효과 패널 오른쪽 클릭).
+      const ord = store.get().order;
+      const i = layerId ? ord.indexOf(layerId) : -1;
+      addEffectLayer(store, editorState, data.id, i >= 0 ? { index: i + 1 } : {});
     } else if (data.kind === 'motion') {
       if (layerId) addMotionToLayers(store, editorState, [layerId], data.id);
     } else if (data.kind === 'asset') {

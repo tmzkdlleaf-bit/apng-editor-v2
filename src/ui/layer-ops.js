@@ -1,3 +1,4 @@
+import { showToast } from './shell/status.js';
 // R23b — 패널(프로젝트·효과)과 끌어 놓기가 함께 쓰는 레이어 만들기·효과 더하기 공용 동작.
 //   레이어 추가 메뉴·효과 쌓기·움직임 섹션에 흩어져 있던 "효과 레이어 만들기 / 모션 더하기"를 한곳으로.
 //   되돌리기 기록은 각 동작당 1건.
@@ -21,8 +22,12 @@ function _affectedProps(motion) {
   return set;
 }
 
-// 효과 레이어 하나를 기본 파라미터로 만든다(화면 전체). layer-add 의 _addEffect 와 같은 결과.
-export function addEffectLayer(store, editorState, effectId, { index } = {}) {
+// 효과 레이어 하나를 기본 파라미터로 만든다. layer-add 의 _addEffect 와 같은 결과.
+// R32: 상자 범위를 지원하는 효과는 '움직이는 상자'로 넣는다 — 캔버스에서 클릭·끌기·크기 조절.
+//   날씨·오버레이·사이버처럼 화면을 덮는 종류는 상자를 문서 크기로, 나머지는 문서의 60% 크기로.
+//   at: { x, y } 문서 좌표(끌어 놓은 자리) — 없으면 가운데.
+const _FULL_BOX_CATS = new Set(['날씨', '오버레이', '사이버']);
+export function addEffectLayer(store, editorState, effectId, { index, at } = {}) {
   const effect = getEffect(effectId);
   if (!effect) return null;
   const doc = store.get();
@@ -31,9 +36,19 @@ export function addEffectLayer(store, editorState, effectId, { index } = {}) {
   const layer = createLayer('effect', { name: effect.name.replace(/^\[시험\]\s*/, ''), effectId });
   layer.params = params;
   layer.seed = Math.floor(Math.random() * 1e6);
-  layer.transform.x.value = 0; layer.transform.y.value = 0;
+  const W = doc.meta.width, H = doc.meta.height;
+  if ((effect.scopes ?? ['full']).includes('box')) {
+    const k = _FULL_BOX_CATS.has(effect.category) ? 1 : 0.6;
+    layer.scope = 'box';
+    layer.box = { w: Math.round(W * k), h: Math.round(H * k) };
+    layer.transform.x.value = Math.round(at?.x ?? W / 2);
+    layer.transform.y.value = Math.round(at?.y ?? H / 2);
+  } else {
+    layer.transform.x.value = 0; layer.transform.y.value = 0;
+  }
   store.apply({ type: 'addLayer', layer, index: index ?? doc.order.length });
   editorState.set({ selection: [layer.id] });
+  if (effectId === 'footage') showToast('효과 컨트롤의 "소재" 칸에 이미지를 연결하세요. 내장 소재는 + 레이어 → 실사 소재에서 바로 넣을 수 있어요.');
   return layer.id;
 }
 

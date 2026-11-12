@@ -167,7 +167,7 @@ export function drawOverlay(ctx, doc, es, snapLines = [], W, H, assets = null) {
   }
 
   // 이펙트 coord 점(R12-1) — 편집 도구에서 단일 이펙트 선택 시. 끌어서 위치를 정한다.
-  if (es.tool === 'edit' && selection.length === 1) {
+  if ((es.tool === 'edit' || es.tool === 'select') && selection.length === 1) { // R32: 옮기기 도구에서도 효과 위치 점 표시
     const layer = doc.layers[selection[0]];
     if (layer && layer.type === 'effect') {
       const acc = getComputedStyle(document.documentElement).getPropertyValue('--acc').trim() || '#f0a35e';

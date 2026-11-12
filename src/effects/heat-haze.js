@@ -12,7 +12,7 @@ export default {
   thumbnail: { frame: 3, bg: '#1a140f' },
   bleed: 10,
   params: [
-    { key: 'strength', label: '세기', type: 'float', default: 0.5, min: 0, max: 1, step: 0.01 },
+    { key: 'strength', label: '세기', type: 'float', default: 0.7, min: 0, max: 1, step: 0.01 },
     { key: 'scale', label: '일렁임 크기', type: 'float', default: 0.5, min: 0.1, max: 1, step: 0.01 },
     { key: 'speed', label: '위로 흐르는 속도', type: 'int', default: 2, min: 1, max: 8 },
     { key: 'range', label: '범위', type: 'select', default: 'bottom',
@@ -27,7 +27,7 @@ export default {
     const src = (sources || []).find((s) => s.key === 'below')?.canvas;
     if (!src) return;
     const W = src.width, H = src.height;
-    const st = clamp(p.strength ?? 0.5, 0, 1);
+    const st = clamp(p.strength ?? 0.7, 0, 1);
     ctx.save();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     if (st <= 0) { ctx.drawImage(src, pad, pad); ctx.restore(); return; }

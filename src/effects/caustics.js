@@ -14,7 +14,7 @@ export default {
     { key: 'speed', label: '속도', type: 'int', default: 1, min: 1, max: 6 },
     { key: 'intensity', label: '세기', type: 'float', default: 0.6, min: 0, max: 1, step: 0.01 },
     { key: 'color', label: '색', type: 'color', default: '#9fe8ff' },
-    { key: 'cells', label: '해상도', type: 'int', default: 40, min: 16, max: 96, advanced: true },
+    { key: 'cells', label: '해상도', type: 'int', default: 72, min: 16, max: 128, advanced: true },
   ],
   scopes: ['full', 'box'],
   render(ctx, { f, frameCount, w, h, rng, borrow, release }, p) {
@@ -22,7 +22,7 @@ export default {
     const speed = Math.max(1, Math.round(p.speed ?? 1));
     const intensity = clamp(p.intensity ?? 0.6, 0, 1);
     const col = parseColor(p.color ?? '#9fe8ff');
-    const cells = Math.max(8, Math.round(p.cells ?? 40));
+    const cells = Math.max(8, Math.round(p.cells ?? 72));
     const seed = Math.floor(rng() * 1000);
     const progress = f / Math.max(1, frameCount);
     // 순환 오프셋(루프): 노이즈 좌표를 원으로 돌린다
@@ -33,11 +33,12 @@ export default {
     drawField(ctx, w, h, cells, cells, borrow, release, (gx, gy) => {
       const nx = (gx / cells) * freq + ax;
       const ny = (gy / cells) * freq + ay;
-      let n = fbm(nx, ny, seed, 2);
-      // 밝은 능선만(코스틱 느낌): 가파른 대비
-      n = Math.pow(clamp((n - 0.45) / 0.3, 0, 1), 2.2);
+      // R32: 물 밑 빛 무늬는 '가는 밝은 그물'이다(능선 노이즈). 예전 문턱 방식은 프레임 대부분이 비었다.
+      const r1 = 1 - Math.abs(2 * fbm(nx, ny, seed, 2) - 1);
+      const r2 = 1 - Math.abs(2 * fbm(nx * 1.7 + 3.1, ny * 1.7 - 1.3, seed + 7, 2) - 1);
+      const n = clamp(Math.pow(r1, 10) + 0.6 * Math.pow(r2, 13), 0, 1);
       if (n <= 0.02) return null;
       return [col.r, col.g, col.b, intensity * n];
-    });
+    }, 'high');
   },
 };
