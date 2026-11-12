@@ -1,5 +1,8 @@
 // 비 — 빗줄기(비·물보라 합침). 결정론·루프(frac 낙하, 정수 바퀴).
+// R29 손그림 개편(docs/vfx-reference-guide.md 4장 "비·눈"): 앞·중간·뒤 3겹(뒤는 남색 쪽으로 색조 이동),
+//   굵기가 변하는 빗줄기, 길이 편차, 옆으로 흘러가는 비 커튼, 루프당 한 번 돌풍, 왕관 물보라.
 import { TAU, frac, withAlpha, clamp } from './_fx-util.js';
+import { taperPath, teardropPath, mixCss } from './_fx-style.js';
 
 export default {
   id: 'rain',
@@ -17,8 +20,8 @@ export default {
     { key: 'groundY', label: '바닥 높이', type: 'float', default: 0.92, min: 0.1, max: 1, step: 0.01 },
     { key: 'color', label: '색', type: 'color', default: '#bcd4ff' },
     { key: 'opacity', label: '불투명도', type: 'float', default: 0.55, min: 0, max: 1, step: 0.01 },
-    // R28e — 기본값이면 예전과 픽셀 동일
-    { key: 'depth', label: '앞뒤 겹 수', type: 'int', default: 1, min: 1, max: 3 },
+    { key: 'depth', label: '앞뒤 겹 수', type: 'int', default: 3, min: 1, max: 3 },
+    { key: 'veil', label: '빗발 짙고 옅음', type: 'float', default: 0.5, min: 0, max: 1, step: 0.05 },
     { key: 'splashSize', label: '물보라 크기', type: 'float', default: 1, min: 0.3, max: 3, step: 0.1 },
     { key: 'puddle', label: '물웅덩이 파문', type: 'float', default: 0, min: 0, max: 1, step: 0.05 },
     { key: 'sleet', label: '진눈깨비(눈 섞임)', type: 'float', default: 0, min: 0, max: 1, step: 0.05 },
@@ -31,71 +34,81 @@ export default {
     { id: 'sleet', label: '진눈깨비', values: { amount: 120, thickness: 1.2, sleet: 0.5, opacity: 0.6 } },
   ],
   scopes: ['full', 'box'],
-  render(ctx, { f, frameCount, w, h, rng }, p) {
+  render(ctx, env, p) {
+    const { f, frameCount, w, h, rng } = env;
     const n = Math.max(1, Math.round(p.amount ?? 120));
     const thick = p.thickness ?? 1.5;
-    const ang = (p.windAngle ?? 12) * Math.PI / 180;
     const splash = p.splash ?? true;
     const groundY = clamp(p.groundY ?? 0.92, 0.1, 1) * h;
     const color = p.color ?? '#bcd4ff';
     const op = clamp(p.opacity ?? 0.55, 0, 1);
     const progress = f / Math.max(1, frameCount);
+    // 돌풍(지침 4장 비·눈): 루프당 한 번 바람이 세졌다 잦아든다. 정수 주기 → 루프 유지.
+    const gust = Math.pow(Math.max(0, Math.sin(progress * TAU)), 3);
+    const ang = (p.windAngle ?? 12) * (1 + 0.35 * gust) * Math.PI / 180;
     const dxu = Math.sin(ang), dyu = Math.cos(ang);
     const fall = h * 1.1;
-    const depth = Math.max(1, Math.min(3, Math.round(p.depth ?? 1)));
+    const depth = Math.max(1, Math.min(3, Math.round(p.depth ?? 3)));
     const ssz = Math.max(0.3, p.splashSize ?? 1);
+    const veil = clamp(p.veil ?? 0.5, 0, 1);
+    // 비 커튼: 옆으로 흘러가는 짙고 옅은 띠(빗줄기 밀도가 고르지 않게). 정수 바퀴.
+    const vph = rng() * TAU;
+    const curtain = (x) => 1 - veil * 0.45 * (0.5 + 0.5 * Math.sin((x / w) * TAU * 1.5 - progress * TAU + vph)) * (0.6 + 0.4 * Math.sin((x / w) * TAU * 3.5 + vph * 2));
+    // 겹마다: [개수 비율, 길이·굵기 배율, 불투명도, 속도(바퀴), 색 섞기(뒤는 짙은 남색 쪽으로 색조 이동)]
+    const back = mixCss(color, '#2c3c78', 0.45), front = mixCss(color, '#ffffff', 0.35);
+    const layers = depth === 1 ? [[1, 1, 1, 2, color]]
+      : depth === 2 ? [[0.75, 0.55, 0.45, 1, back], [0.6, 1, 1, 2, color]]
+      : [[0.8, 0.55, 0.55, 1, back], [0.6, 1, 1, 2, color], [0.08, 2.1, 0.5, 3, front]];
 
-    ctx.lineCap = 'round';
-    ctx.strokeStyle = withAlpha(color, op);
-    for (let i = 0; i < n; i++) {
-      const bx = rng(), by = rng(), spd = 2 + Math.floor(rng() * 2); // 2~3바퀴(정수)
-      const len = h * (0.05 + rng() * 0.06);
-      const t = frac(by + progress * spd);
-      const y = t * fall;
-      const x = bx * w + dxu * y;
-      ctx.lineWidth = thick * (0.7 + 0.6 * rng());
-      ctx.beginPath();
-      ctx.moveTo(x, y);
-      ctx.lineTo(x - dxu * len, y - dyu * len);
-      ctx.stroke();
+    for (const [cnt, k, a, sp, col] of layers) {
+      ctx.fillStyle = col;
+      const nn = Math.max(1, Math.round(n * cnt));
+      for (let i = 0; i < nn; i++) {
+        const bx = rng(), by = rng(), spd = sp + Math.floor(rng() * 2);
+        const len = h * (0.05 + rng() * 0.06) * k * (0.6 + rng() * 0.8); // 길이 편차 ±40%
+        const wd = thick * k * (1 + 0.6 * rng());
+        const t = frac(by + progress * spd);
+        const y = t * fall;
+        const x = bx * w + dxu * y;
+        ctx.globalAlpha = op * a * curtain(x);
+        // 굵기가 변하는 빗줄기: 위(꼬리)는 가늘게 사라지고 아래(앞쪽)가 굵다
+        ctx.beginPath();
+        taperPath(ctx, [[x - dxu * len, y - dyu * len], [x - dxu * len * 0.5, y - dyu * len * 0.5], [x - dxu * len * 0.15, y - dyu * len * 0.15], [x, y]], 0, wd, wd * 0.6, 0.8);
+        ctx.fill();
+      }
     }
+    ctx.globalAlpha = 1;
 
     if (splash) {
-      // 바닥 물보라 — 짧은 호가 깜빡(결정론·루프). 위치 고정, 시점만 위상.
-      ctx.strokeStyle = withAlpha(color, op * 0.8);
-      ctx.lineWidth = Math.max(0.8, thick * 0.7);
+      // 바닥 물보라: 왕관처럼 튀는 작은 물방울 2~3개 + 납작한 고리. 짧고 빠르게(위치 고정, 시점만 위상).
       const m = Math.max(4, Math.round(n * 0.15 * (ssz > 1 ? ssz : 1)));
+      ctx.fillStyle = front;
+      ctx.strokeStyle = color;
       for (let i = 0; i < m; i++) {
         const sx = rng() * w, ph = rng(), spd = 3 + Math.floor(rng() * 3);
+        const drops = 2 + Math.floor(rng() * 2), tilt = (rng() - 0.5) * 0.6;
+        const gy = groundY + (rng() - 0.5) * h * 0.03;
         const t = frac(ph + progress * spd);
-        const grow = Math.sin(t * Math.PI); // 0→1→0
-        if (grow <= 0.05) continue;
-        const rr = (2 + grow * 8) * ssz;
-        ctx.globalAlpha = op * (1 - t);
-        ctx.beginPath(); ctx.arc(sx, groundY, rr, Math.PI * 1.1, Math.PI * 1.9); ctx.stroke();
+        if (t > 0.6) continue; // 쉬는 구간 — 늘 튀고 있지 않게
+        const u = t / 0.6;
+        const e = 1 - (1 - u) * (1 - u); // 빠르게 튀고 느려짐
+        ctx.globalAlpha = op * (1 - u * u);
+        for (let d = 0; d < drops; d++) {
+          const da = -Math.PI / 2 + tilt + (d - (drops - 1) / 2) * 0.9;
+          const dist = (3 + 7 * e) * ssz;
+          const lift = Math.sin(u * Math.PI) * 6 * ssz; // 포물선
+          const px = sx + Math.cos(da) * dist, py = gy + Math.sin(da) * dist * 0.4 - lift;
+          const rr = Math.max(0.6, thick * 0.55 * (1 - u * 0.6) * Math.min(ssz, 1.6));
+          ctx.beginPath();
+          teardropPath(ctx, px, py, rr, rr * 2.2, Math.atan2(gy - py, sx - px), 0); // 꼬리는 튄 자리 쪽
+          ctx.fill();
+        }
+        ctx.lineWidth = Math.max(0.6, thick * 0.5);
+        ctx.beginPath(); ctx.ellipse(sx, gy, (2 + e * 7) * ssz, (2 + e * 7) * ssz * 0.25, 0, Math.PI, TAU); ctx.stroke();
       }
       ctx.globalAlpha = 1;
     }
 
-    // R28e 추가분 — 기본값(겹 1·파문 0·진눈깨비 0)이면 아래는 아무것도 그리지 않는다(난수도 쓰지 않음 → 예전과 동일).
-    if (depth > 1) {
-      // 뒤 겹: 가늘고 짧고 옅게 / 앞 겹(3일 때): 굵고 길고 흐릿하게(초점 밖)
-      for (let l = 1; l < depth; l++) {
-        const front = l === 2;
-        const k = front ? 1.8 : 0.55;
-        ctx.strokeStyle = withAlpha(color, op * (front ? 0.28 : 0.45));
-        const nn = Math.round(n * (front ? 0.12 : 0.8));
-        for (let i = 0; i < nn; i++) {
-          const bx = rng(), by = rng(), spd = (front ? 3 : 1) + Math.floor(rng() * 2);
-          const len = h * (0.05 + rng() * 0.06) * k;
-          const t = frac(by + progress * spd);
-          const y = t * fall;
-          const x = bx * w + dxu * y;
-          ctx.lineWidth = thick * k * (front ? 2.2 : 0.7);
-          ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x - dxu * len, y - dyu * len); ctx.stroke();
-        }
-      }
-    }
     const puddle = clamp(p.puddle ?? 0, 0, 1);
     if (puddle > 0) {
       // 바닥 물웅덩이: 납작한 동심원이 퍼졌다 사라짐

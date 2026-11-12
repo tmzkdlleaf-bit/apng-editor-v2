@@ -232,14 +232,23 @@ CLAUDE.md 규칙(결정적 RNG, 0프레임 = N프레임 루프, `ctx.filter` 금
 
 ---
 
-## 6. 적용 순서 제안 (다음 단계, 아직 미착수)
+## 6. 적용 순서
 
-1. 공통 도구 `_fx-style.js`: `sizeTier`, `gauss`, `stepRamp`, `holdFrame`, `teardropPath`, `hookPath`, `blobPath`, `taperStroke`, `diffusion`, `para`.
-2. 대표 효과 3개로 먼저 검증: 불(또는 critical-burst) · 비 · 반짝임.
+1. [완료 R29] 공통 도구 `src/effects/_fx-style.js`:
+   - 분포: `gauss`, `sizeTier`, `makeClusters`, `clusterPoint`
+   - 시간: `holdFrame`, `HOLD_PARAM`, `flick`, `onceSpan`, `easeIn`, `easeOut`
+   - 색: `rampGradient`, `rampRadial`, `mixCss`
+   - 형태: `teardropPath`, `blobPath`, `jitter`, `taperPath`
+   - 촬영: `withDiffusion`, `DIFFUSION_PARAM`
+2. [완료 R29] 대표 효과 3개로 검증: 불꽃(`flame`) · 비(`rain`) · 반짝임(`sparkle`).
 3. 카테고리별 일괄 적용: 빛 → 자연·날씨 → 공포 → 전환 → 변형.
 4. 이전/이후 프레임 시트를 나란히 비교한 이미지를 남긴다.
 
 ---
+
+## 7. 주의 (실제로 겪은 함정)
+- `_fx-util.mix()` 는 `{r,g,b}` **객체**를 돌려준다. `fillStyle`/`strokeStyle` 에 바로 넣으면 브라우저가 조용히 무시하고 **이전 색이 남는다**(결정론 깨짐). 색 문자열이 필요하면 `mixCss()` 를 쓴다.
+- `withDiffusion` 의 그리기 콜백 안에서는 `rng()` 를 부르지 않는다. 성질은 콜백 밖에서 미리 뽑아 둔다(난수 순서 고정).
 
 ## 출처
 - Riot Games, /dev: League's VFX Style Guide — https://nexus.leagueoflegends.com/en-us/2017/10/dev-leagues-vfx-style-guide/
