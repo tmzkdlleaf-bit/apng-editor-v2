@@ -150,6 +150,7 @@ export function createRenderEngine(opts = {}) {
       viewOffsetX,
       viewOffsetY,
       frameCount,
+      fps:          doc.meta.fps || 12, // R30: 실사 효과가 실제 시간(초)을 계산할 때
       motions:      motions      ?? null,
       effects:      effects      ?? null,
       assets:       assets       ?? { getBitmap: () => null, getAnimFrames: () => null },

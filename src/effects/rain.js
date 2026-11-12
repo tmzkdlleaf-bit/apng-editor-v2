@@ -5,6 +5,125 @@
 import { TAU, frac, withAlpha, clamp, drawField, mix } from './_fx-util.js';
 import { taperPath, teardropPath, mixCss, LOOK_PARAM, lookOf, loopFbm } from './_fx-style.js';
 import { blurCanvas } from '../core/render/blur.js';
+import { world, emit, streak, camera, overLife, WORLD_PARAMS } from './_fx-real.js';
+import { hash2 } from './_fx-util.js';
+
+// 빗방울 지름(mm) → 떨어지는 속도(m/s). 측정값 근사(이슬비 0.5 mm ≈ 2, 2 mm ≈ 6.5, 5 mm ≈ 9). 자료집 2-5.
+export const dropSpeed = (Dmm) => Math.max(0.5, 9.65 - 10.3 * Math.exp(-0.6 * Dmm));
+
+// R30 실사(docs/vfx-guide-real.md 4-1 비): 빗방울 크기 분포 → 실제 낙하 속도 → 셔터 흐림 길이.
+//   앞(가깝고 크고 흐림)·중간·뒤(멀고 작고 옅음) 3겹 원근, 뒤쪽 빛 근처에서만 밝게(역광),
+//   가까운 줄 안의 반짝이는 점, 1프레임 물보라 + 오래 가는 파문, 바닥 물안개, 촬영 마무리.
+function renderReal(ctx, env, p) {
+  const { w, h, rng, borrow, release, scale = 1 } = env;
+  const W = world(env, p);
+  const n = Math.max(1, Math.round((p.amount ?? 120) * 5)); // 실사: 먼 빗방울까지 — 개수는 많고 하나하나는 옅다
+  const thick = p.thickness ?? 1.5;
+  const color = p.color ?? '#bcd4ff';
+  const op = clamp((p.opacity ?? 0.55) * 1.3, 0, 1);
+  const groundY = clamp(p.groundY ?? 0.92, 0.1, 1) * h;
+  const back = clamp(p.backlight ?? 0.7, 0, 1);
+  const lx = clamp(p.lightX ?? 0.7, 0, 1), ly = clamp(p.lightY ?? 0.2, 0, 1);
+  const seed = Math.floor(rng() * 1e6);
+  const prog = W.t / W.L;
+  const gust = Math.pow(Math.max(0, Math.sin(prog * TAU)), 3);
+  const ang = (p.windAngle ?? 12) * (1 + 0.35 * gust) * Math.PI / 180;
+  const tanA = Math.tan(ang);
+  // 역광: 빛 근처(화면 비율 거리)에서 밝고, 멀면 흐릿한 바탕 밝기만 남는다.
+  const lit = (x, y) => 0.22 + 0.78 * back * Math.exp(-(((x / w - lx) ** 2) + ((y / h - ly) ** 2) * 0.6) / 0.12);
+  const zRef = 3; // 이 거리(m)에서 화면 높이 = worldHeight
+  // 겹: [개수 비율, 거리 범위(m), 초점 흐림]
+  const layers = [[0.6, [8, 20], false], [0.32, [2.5, 6], false], [0.08, [0.7, 1.4], true]];
+  camera(ctx, env, p, (c) => {
+    layers.forEach(([cnt, [z0, z1], dof], li) => {
+      const dc = c;
+      const nn = Math.max(1, Math.round(n * cnt));
+      for (let i = 0; i < nn; i++) {
+        const H = (k) => hash2(i + li * 7919, k, seed);
+        // 크기 분포: 작은 것 60%(1~1.8 mm) · 중간 30%(2~3) · 큰 것 10%(3.5~5)
+        const q = H(1);
+        const Dmm = q < 0.6 ? 1 + 0.8 * H(2) : q < 0.9 ? 2 + H(2) : 3.5 + 1.5 * H(2);
+        const z = z0 + (z1 - z0) * H(3);
+        const s = zRef / z;                                   // 원근 배율
+        const v = dropSpeed(Dmm) * (1 - 0.25 * gust);          // 돌풍 속 낙하 감소(25~30%)
+        // 화면 속도(px/s). 루프에 맞게 화면을 정수 번 가로지르도록 맞춘다.
+        const span = h * 1.25;
+        const m = Math.max(1, Math.round(W.L * v * W.pxPerM * s / span));
+        const vy = span * m / W.L, vx = vy * tanA;
+        const y = frac(H(4) + W.t * m / W.L) * span - h * 0.15;
+        const x = H(5) * w * 1.2 - w * 0.1 + (y + h * 0.15) * tanA - (h * tanA) * 0.5;
+        const trueW = (Dmm / 1000) * W.pxPerM * s * thick;     // 실제 굵기(px)
+        const wd = Math.max(0.6, trueW);
+        const cover = Math.min(1, 0.45 + trueW / 0.6);          // 1px 보다 가늘면 옅게(영화식: 큰 물방울·역광으로 보이게 한 정도까지는 살림)
+        const a = op * cover * lit(x, y) * (dof ? 1.4 : li === 0 ? 0.55 : 1);
+        if (a < 0.01) continue;
+        if (dof) {
+          // 초점 밖(가까움): 흐리게 번진 넓은 띠 + 옅은 심. 화면 전체를 흐리는 것보다 훨씬 빠르다.
+          streak(dc, x, y, vx, vy, W, wd * 5, color, a * 0.22);
+          streak(dc, x, y, vx, vy, W, wd * 2.2, color, a * 0.35);
+        } else streak(dc, x, y, vx, vy, W, wd, color, a);
+        if (!dof && s > 0.8 && H(6) < 0.5) {
+          // 가까운 빗방울: 떨어지며 출렁여 줄 안에 반짝이는 점이 생긴다(자료집 2-5)
+          const L = vy * W.dt * W.blurK;
+          for (let k = 0; k < 2; k++) {
+            const t = H(7 + k);
+            dc.globalAlpha = Math.min(1, a * 1.6);
+            dc.fillStyle = '#ffffff';
+            dc.beginPath(); dc.arc(x - tanA * L * t, y - L * t, wd * 0.6, 0, TAU); dc.fill();
+          }
+        }
+      }
+    });
+    c.globalAlpha = 1;
+
+    // 물보라(자료집 2-6): 왕관은 약 6 ms → 1프레임만 보이는 작은 물방울 반짝임. 파문은 오래(0.5 s) 퍼진다.
+    if (p.splash ?? true) {
+      const ssz = Math.max(0.3, p.splashSize ?? 1);
+      const puddle = clamp(p.puddle ?? 0, 0, 1);
+      emit({ count: Math.max(6, Math.round(n * 0.04)), life: [0.45, 0.7], gap: 0.6, seed: seed + 1 }, W.t, W.L, (i, age, u, R) => {
+        const sx = R(1) * w, gy = groundY + (R(2) - 0.5) * h * 0.04;
+        const k = lit(sx, gy);
+        if (age < W.dt) {
+          // 셔터 안에 튄 물방울들: 짧은 흔적
+          const drops = 3 + Math.floor(R(3) * 4);
+          for (let d = 0; d < drops; d++) {
+            const da = -Math.PI / 2 + (R(4 + d) - 0.5) * 2.2;
+            const sp = (0.6 + 1.2 * R(10 + d)) * W.pxPerM * ssz;
+            const tt = Math.min(age + W.dt * 0.5, 0.02);
+            const px = sx + Math.cos(da) * sp * tt, py = gy + Math.sin(da) * sp * tt * 0.8;
+            streak(c, px, py, Math.cos(da) * sp, Math.sin(da) * sp, W, Math.max(0.6, thick * 0.6), '#ffffff', op * k * 0.9);
+          }
+        }
+        // 파문: 고인 물이 있을수록 진하게
+        const pa = op * k * (0.25 + 0.75 * puddle) * Math.pow(1 - u, 2);
+        if (pa > 0.01) {
+          const rr = (0.03 + 0.25 * u) * W.pxPerM * ssz;
+          c.globalAlpha = pa; c.strokeStyle = color; c.lineWidth = Math.max(0.6, thick * 0.5);
+          c.beginPath(); c.ellipse(sx, gy, rr, rr * 0.22, 0, 0, TAU); c.stroke();
+        }
+      });
+      c.globalAlpha = 1;
+    }
+
+    // 바닥 물안개
+    const mist = clamp(p.mist ?? 0.4, 0, 1);
+    if (mist > 0 && borrow) {
+      const top = groundY - h * 0.22, mh = h - top;
+      const mc = mix(color, '#ffffff', 0.5);
+      const flow = prog * 4 * Math.sign(tanA || 1);
+      const cols = 48, rows = 16;
+      c.save(); c.translate(0, top);
+      drawField(c, w, mh, cols, rows, borrow, release, (gx, gy) => {
+        const u = (gx + 0.5) / cols, v = (gy + 0.5) / rows;
+        const fadeV = Math.sin(Math.min(1, v * 1.3) * Math.PI);
+        const nv = loopFbm(u * 4 - flow, v * 2, 4, 0, seed % 9973, 3);
+        const a = mist * 0.4 * fadeV * clamp((nv - 0.35) / 0.5, 0, 1) * lit(u * w, top + v * mh);
+        return a > 0.01 ? [mc.r, mc.g, mc.b, a] : null;
+      });
+      c.restore();
+    }
+  }, { bloomK: 0.5 });
+}
 
 export default {
   id: 'rain',
@@ -29,6 +148,10 @@ export default {
     { key: 'splashSize', label: '물보라 크기', type: 'float', default: 1, min: 0.3, max: 3, step: 0.1 },
     { key: 'puddle', label: '물웅덩이 파문', type: 'float', default: 0, min: 0, max: 1, step: 0.05 },
     { key: 'sleet', label: '진눈깨비(눈 섞임)', type: 'float', default: 0, min: 0, max: 1, step: 0.05 },
+    { key: 'backlight', label: '뒤쪽 빛(실사)', type: 'float', default: 0.7, min: 0, max: 1, step: 0.05 },
+    { key: 'lightX', label: '빛 위치 가로(실사)', type: 'float', default: 0.7, min: 0, max: 1, step: 0.01 },
+    { key: 'lightY', label: '빛 위치 세로(실사)', type: 'float', default: 0.2, min: 0, max: 1, step: 0.01 },
+    ...WORLD_PARAMS,
   ],
   // '종류'는 프리셋(값을 한꺼번에 채우는 버튼)으로 — 고른 뒤 고친 값은 그대로, "(수정됨)" 표시(R28e)
   presets: [
@@ -41,6 +164,7 @@ export default {
   render(ctx, env, p) {
     const { f, frameCount, w, h, rng, borrow, release, scale = 1 } = env;
     const look = lookOf(p);
+    if (look === 'real') { renderReal(ctx, env, p); return; }
     const n = Math.max(1, Math.round(p.amount ?? 120));
     const thick = p.thickness ?? 1.5;
     const splash = p.splash ?? true;

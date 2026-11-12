@@ -16,6 +16,7 @@ export function runEffect(def, ctx, env, params) {
   const _env = {
     f: env.f,
     frameCount: env.frameCount,
+    fps: env.fps || 12, // R30: 초당 프레임(실제 시간 계산용)
     w: env.w,
     h: env.h,
     rng,

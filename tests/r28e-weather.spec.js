@@ -55,7 +55,7 @@ test('성에 한 번형: 진행 0 이면 없음, 1 이면 가장자리에 서리
 });
 
 test('번개: 친 프레임에는 그려지고, 안 친 프레임은 비어 있다', async ({ page }) => {
-  const cases = {}; for (let f = 0; f < 12; f++) cases['f' + f] = { fx: 'lightning', params: { strikes: 1, linger: 2 }, f };
+  const cases = {}; for (let f = 0; f < 12; f++) cases['f' + f] = { fx: 'lightning', params: { strikes: 1, linger: 2, look: 'cel' }, f }; // 잔상 프레임 규칙은 손그림 그림체
   const r = await page.evaluate(RUN, { cases });
   const lit = Object.values(r).map(alpha);
   expect(lit.filter((n) => n > 0).length).toBeGreaterThanOrEqual(1);

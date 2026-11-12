@@ -4,6 +4,7 @@
 //   S자로 휘는 혀 모양 불길을 3단 색(속·몸통·가장자리)으로 겹쳐 그리는 셀 방식,
 //   크기 3단계, 위로 떨어져 나가는 물방울 불씨, 2프레임 홀드, 은은한 빛 번짐.
 import { TAU, frac, clamp, parseColor, mix, drawField } from './_fx-util.js';
+import { world, cyclesInLoop, emit, integrate, overLife, blackbody, rgbStr, streak, camera, WORLD_PARAMS } from './_fx-real.js';
 import { sizeTier, gauss, holdFrame, HOLD_PARAM, LOOK_PARAM, lookOf, holdOf, loopFbm, loopNoise, makeRamp, teardropPath, withDiffusion, DIFFUSION_PARAM } from './_fx-style.js';
 
 // 불길 혀 하나: 바닥(x, base) 에서 위로 th 만큼. sway 는 끝의 옆 흔들림(S자·갈고리 모양을 만든다).
@@ -19,6 +20,107 @@ function tongue(ctx, x, base, wd, th, sway, lean) {
 
 // 반실사·실사: 열(heat) 지도를 작은 칸 격자에서 계산해 색 램프로 칠한다.
 //   열 = (혀들이 만든 바닥 분포) − (높이) + 위로 흐르는 노이즈(루프 주기 노이즈 → 0프레임 = N프레임).
+// R30 실사(docs/vfx-guide-real.md 4-1 불): 불 크기로 깜빡임 빠르기 결정(f = 1.68/√D), 온도색(흑체),
+//   뒤쪽 그을음 연기 층, 식으며 색이 바뀌는 불티(셔터 흐림), 촬영 마무리(빛 번짐·입자감).
+// 온도 → 카메라에 찍힌 색. 흑체 색 × 복사량(∝T⁴)을 노출 곡선(1-e^-x)에 넣는다.
+//   뜨거운 바닥은 노출이 넘쳐 노랑빛 흰색으로 날아가고, 식은 끝은 어두운 빨강(실제 사진과 같은 모습).
+export function exposeTemp(T, exposure = 1.2) {
+  const bb = blackbody(T);
+  const I = Math.pow(T / 1800, 4) * 1.6 * exposure;
+  const o = bb.rgb.map((c) => 1 - Math.exp(-(c / 255) * I));
+  // 불은 스스로 빛난다: 어두운 것은 '검게'가 아니라 '투명하게'. 가장 밝은 채널을 불투명도로, 색은 그만큼 키운다.
+  const m = Math.max(1e-3, o[0], o[1], o[2]);
+  return [Math.round(255 * o[0] / m), Math.round(255 * o[1] / m), Math.round(255 * o[2] / m), clamp(m, 0, 1)];
+}
+
+function renderReal(ctx, env, p, o) {
+  const { w, h, borrow, release, scale = 1 } = env;
+  const { T, height, cCore, cBody, cEdge, op, emb } = o;
+  const W = world(env, p);
+  const turb = clamp(p.turbulence ?? 0.6, 0, 1);
+  const useTemp = (p.palette ?? 'temp') === 'temp';
+  // 불 크기(m): 불 폭 ≈ 높이 × 0.6 (지름 근사)
+  const D = Math.max(0.03, (height / W.pxPerM) * 0.6);
+  const fHz = 1.68 / Math.sqrt(D);
+  const fMax = W.fps / 2.5;                    // 프레임으로 그릴 수 있는 한계(지침 5-3)
+  const fEff = Math.min(fHz, fMax);
+  const amp = fHz > fMax ? fMax / fHz : 1;     // 한계보다 빠르면 출렁임은 작게(흐림으로 대신)
+  const cycles = cyclesInLoop(1 / fEff, W.L);
+  const prog = W.t / W.L;
+  const P = 3;
+  const flow = prog * P * cycles;              // 깜빡임 한 번에 노이즈 한 주기 위로 — 정수배라 루프 이음매 없음
+  const seed = Math.floor(T[0].ph[0] * 1000);
+  const cols = Math.max(24, Math.min(140, Math.round(w * scale / 4)));
+  const rows = Math.max(24, Math.min(150, Math.round(h * scale / 4)));
+  const puff = 1 + 0.14 * amp * Math.sin(prog * Math.PI * 2 * cycles + seed); // 불 전체가 오르내림(퍼핑)
+  const hf = (height * puff) / h;
+  const base = new Float32Array(cols);
+  for (let gx = 0; gx < cols; gx++) {
+    const u = (gx + 0.5) / cols;
+    let b = 0;
+    for (const t of T) { const d = (u - t.bx) / Math.max(0.015, (t.wd / w) * 0.9); b = Math.max(b, t.k * Math.exp(-d * d)); }
+    base[gx] = Math.max(b, 0.22);
+  }
+  let maxB = 0; for (const v of base) maxB = Math.max(maxB, v);
+  // 온도색 표(256칸) — 칸마다 흑체·노출 계산을 반복하지 않게
+  const LUT = useTemp ? Array.from({ length: 256 }, (_, i) => exposeTemp(900 + 1250 * Math.pow(i / 255, 1.1))) : null;
+  const ramp = useTemp ? null : makeRamp([[0, cEdge], [0.25, cEdge], [0.55, cBody], [0.9, cCore], [1, cCore]]);
+  const cell = (gx, gy) => {
+    const u = (gx + 0.5) / cols, vy = (gy + 0.5) / rows;
+    const hy = (1 - vy) / hf;
+    if (hy > maxB * 1.6) return null;
+    const wx = loopNoise(u * 3, hy * 2 + flow * 0.5, 0, P * 2, seed + 7) - 0.5;
+    const ux = clamp(Math.round((u + wx * 0.12 * hy * turb) * cols - 0.5), 0, cols - 1);
+    const b = base[ux];
+    const n = loopFbm(u * 10 * (w / Math.max(w, h)) + wx * 2, hy * 1.5 + flow, 0, P, seed, 3);
+    const r = hy / b;
+    const heat = 1 - Math.pow(r, 1.3) + (n - 0.5) * (0.7 + 1.1 * turb) * (0.25 + r);
+    if (heat <= 0) return null;
+    const v = clamp(heat * 1.1, 0, 1);
+    let a = clamp(heat / 0.08, 0, 1) * op;
+    if (useTemp) {
+      // 온도: 바닥 중심 약 2100 K(노랑빛 흰색) → 끝 약 900 K(어두운 빨강). 자료집 2-1 온도표.
+      const ex = LUT[(v * 255) | 0];
+      a *= ex[3];
+      return [ex[0], ex[1], ex[2], a];
+    }
+    const col = ramp(v);
+    return [col[0], col[1], col[2], a];
+  };
+  const tw = (t) => t.bx * w;
+  camera(ctx, env, p, (c) => {
+    // 1) 그을음 연기(뒤): 불 끝에서 태어나 부력으로 오르며 2~3배로 커지고 옅어진다. 가장 오래 산다.
+    emit({ count: Math.round(5 + T.length * 0.5), life: [1.6, 3.2], seed: seed + 3 }, W.t, W.L, (i, age, u, R) => {
+      const t = T[Math.floor(R(1) * T.length)];
+      const x = tw(t) + (R(2) - 0.5) * t.wd + Math.sin(age * 1.3 + R(3) * 6) * 0.08 * W.pxPerM;
+      const y = h - height * t.k * (0.8 + 0.2 * R(4)) - (0.35 + 0.35 * R(5)) * W.pxPerM * age;
+      const rad = (0.12 + 0.1 * R(6)) * D * W.pxPerM * (1 + 2 * u);
+      const a = op * 0.22 * overLife([[0, 0], [0.15, 1], [0.6, 0.6], [1, 0]], u);
+      if (a < 0.005) return;
+      const g = c.createRadialGradient(x, y, 0, x, y, rad);
+      g.addColorStop(0, `rgba(58,52,50,${a})`); g.addColorStop(0.6, `rgba(48,44,44,${a * 0.6})`); g.addColorStop(1, 'rgba(40,38,40,0)');
+      c.globalAlpha = 1; c.fillStyle = g;
+      c.beginPath(); c.arc(x, y, rad, 0, Math.PI * 2); c.fill();
+    });
+    // 2) 불길(온도 필드)
+    drawField(c, w, h, cols, rows, borrow, release, cell);
+    // 3) 불티: 위로 튀었다가 저항으로 느려지고, 식으며 흰 → 노랑 → 주황 → 빨강. 셔터 흐림 꼬리.
+    c.save();
+    c.globalCompositeOperation = 'lighter';
+    emit({ count: Math.round(T.length * 0.9 * emb), life: [0.7, 1.8], gap: 0.4, seed: seed + 5 }, W.t, W.L, (i, age, u, R) => {
+      const t = T[Math.floor(R(1) * Math.min(T.length, 8))];
+      const m = integrate(0, 0, (R(2) - 0.5) * 1.2, -(1.2 + 2.2 * R(3)), 0, -0.6, 1.4, age);
+      const x = tw(t) + (R(4) - 0.5) * t.wd * 0.8 + m.x * W.pxPerM + Math.sin(age * 4 + R(5) * 6) * 0.03 * W.pxPerM;
+      const y = h - height * t.k * 0.35 * R(6) + m.y * W.pxPerM;
+      const ex = exposeTemp(1950 - 1050 * u);
+      const a = op * overLife([[0, 0], [0.04, 1], [0.7, 0.8], [1, 0]], u) * ex[3];
+      if (a < 0.01) return;
+      streak(c, x, y, m.vx * W.pxPerM, m.vy * W.pxPerM, W, Math.max(0.8, 1.6 * (1 - u * 0.5)), rgbStr(ex), a);
+    });
+    c.restore();
+  }, { bloomK: 1.3 });
+}
+
 function renderField(ctx, env, p, o) {
   const { w, h, borrow, release, scale = 1 } = env;
   const { look, T, E, progress, height, speed, cCore, cBody, cEdge, op } = o;
@@ -111,15 +213,17 @@ export default {
     { key: 'color3', label: '가장자리 색', type: 'color', default: '#b3123e' },
     { key: 'embers', label: '불씨', type: 'float', default: 0.6, min: 0, max: 1, step: 0.05 },
     LOOK_PARAM('real'),
+    { key: 'palette', label: '불 색(실사)', type: 'select', default: 'temp', options: [{ value: 'temp', label: '실제 온도색' }, { value: 'custom', label: '지정한 색' }] },
     { key: 'turbulence', label: '일렁임', type: 'float', default: 0.6, min: 0, max: 1, step: 0.05 },
     HOLD_PARAM('auto'),
     DIFFUSION_PARAM(0.45),
     { key: 'opacity', label: '불투명도', type: 'float', default: 0.95, min: 0, max: 1, step: 0.01 },
+    ...WORLD_PARAMS,
   ],
   presets: [
-    { id: 'fire', label: '주황 불', values: { color: '#fff4b8', color2: '#ff7a1a', color3: '#b3123e' } },
-    { id: 'blue', label: '푸른 불', values: { color: '#e8fdff', color2: '#3a9bff', color3: '#3b2a9e' } },
-    { id: 'poison', label: '독 불', values: { color: '#f0ffc8', color2: '#52d15e', color3: '#17675e' } },
+    { id: 'fire', label: '주황 불', values: { color: '#fff4b8', color2: '#ff7a1a', color3: '#b3123e', palette: 'temp' } },
+    { id: 'blue', label: '푸른 불', values: { color: '#e8fdff', color2: '#3a9bff', color3: '#3b2a9e', palette: 'custom' } },
+    { id: 'poison', label: '독 불', values: { color: '#f0ffc8', color2: '#52d15e', color3: '#17675e', palette: 'custom' } },
   ],
   scopes: ['full', 'box'],
   render(ctx, env, p) {
@@ -162,6 +266,7 @@ export default {
       E.push({ src: T[order[Math.floor(rng() * big)]], ph: rng(), spd: speed + 1 + Math.floor(rng() * 2), drift: (rng() - 0.5) * 2, r0: (2 + rng() * 3.5) * Math.max(w, h) / 220 });
     }
 
+    if (look === 'real') { renderReal(ctx, env, p, { T, height, cCore, cBody, cEdge, op, emb }); return; }
     if (look !== 'cel') { renderField(ctx, env, p, { look, T, E, progress, height, speed, cCore, cBody, cEdge, op }); return; }
     withDiffusion(ctx, env, clamp(p.diffusion ?? 0.45, 0, 1) * op, Math.max(w, h) * 0.06, (c) => {
       c.globalAlpha = op;

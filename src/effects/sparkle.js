@@ -4,6 +4,7 @@
 //   크기 3단계·무리 지어 분포, "빠르게 켜지고 천천히 꺼지는" 깜빡임, 2프레임 홀드, 빛 번짐.
 // R29b 그림체: 손그림(위 그대로) / 반실사(별 안쪽이 흰빛→색→투명으로 번짐) / 실사(렌즈에 맺힌 빛: 부드러운 빛점 + 가늘게 사라지는 빛줄기, 더하기 합성).
 import { TAU, frac, clamp, withAlpha } from './_fx-util.js';
+import { camera, spikeCount, WORLD_PARAMS } from './_fx-real.js';
 import { sizeTier, makeClusters, clusterPoint, holdFrame, HOLD_PARAM, LOOK_PARAM, lookOf, holdOf, flick, mixCss, withDiffusion, DIFFUSION_PARAM } from './_fx-style.js';
 
 // 오목한 별: 갈래 끝을 중심 쪽으로 오목하게 휜 곡선으로 잇는다(선 긋기가 아니라 면).
@@ -41,7 +42,11 @@ export default {
     LOOK_PARAM('real'),
     HOLD_PARAM('auto'),
     DIFFUSION_PARAM(0.5),
+    { key: 'blades', label: '조리개 날 수(실사 빛줄기)', type: 'select', default: '6',
+      options: [{ value: '0', label: '둥근 조리개(빛줄기 없음)' }, { value: '5', label: '5날(10갈래)' }, { value: '6', label: '6날(6갈래)' }, { value: '7', label: '7날(14갈래)' }, { value: '8', label: '8날(8갈래)' }, { value: '9', label: '9날(18갈래)' }] },
+    { key: 'lensAngle', label: '빛줄기 기울기(실사)', type: 'float', default: 15, min: 0, max: 90, step: 1 },
     { key: 'opacity', label: '불투명도', type: 'float', default: 1, min: 0, max: 1, step: 0.01 },
+    ...WORLD_PARAMS.map((q) => (q.key === 'bloom' ? { ...q, default: 0.5 } : q)),
   ],
   presets: [
     { id: 'gold', label: '금빛', values: { color: '#ffd77a', shape: 'four', size: 10 } },
@@ -59,6 +64,9 @@ export default {
     const shape = p.shape ?? 'four';
     const op = clamp(p.opacity ?? 1, 0, 1);
     const look = lookOf(p);
+    const blades = Number(p.blades ?? 6) | 0;
+    const spikes = spikeCount(blades);
+    const lensRot = -Math.PI / 2 + (p.lensAngle ?? 15) * Math.PI / 180;
     const hold = holdOf(p, look);
     const progress = holdFrame(f, hold, frameCount) / Math.max(1, frameCount);
 
@@ -82,7 +90,8 @@ export default {
     }
     S.sort((a, b) => b.tier - a.tier); // 작은 것(보조) 먼저, 큰 것(주요소) 나중
 
-    withDiffusion(ctx, env, clamp(p.diffusion ?? 0.5, 0, 1) * op, size * 2.5, (c) => {
+    const wrap = look === 'real' ? (fn) => camera(ctx, env, p, fn, { bloomRad: size * 3 }) : (fn) => withDiffusion(ctx, env, clamp(p.diffusion ?? 0.5, 0, 1) * op, size * 2.5, fn);
+    wrap((c) => {
       for (const s of S) {
         const u = frac(s.ph + progress * s.spd);
         if (u >= s.on) continue;
@@ -128,13 +137,16 @@ export default {
           g.addColorStop(0, withAlpha('#ffffff', 1)); g.addColorStop(0.15, withAlpha(core, 0.9));
           g.addColorStop(0.4, withAlpha(color, 0.35)); g.addColorStop(1, withAlpha(color, 0));
           c.fillStyle = g; c.beginPath(); c.arc(s.x, s.y, gr, 0, TAU); c.fill();
-          const lw = Math.max(0.6, r * 0.045);
-          for (let k = 0; k < baseLens.length; k++) {
-            const a = -Math.PI / 2 + (k / baseLens.length) * TAU; // 실사 빛줄기는 화면 축에 맞춰 곧게
-            const L = r * 1.25 * baseLens[k];
+          // 조리개 날 n: 짝수면 n 갈래, 홀수면 2n 갈래(자료집 2-9). 모든 빛이 같은 렌즈 → 같은 방향.
+          //   갈래 길이는 밝기의 제곱근에 비례(밝을수록 길다). 가늘고 끝으로 사라진다.
+          const nb = spikes;
+          const lw = Math.max(0.5, r * 0.03);
+          for (let k = 0; k < nb; k++) {
+            const a = lensRot + (k / nb) * TAU;
+            const L = r * 1.6 * Math.sqrt(v) * (k % 2 ? 0.9 : 1);
             const ex = s.x + Math.cos(a) * L, ey = s.y + Math.sin(a) * L;
             const lg = c.createLinearGradient(s.x, s.y, ex, ey);
-            lg.addColorStop(0, withAlpha(core, 0.95)); lg.addColorStop(0.3, withAlpha(color, 0.5)); lg.addColorStop(1, withAlpha(color, 0));
+            lg.addColorStop(0, withAlpha(core, 0.9)); lg.addColorStop(0.25, withAlpha(color, 0.4)); lg.addColorStop(1, withAlpha(color, 0));
             c.strokeStyle = lg; c.lineWidth = lw; c.lineCap = 'butt';
             c.beginPath(); c.moveTo(s.x, s.y); c.lineTo(ex, ey); c.stroke();
           }

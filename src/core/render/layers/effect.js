@@ -11,7 +11,7 @@ export function renderEffectLayer(outputCtx, layer, worldTr, totalAlpha, rctx) {
     effects, pool, rawDocWidth, rawDocHeight,
     width, height,
     viewOffsetX = 0, viewOffsetY = 0,
-    f, frameCount, renderScale = 1,
+    f, frameCount, renderScale = 1, fps = 12,
   } = rctx;
   if (!effects) return;
 
@@ -81,7 +81,7 @@ export function renderEffectLayer(outputCtx, layer, worldTr, totalAlpha, rctx) {
 
   // 효과 호출(공용 fx-run): rng·임시 캔버스 빌림/반납을 한곳에서 처리.
   runEffect(effect, contentCtx, {
-    f, frameCount,
+    f, frameCount, fps,
     w: ew, h: eh,          // 문서 단위
     seed,
     sources: sourcesForRender,
