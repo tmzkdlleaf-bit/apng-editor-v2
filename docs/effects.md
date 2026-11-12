@@ -128,3 +128,15 @@ registry 가 고급 파라미터 `밝은 배경용`(끔·테두리·진하게)�
 
 `test-dots`·`test-light-rays`·`test-source-mirror`(그리고 시험 모션 3개)는 앱 목록에서 빠졌다.
 테스트만 `globalThis.__APNG_TEST_REGISTRY` 를 켜서 쓴다(`tests/helpers/fixtures.js` 가 모든 페이지에 켠다).
+
+## R28a 추가 — 한 번(once)형·진행 방식·흐림/가지 선 공용
+
+- `once: true`: 전환·깨짐·터짐처럼 한 번 재생되는 효과. 루프 이음매 검사에서 빠지고, 반복 내보내기 때
+  "한 번 재생되는 효과" 경고가 뜬다(`getExportWarnings(doc, { effects })`).
+- 진행 방식: params 에 `...PROGRESS_PARAMS`(`_fx-util.js`) — 진행 방식(자동: 시작 프레임+길이 / 직접: 진행 값 키),
+  방향(나타나기/사라지기), 느리게 시작·끝. 렌더에서 `progressOf(f, p, ease)` 하나로 0~1 진행값을 얻는다.
+- 소스 여러 개: `sources: [{key:'a'}, {key:'b'}]` 그대로 지원(속성 패널에 소스 칸이 개수만큼).
+- 흐림: `core/render/blur.js` — `blurCanvas(src, r, borrow, release)`(줄여서 흐린 뒤 늘림, 큰 반지름도 빠름),
+  `variableBlur(ctx, src, dx, dy, r, amount(u,v), borrow, release)`(위치마다 다른 흐림, 단계 3장 섞기).
+- 번지는 경계: `thresholdField(...)`(값 지도가 문턱보다 작은 곳을 칠함 — 잉크·불타기·성에).
+- 가지 선: `branchSegments(rng, o)` + `drawSegments(ctx, segs, progress, width, color, glow)` — 번개·혈관·금.

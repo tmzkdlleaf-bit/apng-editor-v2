@@ -361,7 +361,7 @@ export function initExport(store, editorState, projectApi = null) {
   function renderWarnings() {
     const doc = store.get();
     const loops = settings.loopMode === 'infinite' ? 0 : Math.max(1, settings.loopCount);
-    const ws = getExportWarnings(doc, { loops, motions: motionRegistry });
+    const ws = getExportWarnings(doc, { loops, motions: motionRegistry, effects: effectsRegistry });
     const lines = [];
     if (doc.meta.playback === 'pingpong') lines.push('핑퐁: 앞뒤로 재생됩니다(0→N→0).');
     for (const w of ws) {

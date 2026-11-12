@@ -26,7 +26,7 @@ function _loopCountOf(doc, { playback, loops }) {
 function _pad4(n) { return String(n).padStart(4, '0'); }
 
 // 내보내기 전 경고(막지 않고 안내만). checkLoopSeam + 원샷(퇴장 클립) 경고.
-export function getExportWarnings(doc, { loops = 0, motions = null } = {}) {
+export function getExportWarnings(doc, { loops = 0, motions = null, effects = null } = {}) {
   const warnings = [];
   const seam = checkLoopSeam(doc, motions);
   if (seam.length) warnings.push({ type: 'seam', issues: seam });
@@ -39,6 +39,23 @@ export function getExportWarnings(doc, { loops = 0, motions = null } = {}) {
         type: 'oneshot',
         message: '등장·퇴장 효과가 있어 반복할 때마다 다시 재생됩니다. 해당 레이어를 확인하세요.',
       });
+    }
+    // R28a: 한 번(once) 재생되는 효과(전환·깨짐·터짐) — 반복 재생 때 끊겨 보일 수 있다.
+    if (effects) {
+      const names = new Set();
+      for (const l of Object.values(doc.layers)) {
+        if (!l || l.visible === false) continue;
+        const ids = [];
+        if (l.type === 'effect' && l.effectId) ids.push(l.effectId);
+        for (const fid of (l.fxOrder ?? [])) { const fx = l.fx?.[fid]; if (fx && fx.enabled !== false) ids.push(fx.effectId); }
+        for (const id of ids) { const def = effects.get?.(id); if (def?.once) names.add(def.name ?? id); }
+      }
+      if (names.size) {
+        warnings.push({
+          type: 'oneshot',
+          message: `한 번 재생되는 효과(${[...names].join(', ')})가 있어 반복 재생 때 끊겨 보일 수 있습니다.`,
+        });
+      }
     }
   }
   return warnings;
@@ -112,7 +129,7 @@ export async function exportAnimation(doc, opts = {}) {
       scale, trim, playback, loops: loopCount, range,
       filename, mime: info.mime,
       colors: encOptions.colors, lossless: encOptions.lossless, quality: encOptions.quality,
-      warnings: getExportWarnings(doc, { loops: loopCount, motions }),
+      warnings: getExportWarnings(doc, { loops: loopCount, motions, effects }),
     },
   };
 }
