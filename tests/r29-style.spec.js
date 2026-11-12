@@ -28,7 +28,7 @@ test('공용 도구: 홀드는 루프를 지키고, 크기 3단계 비율, 색 �
   expect(r.once).toBe('fall');
 });
 
-test('불꽃·반짝임 홀드 2: 짝수 프레임과 다음 홀수 프레임이 같은 그림', async ({ page }) => {
+test('불꽃·반짝임 손그림(홀드 자동=2): 짝수 프레임과 다음 홀수 프레임이 같은 그림, 실사는 매 프레임', async ({ page }) => {
   const r = await page.evaluate(async () => {
     const { createRenderEngine } = await import('/src/core/render/frame.js');
     const { effects } = await import('/src/effects/registry.js');
@@ -46,9 +46,10 @@ test('불꽃·반짝임 홀드 2: 짝수 프레임과 다음 홀수 프레임이
     const eq = (a, b) => a.every((v, i) => v === b[i]);
     for (const id of ['flame', 'sparkle']) {
       out[id] = {
-        sameInPair: eq(draw(id, 4, {}), draw(id, 5, {})),
-        diffAcross: !eq(draw(id, 4, {}), draw(id, 6, {})),
-        smoothDiff: !eq(draw(id, 4, { hold: '1' }), draw(id, 5, { hold: '1' })),
+        sameInPair: eq(draw(id, 4, { look: 'cel' }), draw(id, 5, { look: 'cel' })),
+        diffAcross: !eq(draw(id, 4, { look: 'cel' }), draw(id, 6, { look: 'cel' })),
+        smoothDiff: !eq(draw(id, 4, { look: 'cel', hold: '1' }), draw(id, 5, { look: 'cel', hold: '1' })),
+        realSmooth: !eq(draw(id, 4, {}), draw(id, 5, {})),
       };
     }
     return out;
@@ -57,5 +58,36 @@ test('불꽃·반짝임 홀드 2: 짝수 프레임과 다음 홀수 프레임이
     expect(r[id].sameInPair, `${id} 홀드`).toBe(true);
     expect(r[id].diffAcross, `${id} 다음 그림`).toBe(true);
     expect(r[id].smoothDiff, `${id} 매 프레임`).toBe(true);
+    expect(r[id].realSmooth, `${id} 실사 기본은 매 프레임`).toBe(true);
+  }
+});
+
+test('그림체 3종(손그림·반실사·실사): 불꽃·비·반짝임 모두 결정론·루프 이음매·무언가 그림', async ({ page }) => {
+  const r = await page.evaluate(async () => {
+    const { createRenderEngine } = await import('/src/core/render/frame.js');
+    const { effects } = await import('/src/effects/registry.js');
+    const { createDoc, createLayer } = await import('/src/core/doc/schema.js');
+    const mk = (w, h) => { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; };
+    const eng = createRenderEngine({ createCanvas: mk, effects });
+    const S = 128, out = {};
+    const draw = (id, f, params) => {
+      const doc = createDoc({ width: S, height: S, fps: 12, frameCount: 12 });
+      const L = createLayer('effect', { effectId: id }); L.params = params; L.seed = 9;
+      doc.layers[L.id] = L; doc.order.push(L.id);
+      const cv = mk(S, S); eng.renderFrame(cv.getContext('2d'), doc, f, {});
+      return Array.from(cv.getContext('2d').getImageData(0, 0, S, S).data);
+    };
+    const eq = (a, b) => a.every((v, i) => v === b[i]);
+    for (const id of ['flame', 'rain', 'sparkle']) for (const look of ['cel', 'semi', 'real']) {
+      const a = draw(id, 5, { look }), b = draw(id, 5, { look });
+      let ink = 0; for (let i = 3; i < a.length; i += 4) if (a[i] > 10) ink++;
+      out[`${id}/${look}`] = { determ: eq(a, b), loop: eq(draw(id, 0, { look }), draw(id, 12, { look })), ink };
+    }
+    return out;
+  });
+  for (const [k, v] of Object.entries(r)) {
+    expect(v.determ, `${k} 결정론`).toBe(true);
+    expect(v.loop, `${k} 0프레임 = N프레임`).toBe(true);
+    expect(v.ink, `${k} 그려짐`).toBeGreaterThan(30);
   }
 });

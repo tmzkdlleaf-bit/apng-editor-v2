@@ -1,8 +1,10 @@
 // 비 — 빗줄기(비·물보라 합침). 결정론·루프(frac 낙하, 정수 바퀴).
 // R29 손그림 개편(docs/vfx-reference-guide.md 4장 "비·눈"): 앞·중간·뒤 3겹(뒤는 남색 쪽으로 색조 이동),
 //   굵기가 변하는 빗줄기, 길이 편차, 옆으로 흘러가는 비 커튼, 루프당 한 번 돌풍, 왕관 물보라.
-import { TAU, frac, withAlpha, clamp } from './_fx-util.js';
-import { taperPath, teardropPath, mixCss } from './_fx-style.js';
+// R29b 그림체: 손그림(위 그대로) / 반실사(앞 겹 초점 흐림 + 물안개) / 실사(움직임 흐림 빗줄기 + 초점 흐림 + 물안개).
+import { TAU, frac, withAlpha, clamp, drawField, mix } from './_fx-util.js';
+import { taperPath, teardropPath, mixCss, LOOK_PARAM, lookOf, loopFbm } from './_fx-style.js';
+import { blurCanvas } from '../core/render/blur.js';
 
 export default {
   id: 'rain',
@@ -21,6 +23,8 @@ export default {
     { key: 'color', label: '색', type: 'color', default: '#bcd4ff' },
     { key: 'opacity', label: '불투명도', type: 'float', default: 0.55, min: 0, max: 1, step: 0.01 },
     { key: 'depth', label: '앞뒤 겹 수', type: 'int', default: 3, min: 1, max: 3 },
+    LOOK_PARAM('real'),
+    { key: 'mist', label: '물안개', type: 'float', default: 0.4, min: 0, max: 1, step: 0.05 },
     { key: 'veil', label: '빗발 짙고 옅음', type: 'float', default: 0.5, min: 0, max: 1, step: 0.05 },
     { key: 'splashSize', label: '물보라 크기', type: 'float', default: 1, min: 0.3, max: 3, step: 0.1 },
     { key: 'puddle', label: '물웅덩이 파문', type: 'float', default: 0, min: 0, max: 1, step: 0.05 },
@@ -35,7 +39,8 @@ export default {
   ],
   scopes: ['full', 'box'],
   render(ctx, env, p) {
-    const { f, frameCount, w, h, rng } = env;
+    const { f, frameCount, w, h, rng, borrow, release, scale = 1 } = env;
+    const look = lookOf(p);
     const n = Math.max(1, Math.round(p.amount ?? 120));
     const thick = p.thickness ?? 1.5;
     const splash = p.splash ?? true;
@@ -60,8 +65,30 @@ export default {
       : depth === 2 ? [[0.75, 0.55, 0.45, 1, back], [0.6, 1, 1, 2, color]]
       : [[0.8, 0.55, 0.55, 1, back], [0.6, 1, 1, 2, color], [0.08, 2.1, 0.5, 3, front]];
 
-    for (const [cnt, k, a, sp, col] of layers) {
-      ctx.fillStyle = col;
+    const streak = (c, x, y, len, wd, alpha, col) => {
+      if (look === 'real') {
+        // 움직임 흐림: 셔터 동안 지나간 자리 — 길고 아주 가늘고 옅다. 앞쪽 1/3 만 조금 진하게.
+        const L = len * 1.8;
+        c.strokeStyle = col; c.lineCap = 'butt'; c.lineWidth = Math.max(0.5, wd * 0.5);
+        c.globalAlpha = alpha * 0.35;
+        c.beginPath(); c.moveTo(x - dxu * L, y - dyu * L); c.lineTo(x, y); c.stroke();
+        c.globalAlpha = alpha * 0.75;
+        c.beginPath(); c.moveTo(x - dxu * L * 0.35, y - dyu * L * 0.35); c.lineTo(x, y); c.stroke();
+        return;
+      }
+      const L = look === 'semi' ? len * 1.3 : len;
+      c.fillStyle = col;
+      c.globalAlpha = alpha * (look === 'semi' ? 0.85 : 1);
+      // 굵기가 변하는 빗줄기: 위(꼬리)는 가늘게 사라지고 아래(앞쪽)가 굵다
+      c.beginPath();
+      taperPath(c, [[x - dxu * L, y - dyu * L], [x - dxu * L * 0.5, y - dyu * L * 0.5], [x - dxu * L * 0.15, y - dyu * L * 0.15], [x, y]], 0, wd, wd * 0.6, 0.8);
+      c.fill();
+    };
+    layers.forEach(([cnt, k, a, sp, col], li) => {
+      // 반실사·실사: 가장 앞 겹은 초점 밖 — 따로 그려 흐린 뒤 합친다
+      const dof = look !== 'cel' && depth === 3 && li === 2 && ctx.canvas && borrow;
+      let c = ctx, tmp = null;
+      if (dof) { tmp = borrow(ctx.canvas.width, ctx.canvas.height); c = tmp.getContext('2d'); c.setTransform(ctx.getTransform()); }
       const nn = Math.max(1, Math.round(n * cnt));
       for (let i = 0; i < nn; i++) {
         const bx = rng(), by = rng(), spd = sp + Math.floor(rng() * 2);
@@ -70,12 +97,33 @@ export default {
         const t = frac(by + progress * spd);
         const y = t * fall;
         const x = bx * w + dxu * y;
-        ctx.globalAlpha = op * a * curtain(x);
-        // 굵기가 변하는 빗줄기: 위(꼬리)는 가늘게 사라지고 아래(앞쪽)가 굵다
-        ctx.beginPath();
-        taperPath(ctx, [[x - dxu * len, y - dyu * len], [x - dxu * len * 0.5, y - dyu * len * 0.5], [x - dxu * len * 0.15, y - dyu * len * 0.15], [x, y]], 0, wd, wd * 0.6, 0.8);
-        ctx.fill();
+        streak(c, x, y, len, wd * (dof ? 1.6 : 1), op * a * curtain(x) * (dof ? 1.6 : 1), col);
       }
+      if (dof) {
+        const bl = blurCanvas(tmp, Math.max(1.5, thick * 2.5 * scale), borrow, release);
+        ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = 1; ctx.drawImage(bl, 0, 0); ctx.restore();
+        release(bl); release(tmp);
+      }
+    });
+    ctx.globalAlpha = 1;
+
+    // 반실사·실사: 바닥에 낮게 깔려 바람 따라 흐르는 물안개(가로 주기 노이즈 → 루프·가로 이음매 없음)
+    const mist = look === 'cel' ? 0 : clamp(p.mist ?? 0.4, 0, 1);
+    if (mist > 0 && borrow) {
+      const top = groundY - h * 0.22, mh = h - top;
+      const mc = mix(color, '#ffffff', 0.5); // {r,g,b}
+      const flow = progress * 4 * Math.sign(dxu || 1);
+      const cols = 48, rows = 16, seed = Math.floor(vph * 1000);
+      ctx.save();
+      ctx.translate(0, top);
+      drawField(ctx, w, mh, cols, rows, borrow, release, (gx, gy) => {
+        const u = (gx + 0.5) / cols, v = (gy + 0.5) / rows;
+        const fadeV = Math.sin(Math.min(1, v * 1.3) * Math.PI) ; // 위·아래로 옅어짐
+        const nv = loopFbm(u * 4 - flow, v * 2, 4, 0, seed, 3);
+        const a = mist * 0.45 * fadeV * clamp((nv - 0.35) / 0.5, 0, 1);
+        return a > 0.01 ? [mc.r, mc.g, mc.b, a] : null;
+      });
+      ctx.restore();
     }
     ctx.globalAlpha = 1;
 
@@ -100,7 +148,8 @@ export default {
           const px = sx + Math.cos(da) * dist, py = gy + Math.sin(da) * dist * 0.4 - lift;
           const rr = Math.max(0.6, thick * 0.55 * (1 - u * 0.6) * Math.min(ssz, 1.6));
           ctx.beginPath();
-          teardropPath(ctx, px, py, rr, rr * 2.2, Math.atan2(gy - py, sx - px), 0); // 꼬리는 튄 자리 쪽
+          if (look === 'real') ctx.arc(px, py, rr * 0.7, 0, TAU); // 실사: 아주 작은 물방울 점
+          else teardropPath(ctx, px, py, rr, rr * 2.2, Math.atan2(gy - py, sx - px), 0); // 꼬리는 튄 자리 쪽
           ctx.fill();
         }
         ctx.lineWidth = Math.max(0.6, thick * 0.5);

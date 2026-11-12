@@ -1,7 +1,7 @@
 // 손그림 VFX 공용 도구(R29) — docs/vfx-reference-guide.md 의 규칙을 코드로.
 //   "AI/SVG 느낌"(고른 무작위·일정 속도·완벽한 원·2색 그라데이션)을 피하려고 효과들이 함께 쓴다.
 //   전부 결정론: 무작위는 넘겨받은 rng 만 쓴다. DOM 없음. 캔버스는 borrow/release 로만.
-import { clamp, withAlpha, mix, rgba } from './_fx-util.js';
+import { clamp, lerp, withAlpha, mix, rgba, parseColor, hash2 } from './_fx-util.js';
 import { blurToSmall } from '../core/render/blur.js';
 
 // ── 분포 ────────────────────────────────────────────────
@@ -37,10 +37,24 @@ export function holdFrame(f, n, frameCount) {
   const k = Math.max(1, n | 0);
   return k <= 1 ? ff : Math.floor(ff / k) * k;
 }
-export const HOLD_PARAM = (def = 2) => ({
+export const HOLD_PARAM = (def = 'auto') => ({
   key: 'hold', label: '그림 바꾸는 간격(프레임)', type: 'select', default: String(def),
-  options: [{ value: '1', label: '매 프레임(부드럽게)' }, { value: '2', label: '2프레임(손그림)' }, { value: '3', label: '3프레임(더 거칠게)' }],
+  options: [{ value: 'auto', label: '자동(그림체 따라)' }, { value: '1', label: '매 프레임(부드럽게)' }, { value: '2', label: '2프레임(손그림)' }, { value: '3', label: '3프레임(더 거칠게)' }],
 });
+
+// ── 그림체(R29b) ────────────────────────────────────────
+// cel: 애니 셀(딱딱한 색 경계·2프레임) / semi: 반실사 게임풍 / real: 실사 영상풍.
+export const LOOK_PARAM = (def = 'real') => ({
+  key: 'look', label: '그림체', type: 'select', default: def,
+  options: [{ value: 'cel', label: '손그림(애니)' }, { value: 'semi', label: '반실사(게임)' }, { value: 'real', label: '실사(영상)' }],
+});
+export const lookOf = (p, def = 'real') => (p.look === 'cel' || p.look === 'semi' || p.look === 'real') ? p.look : def;
+// 홀드 값: 'auto' 면 손그림 2, 그 외 1.
+export function holdOf(p, look) {
+  const v = p.hold ?? 'auto';
+  if (v === 'auto') return look === 'cel' ? 2 : 1;
+  return Math.max(1, Number(v) | 0 || 1);
+}
 
 export const easeOut = (t, k = 2.5) => 1 - Math.pow(1 - clamp(t, 0, 1), k);
 export const easeIn = (t, k = 2.5) => Math.pow(clamp(t, 0, 1), k);
@@ -58,6 +72,23 @@ export function onceSpan(t, wind = 0.1, hit = 0.1) {
   if (t < wind) return { phase: 'wind', u: t / wind };
   if (t < wind + hit) return { phase: 'hit', u: (t - wind) / hit };
   return { phase: 'fall', u: (t - wind - hit) / (1 - wind - hit) };
+}
+
+// ── 루프 노이즈 ─────────────────────────────────────────
+// 한쪽 축이 주기 P(정수)로 이어지는 값 노이즈 — 시간에 따라 그 축으로 P 만큼 흘려도 0프레임 = N프레임.
+//   py>0 이면 y 축이, px>0 이면 x 축이 주기. 0 이면 그 축은 주기 없음.
+const fade = (t) => t * t * (3 - 2 * t);
+const wrap = (i, P) => (P > 0 ? ((i % P) + P) % P : i);
+export function loopNoise(x, y, px, py, seed = 0) {
+  const xi = Math.floor(x), yi = Math.floor(y), xf = x - xi, yf = y - yi;
+  const x0 = wrap(xi, px), x1 = wrap(xi + 1, px), y0 = wrap(yi, py), y1 = wrap(yi + 1, py);
+  const u = fade(xf), v = fade(yf);
+  return lerp(lerp(hash2(x0, y0, seed), hash2(x1, y0, seed), u), lerp(hash2(x0, y1, seed), hash2(x1, y1, seed), u), v);
+}
+export function loopFbm(x, y, px, py, seed = 0, oct = 3) {
+  let sum = 0, amp = 0.5, fr = 1, norm = 0;
+  for (let i = 0; i < oct; i++) { sum += amp * loopNoise(x * fr, y * fr, px * fr, py * fr, seed + i * 101); norm += amp; amp *= 0.5; fr *= 2; }
+  return sum / norm;
 }
 
 // ── 색 ──────────────────────────────────────────────────
@@ -82,6 +113,23 @@ function addRampStops(g, stops, alpha, soft) {
     g.addColorStop(clamp(end, 0, 1), withAlpha(col, a * alpha));
     prev = end;
   }
+}
+
+// 색 램프 표본: stops=[[t,'#hex'],...] 오름차순, v(0~1) → [r,g,b]. step>0 이면 계단식(경계 폭 step).
+export function makeRamp(stops) {
+  const S = stops.map(([t, c]) => [t, parseColor(c)]);
+  return (v, step = 0) => {
+    if (v <= S[0][0]) return [S[0][1].r, S[0][1].g, S[0][1].b];
+    for (let i = 1; i < S.length; i++) {
+      if (v <= S[i][0]) {
+        const [t0, a] = S[i - 1], [t1, b] = S[i];
+        let k = (v - t0) / Math.max(1e-6, t1 - t0);
+        if (step > 0) k = clamp((k - 1 + step) / step, 0, 1); // 구간 끝 step 폭에서만 다음 색으로
+        return [a.r + (b.r - a.r) * k, a.g + (b.g - a.g) * k, a.b + (b.b - a.b) * k];
+      }
+    }
+    const z = S[S.length - 1][1]; return [z.r, z.g, z.b];
+  };
 }
 
 // 두 색을 섞은 CSS 색 문자열(fillStyle 에 바로). _fx-util.mix 는 {r,g,b} 객체라 fillStyle 에 넣으면 무시된다.
@@ -147,7 +195,7 @@ export function taperPath(ctx, pts, w0, wMax, w1, peak = 0.35) {
 // 디퓨전(지침 3-7): draw(c) 로 그린 것을 축소·흐림해 'lighter' 로 은은히 더한 뒤 원본을 얹는다.
 //   ctx 와 같은 크기·같은 좌표계 임시 캔버스를 쓴다. amount 0 이면 바로 그린다(비용 없음).
 //   rad 는 논리 px(scale 곱함). 두 겹(작고 강함 + 크고 약함)으로 투과광 느낌.
-export function withDiffusion(ctx, env, amount, rad, draw) {
+export function withDiffusion(ctx, env, amount, rad, draw, tight = 1) {
   const { borrow, release, scale = 1 } = env;
   if (!(amount > 0) || !ctx.canvas || !borrow) { draw(ctx); return; }
   const cw = ctx.canvas.width, ch = ctx.canvas.height;
@@ -156,21 +204,34 @@ export function withDiffusion(ctx, env, amount, rad, draw) {
   lc.setTransform(ctx.getTransform());
   draw(lc);
   lc.setTransform(1, 0, 0, 1, 0, 0);
-  const a = blurToSmall(layer, Math.max(1, rad * 0.4 * scale), borrow);
-  const b = blurToSmall(layer, Math.max(1, rad * scale), borrow);
+  // 먼저 1/4 크기로 줄인 사본(빠른 쌍선형)에서 흐린다 — 큰 캔버스를 고품질로 줄이는 비용을 피함
+  const qw = Math.max(1, Math.ceil(cw / 4)), qh = Math.max(1, Math.ceil(ch / 4));
+  const q = borrow(qw, qh);
+  const qc = q.getContext('2d');
+  qc.imageSmoothingEnabled = true;
+  if ('imageSmoothingQuality' in qc) qc.imageSmoothingQuality = 'low';
+  qc.drawImage(layer, 0, 0, cw, ch, 0, 0, cw / 4, ch / 4);
+  const a = tight > 0.05 ? blurToSmall(q, Math.max(1, rad * 0.4 * scale / 4), borrow) : null;
+  const b = blurToSmall(q, Math.max(1, rad * scale / 4), borrow);
+  // 두 겹을 1/4 크기 캔버스(q 재사용)에서 먼저 합친 뒤, 큰 화면으로는 한 번만 늘린다
+  qc.clearRect(0, 0, qw, qh);
+  qc.globalCompositeOperation = 'lighter';
+  if (a) { qc.globalAlpha = clamp(tight, 0, 1); qc.drawImage(a.canvas, 0, 0, a.sw, a.sh, 0, 0, qw, qh); }
+  qc.globalAlpha = 0.6;
+  qc.drawImage(b.canvas, 0, 0, b.sw, b.sh, 0, 0, qw, qh);
+  qc.globalAlpha = 1; qc.globalCompositeOperation = 'source-over';
   ctx.save();
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.imageSmoothingEnabled = true;
   if ('imageSmoothingQuality' in ctx) ctx.imageSmoothingQuality = 'low';
   ctx.globalCompositeOperation = 'lighter';
   ctx.globalAlpha = clamp(amount, 0, 1);
-  ctx.drawImage(a.canvas, 0, 0, a.sw, a.sh, 0, 0, cw, ch);
-  ctx.globalAlpha = clamp(amount, 0, 1) * 0.6;
-  ctx.drawImage(b.canvas, 0, 0, b.sw, b.sh, 0, 0, cw, ch);
+  ctx.drawImage(q, 0, 0, qw, qh, 0, 0, qw * 4, qh * 4);
   ctx.globalCompositeOperation = 'source-over';
   ctx.globalAlpha = 1;
   ctx.drawImage(layer, 0, 0);
   ctx.restore();
-  release(a.canvas); release(b.canvas); release(layer);
+  if (a) release(a.canvas);
+  release(b.canvas); release(q); release(layer);
 }
 export const DIFFUSION_PARAM = (def = 0.5) => ({ key: 'diffusion', label: '빛 번짐', type: 'float', default: def, min: 0, max: 1, step: 0.05 });

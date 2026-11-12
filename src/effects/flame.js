@@ -1,9 +1,10 @@
 // 불꽃 — 아래에서 타오르는 불길. 결정론·루프(정수 바퀴). 시드 의존. (분류: 연출)
+// R29b 그림체 3종: 손그림(셀) / 반실사(노이즈 불길 + 단계 색) / 실사(노이즈 불길 + 연속 흑체색 + 불티 잔상).
 // R29 손그림 개편(docs/vfx-reference-guide.md 4장 "불"):
 //   S자로 휘는 혀 모양 불길을 3단 색(속·몸통·가장자리)으로 겹쳐 그리는 셀 방식,
 //   크기 3단계, 위로 떨어져 나가는 물방울 불씨, 2프레임 홀드, 은은한 빛 번짐.
-import { TAU, frac, clamp } from './_fx-util.js';
-import { sizeTier, gauss, holdFrame, HOLD_PARAM, teardropPath, withDiffusion, DIFFUSION_PARAM } from './_fx-style.js';
+import { TAU, frac, clamp, parseColor, mix, drawField } from './_fx-util.js';
+import { sizeTier, gauss, holdFrame, HOLD_PARAM, LOOK_PARAM, lookOf, holdOf, loopFbm, loopNoise, makeRamp, teardropPath, withDiffusion, DIFFUSION_PARAM } from './_fx-style.js';
 
 // 불길 혀 하나: 바닥(x, base) 에서 위로 th 만큼. sway 는 끝의 옆 흔들림(S자·갈고리 모양을 만든다).
 function tongue(ctx, x, base, wd, th, sway, lean) {
@@ -14,6 +15,84 @@ function tongue(ctx, x, base, wd, th, sway, lean) {
   // 오른쪽 옆선: 왼쪽과 일부러 다르게(비대칭)
   ctx.bezierCurveTo(x + wd * 0.45 + sway * 0.55, base - th * 0.5, x + wd * 1.1, base - th * 0.3, x + wd, base);
   ctx.closePath();
+}
+
+// 반실사·실사: 열(heat) 지도를 작은 칸 격자에서 계산해 색 램프로 칠한다.
+//   열 = (혀들이 만든 바닥 분포) − (높이) + 위로 흐르는 노이즈(루프 주기 노이즈 → 0프레임 = N프레임).
+function renderField(ctx, env, p, o) {
+  const { w, h, borrow, release, scale = 1 } = env;
+  const { look, T, E, progress, height, speed, cCore, cBody, cEdge, op } = o;
+  const real = look === 'real';
+  const turb = clamp(p.turbulence ?? 0.6, 0, 1);
+  const cols = Math.max(24, Math.min(150, Math.round(w * scale / 3.5)));
+  const rows = Math.max(24, Math.min(160, Math.round(h * scale / 3.5)));
+  const hf = height / h;                       // 화면 높이 대비 불 높이
+  const P = 4;                                 // 노이즈 세로 주기(칸) — 진행 1바퀴에 P*speed 만큼 흐름
+  const flow = progress * P * speed;
+  const seed = Math.floor(T[0].ph[0] * 1000);
+  // 색 램프: 투명 → 가장자리(어두운 붉은) → 몸통 → 속 → (실사만) 거의 흰빛
+  const dm = mix(cEdge, '#1a0505', 0.35);
+  const hx = (v) => v.toString(16).padStart(2, '0');
+  const deep = `#${hx(dm.r)}${hx(dm.g)}${hx(dm.b)}`; // makeRamp 은 #hex 만 읽는다
+  const ramp = makeRamp(real
+    ? [[0, deep], [0.2, cEdge], [0.5, cBody], [0.88, cCore], [1, '#fff8e0']]
+    : [[0, cEdge], [0.12, cEdge], [0.45, cBody], [0.88, cCore], [1, cCore]]);
+  // 바닥 분포(열의 근원): 혀마다 가우시안 언덕. 칸 x 별로 미리 계산.
+  const base = new Float32Array(cols);
+  for (let gx = 0; gx < cols; gx++) {
+    const u = (gx + 0.5) / cols;
+    let b = 0;
+    for (const t of T) { const d = (u - t.bx) / Math.max(0.015, (t.wd / w) * 0.9); b = Math.max(b, t.k * Math.exp(-d * d)); }
+    base[gx] = Math.max(b, 0.22); // 바닥은 이어지고 끝만 갈라지게
+  }
+  let maxB = 0; for (const v of base) maxB = Math.max(maxB, v);
+  const field = (c) => drawField(c, w, h, cols, rows, borrow, release, (gx, gy) => {
+    const u = (gx + 0.5) / cols, vy = (gy + 0.5) / rows;
+    const hy = (1 - vy) / hf;                  // 0 바닥 ~ 1 불 높이
+    if (hy > maxB * 1.6) return null;
+    // 휘어진 좌표(도메인 왜곡): 위로 갈수록 옆으로 크게 흔들림
+    const wx = loopNoise(u * 3, hy * 2 + flow * 0.5, 0, P * 2, seed + 7) - 0.5;
+    const ux = clamp(Math.round((u + wx * 0.12 * hy * turb) * cols - 0.5), 0, cols - 1);
+    const b = base[ux];
+    // 세로로 길쭉한 노이즈(가로 촘촘·세로 성김) → 불길이 혀처럼 갈라진다. 위로 흐름(flow).
+    const n = loopFbm(u * 10 * (w / Math.max(w, h)) + wx * 2, hy * 1.5 + flow, 0, P, seed, 3);
+    const r = hy / b;                            // 이 기둥의 불 높이 대비 위치
+    const heat = 1 - Math.pow(r, 1.3) + (n - 0.5) * (0.7 + 1.1 * turb) * (0.25 + r);
+    if (heat <= 0) return null;
+    const a = clamp(heat / 0.08, 0, 1);
+    const v = Math.pow(clamp(heat * 1.1, 0, 1), real ? 1.6 : 1.3);
+    const col = real ? ramp(v) : ramp(v, 0.2);
+    return [col[0], col[1], col[2], a * op];
+  });
+  withDiffusion(ctx, env, clamp(p.diffusion ?? 0.45, 0, 1) * op * 0.6, Math.max(w, h) * 0.08, (c) => {
+    field(c);
+    // 불티: 실사는 빛나는 작은 점 + 짧은 잔상(움직임 흐림), 반실사는 작은 물방울
+    c.save();
+    if (real) c.globalCompositeOperation = 'lighter';
+    for (const e of E) {
+      const t = frac(e.ph + progress * e.spd);
+      if (t > 0.92) continue;
+      const pos = (tt) => [e.src.bx * w + e.drift * w * 0.05 * tt + Math.sin(tt * TAU + e.ph * TAU) * w * 0.012, h - height * e.src.k * (0.45 + tt * 0.9)];
+      const [x, y] = pos(t);
+      const life = 1 - t * t;
+      const flick = 0.6 + 0.4 * Math.sin((t * 7 + e.ph) * TAU);
+      if (real) {
+        const [px, py] = pos(Math.max(0, t - 0.06));
+        const r = Math.max(0.6, e.r0 * 0.35 * (1 - t * 0.6));
+        c.strokeStyle = cBody; c.lineCap = 'round'; c.lineWidth = r * 1.4;
+        c.globalAlpha = op * life * flick * 0.8;
+        c.beginPath(); c.moveTo(px, py); c.lineTo(x, y); c.stroke();
+        c.fillStyle = cCore;
+        c.beginPath(); c.arc(x, y, r, 0, TAU); c.fill();
+      } else {
+        const r = e.r0 * 0.7 * (1 - t * 0.75);
+        c.globalAlpha = op * life;
+        c.fillStyle = t < 0.5 ? cBody : cEdge;
+        c.beginPath(); teardropPath(c, x, y, r, r * 2.2, Math.PI / 2 + e.drift * 0.3, e.drift * 0.4); c.fill();
+      }
+    }
+    c.restore();
+  }, 0.15);
 }
 
 export default {
@@ -31,8 +110,10 @@ export default {
     { key: 'color2', label: '몸통 색', type: 'color', default: '#ff7a1a' },
     { key: 'color3', label: '가장자리 색', type: 'color', default: '#b3123e' },
     { key: 'embers', label: '불씨', type: 'float', default: 0.6, min: 0, max: 1, step: 0.05 },
-    HOLD_PARAM(2),
-    DIFFUSION_PARAM(0.35),
+    LOOK_PARAM('real'),
+    { key: 'turbulence', label: '일렁임', type: 'float', default: 0.6, min: 0, max: 1, step: 0.05 },
+    HOLD_PARAM('auto'),
+    DIFFUSION_PARAM(0.45),
     { key: 'opacity', label: '불투명도', type: 'float', default: 0.95, min: 0, max: 1, step: 0.01 },
   ],
   presets: [
@@ -48,7 +129,8 @@ export default {
     const speed = Math.max(1, Math.round(p.speed ?? 2));
     const cCore = p.color ?? '#fff4b8', cBody = p.color2 ?? '#ff7a1a', cEdge = p.color3 ?? '#b3123e';
     const op = clamp(p.opacity ?? 0.95, 0, 1);
-    const hold = Math.max(1, Number(p.hold ?? 2) | 0);
+    const look = lookOf(p);
+    const hold = holdOf(p, look);
     const progress = holdFrame(f, hold, frameCount) / Math.max(1, frameCount);
     const emb = clamp(p.embers ?? 0.6, 0, 1);
 
@@ -80,7 +162,8 @@ export default {
       E.push({ src: T[order[Math.floor(rng() * big)]], ph: rng(), spd: speed + 1 + Math.floor(rng() * 2), drift: (rng() - 0.5) * 2, r0: (2 + rng() * 3.5) * Math.max(w, h) / 220 });
     }
 
-    withDiffusion(ctx, env, clamp(p.diffusion ?? 0.35, 0, 1) * op, Math.max(w, h) * 0.06, (c) => {
+    if (look !== 'cel') { renderField(ctx, env, p, { look, T, E, progress, height, speed, cCore, cBody, cEdge, op }); return; }
+    withDiffusion(ctx, env, clamp(p.diffusion ?? 0.45, 0, 1) * op, Math.max(w, h) * 0.06, (c) => {
       c.globalAlpha = op;
       // 1) 가장자리(가장 크고, 색조를 옮긴 어두운 색) → 2) 몸통 → 3) 속(흰빛). 단마다 딱딱한 경계.
       const bands = [[cEdge, 1, 1, 0], [cBody, 0.82, 0.8, 0.03], [cCore, 0.5, 0.42, 0.14]];
