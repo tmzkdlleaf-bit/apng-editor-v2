@@ -96,6 +96,15 @@ import heatHaze from './heat-haze.js';
 import mosaic from './mosaic.js';
 import partialBlur from './partial-blur.js';
 
+// 전환 (R28d)
+import inkWipe from './ink-wipe.js';
+import shatter from './shatter.js';
+import paperBurn from './paper-burn.js';
+import criticalBurst from './critical-burst.js';
+import cardFlip from './card-flip.js';
+import holoTransition from './holo-transition.js';
+import holoFoil from './holo-foil.js';
+
 // 시험용 효과 3개는 앱 목록에서 뺐다(R27). 테스트만 globalThis.__APNG_TEST_REGISTRY 를 켜고 쓴다
 // (tests/helpers/fixtures.js 가 모든 페이지에 켠다). 앱에서는 이 표시가 없어 등록되지 않는다.
 const _testFx = [testDots, testLightRays, testSourceMirror];
@@ -119,6 +128,8 @@ const _all = [
   crack, drip, madness, pulseBorder, veins,
   // 변형 (R28c)
   dropShadow, bloom, heatHaze, mosaic, partialBlur,
+  // 전환 (R28d) — 홀로 코팅은 반복형이라 '빛' 분류
+  inkWipe, shatter, paperBurn, criticalBurst, cardFlip, holoTransition, holoFoil,
 ];
 
 // "밝은 배경용"(R27): lightBg:true 인 효과에 고급 파라미터를 붙인다. 엔진(fx-run)이 값을 읽어 처리.

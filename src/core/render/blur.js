@@ -30,7 +30,7 @@ export function blurCanvas(src, r, borrow, release) {
   if (!(r > 0.5)) { oc.drawImage(src, 0, 0); return out; }
   const b = blurToSmall(src, r, borrow);
   oc.imageSmoothingEnabled = true;
-  if ('imageSmoothingQuality' in oc) oc.imageSmoothingQuality = 'high';
+  if ('imageSmoothingQuality' in oc) oc.imageSmoothingQuality = 'low'; // 늘리기는 쌍선형이면 충분(high 는 느림)
   oc.drawImage(b.canvas, 0, 0, b.sw, b.sh, 0, 0, W, H);
   release(b.canvas);
   return out;
@@ -76,6 +76,7 @@ export function variableBlur(ctx, src, dx, dy, r, amount, borrow, release, mapRe
     bc.drawImage(wmap, 0, 0, mw, mh, 0, 0, bl.sw, bl.sh);
     bc.globalCompositeOperation = 'source-over';
     ctx.imageSmoothingEnabled = true;
+    if ('imageSmoothingQuality' in ctx) ctx.imageSmoothingQuality = 'low';
     ctx.drawImage(bl.canvas, 0, 0, bl.sw, bl.sh, dx, dy, W, H);
     release(bl.canvas);
   }

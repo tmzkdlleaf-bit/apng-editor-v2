@@ -92,7 +92,7 @@ export function drawField(ctx, w, h, cols, rows, borrow, release, cell) {
   tc.putImageData(img, 0, 0);
   ctx.save();
   ctx.imageSmoothingEnabled = true;
-  if ('imageSmoothingQuality' in ctx) ctx.imageSmoothingQuality = 'high';
+  if ('imageSmoothingQuality' in ctx) ctx.imageSmoothingQuality = 'low';
   ctx.drawImage(tmp, 0, 0, cols, rows, 0, 0, w, h);
   ctx.restore();
   release(tmp);
@@ -207,4 +207,35 @@ export function drawSegments(ctx, segsList, progress, width, color, glow = 0) {
   if (glow > 0) stroke(width * 2.4, 0.3 * glow);
   stroke(width, 1);
   ctx.restore();
+}
+
+// ── R28d 전환 공용 ───────────────────────────────────────────────────────
+// 전환 효과의 소스 두 칸: 나가는 화면(out) · 들어오는 화면(in). 둘 다 없어도 되고, 없으면 투명.
+export const TRANSITION_SOURCES = [
+  { key: 'out', label: '나가는 화면' },
+  { key: 'in', label: '들어오는 화면(없으면 투명)' },
+];
+export function transitionCanvases(sources) {
+  const get = (k) => (sources || []).find((s) => s.key === k)?.canvas ?? null;
+  return { out: get('out'), inn: get('in') };
+}
+// 진행 0·1 끝에서는 섞지 않고 그대로 그린다(전환 시작·끝 프레임이 원래 화면과 픽셀 동일).
+export function drawPlain(ctx, canvas, pad) {
+  if (!canvas) return;
+  ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.drawImage(canvas, pad, pad); ctx.restore();
+}
+// 그림이 있는 범위(알파 > 0) — 64×64 로 줄여 찾는다. { x0, y0, x1, y1 } (캔버스 px) 또는 null.
+export function alphaBounds(canvas, borrow, release) {
+  const P = 64, W = canvas.width, H = canvas.height;
+  const probe = borrow(P, P);
+  const pc = probe.getContext('2d');
+  pc.drawImage(canvas, 0, 0, W, H, 0, 0, P, P);
+  const d = pc.getImageData(0, 0, P, P).data;
+  release(probe);
+  let r0 = P, r1 = -1, c0 = P, c1 = -1;
+  for (let y = 0; y < P; y++) for (let x = 0; x < P; x++) if (d[(y * P + x) * 4 + 3] > 0) {
+    if (y < r0) r0 = y; if (y > r1) r1 = y; if (x < c0) c0 = x; if (x > c1) c1 = x;
+  }
+  if (r1 < 0) return null;
+  return { x0: Math.max(0, (c0 - 0.5) * W / P), y0: Math.max(0, (r0 - 0.5) * H / P), x1: Math.min(W, (c1 + 1.5) * W / P), y1: Math.min(H, (r1 + 1.5) * H / P) };
 }
