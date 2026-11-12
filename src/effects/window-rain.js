@@ -16,6 +16,9 @@ export default {
     { key: 'refraction', label: '굴절 세기', type: 'float', default: 0.6, min: 0, max: 1, step: 0.01 },
     { key: 'color', label: '색', type: 'color', default: '#cfe2ff' },
     { key: 'opacity', label: '불투명도', type: 'float', default: 0.85, min: 0, max: 1, step: 0.01 },
+    // R28e — 기본값이면 예전과 픽셀 동일
+    { key: 'trail', label: '지나간 자리 물길', type: 'float', default: 0, min: 0, max: 1, step: 0.05 },
+    { key: 'flip', label: '물방울 속 뒤집혀 비침', type: 'bool', default: false },
   ],
   scopes: ['full', 'box'],
   sources: [{ key: 'bg', label: '배경' }],
@@ -61,6 +64,11 @@ export default {
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       const mag = 1 + refraction * 0.15;
       const dw = src.width * mag, dh = src.height * mag;
+      if (p.flip) {
+        // 진짜 물방울처럼 위아래가 뒤집혀 비친다(R28e)
+        ctx.translate(0, pad * 2 + src.height);
+        ctx.scale(1, -1);
+      }
       ctx.drawImage(src, pad - (dw - src.width) / 2, pad - (dh - src.height) / 2, dw, dh);
     } else {
       ctx.fillStyle = withAlpha(color, op);
@@ -76,5 +84,32 @@ export default {
       ctx.beginPath(); ctx.arc(b.x - b.r * 0.3, b.y - b.r * 0.3, b.r * 0.22, 0, TAU); ctx.fill();
     }
     ctx.restore();
+
+    // 4) 지나간 자리 물길(R28e): 흘러내린 방울 위로 젖은 길 + 남겨진 작은 방울. 0 이면 그리지 않음.
+    const trail = clamp(p.trail ?? 0, 0, 1);
+    if (trail > 0) {
+      ctx.save();
+      ctx.globalCompositeOperation = 'destination-over';
+      for (const b of beads) {
+        if (!b.sliding || b.t < 0.03) continue;
+        const top = b.y - b.t * h * 0.6;
+        const g = ctx.createLinearGradient(0, top, 0, b.y);
+        g.addColorStop(0, withAlpha(color, 0));
+        g.addColorStop(1, withAlpha(color, op * 0.35 * trail));
+        ctx.fillStyle = g;
+        ctx.fillRect(b.x - b.r * 0.35, top, b.r * 0.7, b.y - top);
+      }
+      ctx.restore();
+      ctx.fillStyle = withAlpha(color, op * 0.8 * trail);
+      for (const b of beads) {
+        if (!b.sliding || b.t < 0.1) continue;
+        const top = b.y - b.t * h * 0.6;
+        for (let k = 1; k <= 3; k++) {
+          const yy = top + (b.y - top) * (k / 4);
+          const rr = b.r * 0.18 * (1 + 0.5 * Math.sin(k * 2.3 + b.x));
+          ctx.beginPath(); ctx.arc(b.x + Math.sin(k * 1.7 + b.y) * b.r * 0.2, yy, rr, 0, TAU); ctx.fill();
+        }
+      }
+    }
   },
 };

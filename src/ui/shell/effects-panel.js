@@ -11,7 +11,7 @@ import { setDrag, DND_FX, DND_MOTION } from './panel-dnd.js';
 import { showToast } from './status.js';
 
 // 효과 분류 표시 순서(프롬프트). 목록에 없는 분류는 뒤에 '기타'로.
-const FX_CATS = ['빛', '날씨', '파티클', '오버레이', '사이버', '판타지', '연출'];
+const FX_CATS = ['빛', '날씨', '파티클', '오버레이', '사이버', '판타지', '연출', '공포', '변형', '전환']; // R28: 공포·변형·전환 추가
 const MOTION_KINDS = [['enter', '등장'], ['exit', '퇴장'], ['loop', '반복'], ['emphasis', '강조']];
 
 export function createEffectsPanel(store, editorState) {

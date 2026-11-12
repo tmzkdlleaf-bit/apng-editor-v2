@@ -31,6 +31,11 @@ import leaves from './leaves.js';
 import sandstorm from './sandstorm.js';
 import windBend from './wind-bend.js';
 import grass from './grass.js';
+import lightning from './lightning.js';
+import fireflies from './fireflies.js';
+import aurora from './aurora.js';
+import clouds from './clouds.js';
+import frost from './frost.js';
 
 // 파티클 (S5-2)
 import sparks from './sparks.js';
@@ -114,6 +119,7 @@ const _all = [
   sparkle, glow, bokeh, lightBeams, sheen, wipe, lensFlare, caustics, lightLeak, candle, flashlight, stageLights, neon,
   // 날씨
   smoke, rain, snow, petals, fog, windowRain, leaves, sandstorm, windBend, grass,
+  lightning, fireflies, aurora, clouds, frost,   // R28e
   // 파티클
   sparks, particles, bubbles, emotes,
   // 오버레이
