@@ -52,6 +52,7 @@ export function createMasksSection(store, editorState, getStageDeps) {
       if (bm) return { w: bm.width ?? bm.naturalWidth ?? 200, h: bm.height ?? bm.naturalHeight ?? 200 };
     }
     if (layer.type === 'effect' && layer.scope === 'box' && layer.box) return { w: layer.box.w ?? 100, h: layer.box.h ?? 100 };
+    if (layer.type === 'effect') { const m = store.get().meta; return { w: m.width, h: m.height }; } // R28c: 화면 전체 효과
     return { w: 200, h: 200 };
   }
 

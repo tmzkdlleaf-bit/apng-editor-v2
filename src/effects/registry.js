@@ -89,6 +89,13 @@ import madness from './madness.js';
 import pulseBorder from './pulse-border.js';
 import veins from './veins.js';
 
+// 변형 (R28c)
+import dropShadow from './drop-shadow.js';
+import bloom from './bloom.js';
+import heatHaze from './heat-haze.js';
+import mosaic from './mosaic.js';
+import partialBlur from './partial-blur.js';
+
 // 시험용 효과 3개는 앱 목록에서 뺐다(R27). 테스트만 globalThis.__APNG_TEST_REGISTRY 를 켜고 쓴다
 // (tests/helpers/fixtures.js 가 모든 페이지에 켠다). 앱에서는 이 표시가 없어 등록되지 않는다.
 const _testFx = [testDots, testLightRays, testSourceMirror];
@@ -110,6 +117,8 @@ const _all = [
   flame, fireworks, confetti, speedLines, comicFlash, impactFlash, ripple, shockwave, countdown, iris, letterbox, curtain, spotlight, focusSun,
   // 공포 (R28b)
   crack, drip, madness, pulseBorder, veins,
+  // 변형 (R28c)
+  dropShadow, bloom, heatHaze, mosaic, partialBlur,
 ];
 
 // "밝은 배경용"(R27): lightBg:true 인 효과에 고급 파라미터를 붙인다. 엔진(fx-run)이 값을 읽어 처리.

@@ -36,11 +36,13 @@ function _drawPath(ctx, path) {
 }
 
 // 가리기 하나의 알파(흐림·넓히기·반전·불투명도 반영)를 one 캔버스에 그린다.
+// pad 는 숫자(가로·세로 같음) 또는 { x, y }(R28c: 화면 전체 효과 레이어 — 보기 오프셋이 가로·세로 다름).
 function _buildOne(pool, W, H, k, pad, path, feather, expand, opacity, invert) {
+  const px = typeof pad === 'object' ? pad.x : pad, py = typeof pad === 'object' ? pad.y : pad;
   let one = pool.borrow(W, H);
   let oc = one.getContext('2d');
   oc.setTransform(1, 0, 0, 1, 0, 0); oc.clearRect(0, 0, one.width, one.height);
-  oc.setTransform(k, 0, 0, k, pad, pad);
+  oc.setTransform(k, 0, 0, k, px, py);
   oc.fillStyle = `rgba(255,255,255,${opacity})`;
   _drawPath(oc, path); oc.fill();
   if (expand) {
@@ -73,7 +75,7 @@ function _buildMaskAlpha(env, layer) {
     fe: evalProp(m.feather ?? { value: 0 }, f), ex: evalProp(m.expand ?? { value: 0 }, f),
     op: evalProp(m.opacity ?? { value: 1 }, f), path: evalProp(m.path, f),
   })).join('|');
-  const key = `${layer.id}:mask:${W}x${H}:k${k.toFixed(3)}:p${pad}:${sig}`;
+  const key = `${layer.id}:mask:${W}x${H}:k${k.toFixed(3)}:p${typeof pad === 'object' ? pad.x + ',' + pad.y : pad}:${sig}`;
   const hit = cache.get(key);
   if (hit) return hit;
 

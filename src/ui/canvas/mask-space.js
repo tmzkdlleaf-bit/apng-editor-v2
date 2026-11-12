@@ -17,6 +17,9 @@ export function maskSpace(layer, doc, assets) {
   if (layer.type === 'effect' && layer.scope === 'box' && layer.box) {
     return { cw: layer.box.w ?? 100, ch: layer.box.h ?? 100, ax: 0.5, ay: 0.5 };
   }
+  if (layer.type === 'effect') { // R28c: 화면 전체 효과 — 가리기 좌표 = 문서 좌표(왼쪽 위 0,0)
+    return { cw: doc?.meta?.width ?? 200, ch: doc?.meta?.height ?? 200, ax: 0, ay: 0 };
+  }
   return { cw: 200, ch: 200, ax, ay }; // text·그 밖은 근사
 }
 

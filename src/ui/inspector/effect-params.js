@@ -134,6 +134,11 @@ export function createEffectParams(store, editorState, { effectDef, targets }) {
   }
 
   function _makeParamControl(pd) {
+    // R28c: 'note' — 값이 없는 안내 한 줄(예: 부분 흐림 '펜으로 지정'은 가리기 칸에서 그린다).
+    if (pd.type === 'note') {
+      const n = document.createElement('div'); n.className = 'info-note fx-note'; n.textContent = pd.label;
+      return n;
+    }
     const t0 = targets()[0];
     const f = editorState.get().f;
     const val = _curVal(t0, pd, f);

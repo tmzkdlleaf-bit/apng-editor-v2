@@ -4,6 +4,7 @@ import { applyTransform } from '../matrix.js';
 import { blendToComposite } from '../blend.js';
 import { evalEffectParams } from '../../anim/params.js';
 import { runEffect } from '../fx-run.js';
+import { hasActiveMasks, applyMasksToWork } from '../shape-mask.js';
 
 export function renderEffectLayer(outputCtx, layer, worldTr, totalAlpha, rctx) {
   const {
@@ -89,6 +90,15 @@ export function renderEffectLayer(outputCtx, layer, worldTr, totalAlpha, rctx) {
     pool,
   }, evalEffectParams(layer, effect, f));
   for (const c of _sourceCanvases) pool.release(c);
+
+  // R28c: 펜·도형 가리기(R21)를 화면 전체 효과 레이어에도. 가리기 좌표 = 문서 좌표(레이어 위치만큼 이동).
+  //   부분 흐림 '펜으로 지정', 아지랑이·모자이크 '가리기로 지정'이 이 경로를 쓴다.
+  if (scope === 'full' && hasActiveMasks(layer)) {
+    applyMasksToWork(contentCanvas, {
+      f, k: renderScale, W: contentW, H: contentH, pool, cache: rctx.cache,
+      pad: { x: PAD_PX - viewOffsetX, y: PAD_PX - viewOffsetY },
+    }, layer);
+  }
 
   const hasMask = !!(layer.mask && rctx.renderMask);
 
