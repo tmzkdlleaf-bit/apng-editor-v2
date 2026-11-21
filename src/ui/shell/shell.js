@@ -37,6 +37,7 @@ const TL_MAX       = 600;
 const STAGE_MIN    = 280;   // 그림판 칸 최소(R23d item 11)
 const BOTTOMBAR_H  = 30;    // 화면 아래 줄
 const CHROME_H     = 48 + 34; // topbar + toolbar
+const NARROW_PX    = 1280;  // 이 폭 이하로 "줄어드는 순간" 왼쪽 패널을 접는다(R33-2, 바꿀 수 있는 기본값)
 
 function _vh() { return (typeof window !== 'undefined' && window.innerHeight) ? window.innerHeight : 900; }
 function _clampTl(h) { return Math.min(TL_MAX, Math.max(TL_MIN, Math.round(h))); }
@@ -144,7 +145,7 @@ export function init(store, editorState, projectApi = null) {
   leftEffectsBody.setAttribute('data-region', 'effects');
   // R23c 2-4: 좁은 화면(1280px 이하)에서 처음 열면(저장된 배치 없음) 왼쪽 패널을 접힌 채로 시작.
   let _noLeftWs = true; try { _noLeftWs = !localStorage.getItem('apng2.ws.left'); } catch {}
-  const _narrow = (typeof window !== 'undefined' && window.innerWidth <= 1280);
+  const _narrow = (typeof window !== 'undefined' && window.innerWidth <= NARROW_PX);
   const leftDock = createPanelDock({
     side: 'left', key: 'left', widthVar: '--left-width',
     defaultWidth: 240, minWidth: 180, maxWidth: 420, defaultActive: 'project',
@@ -216,7 +217,16 @@ export function init(store, editorState, projectApi = null) {
     applyTlHeight(mainArea, defaultTlHeight());
   });
   // 창 크기가 바뀌면 다시 적용(그림판 최소 보장 · 저장값 없으면 창 높이 따라감).
-  window.addEventListener('resize', () => applyTlHeight(mainArea, desiredTlHeight()));
+  //   R33-2: 넓음 → 좁음(NARROW_PX 이하)으로 "건너가는 순간"에만, 왼쪽 패널이 펼쳐져 있으면 접는다.
+  //   사용자가 그 뒤 직접 펼치면 존중한다(다시 넓어졌다 좁아지기 전엔 다시 접지 않는다).
+  //   다시 넓어질 때 자동으로 펼치지는 않는다(사용자가 접어 둔 것일 수 있다).
+  let _prevNarrow = _narrow;
+  window.addEventListener('resize', () => {
+    applyTlHeight(mainArea, desiredTlHeight());
+    const nowNarrow = window.innerWidth <= NARROW_PX;
+    if (nowNarrow && !_prevNarrow && !leftDock.getState().collapsed) leftDock.collapse(true);
+    _prevNarrow = nowNarrow;
+  });
 
   // 캔버스 스테이지
   const canvasRegion = app.querySelector('[data-region="canvas"]');

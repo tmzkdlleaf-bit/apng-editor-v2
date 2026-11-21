@@ -6,7 +6,16 @@
 
 /* ── 재생줄(머리줄) item 5 ─────────────────────────────────────────── */
 .timeline-head { min-height: 36px; }
-.tl-transport { display: flex; align-items: center; gap: 2px; }
+/* R33-1: 재생 버튼·프레임은 고정, 나머지는 가로 스크롤 칸에서 줄어든다. */
+.tl-transport { display: flex; align-items: center; gap: 2px; flex: none; }
+.timeline-head .tl-frame-info { flex: none; }
+.tl-head-rest {
+  display: flex; align-items: center; gap: var(--sp-2);
+  flex: 1 1 auto; min-width: 0;
+  overflow-x: auto; overflow-y: hidden;
+  scrollbar-width: thin;
+}
+.tl-head-rest > * { flex: none; }
 .tl-sep { width: 1px; height: 18px; background: var(--line); margin: 0 var(--sp-1); flex: none; }
 .tl-frame-info { display: flex; align-items: baseline; gap: 2px; font-size: var(--fs-2); color: var(--text2); }
 .tl-frame-cur {

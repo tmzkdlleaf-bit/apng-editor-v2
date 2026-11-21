@@ -125,9 +125,83 @@ export function createBottombar(store, editorState) {
 
   // 프레임 위치(1/24)는 재생 줄에만 둔다(R23d item 11) — 오른쪽 공간은 비워 둔다.
   const spacer = document.createElement('div'); spacer.className = 'bb-spacer';
-  el.append(zoom.el, resWrap, checker.w, guides.w, safe.w, gridWrap, snap.w, onionWrap, spacer);
 
+  // ── R33-1: 좁은 화면 넘침 처리 "더 보기" ────────────────────────────────
+  //   칸은 줄이지 않는다(줄이면 드롭다운이 옆 칸을 덮는 R23d-3 재발). 대신 폭이 모자라면
+  //   덜 중요한 칸부터 숨겨 맨 오른쪽 "더 보기" 드롭다운으로 옮긴다.
+  //   숨기는 순서(바꿀 수 있는 기본값): 겹침 → 격자 → 안전 영역 → 가이드 → 투명 격자.
+  //   배율·해상도·스냅은 늘 남긴다.
+  const HIDE_ORDER = [onionWrap, gridWrap, safe.w, guides.w, checker.w];
+  const RESTORE_SLACK = 16;   // 되살릴 때 여유(깜빡임 방지)
+  const moreBtn = document.createElement('button');
+  moreBtn.type = 'button'; moreBtn.className = 'bb-more';
+  moreBtn.setAttribute('aria-label', '더 보기'); moreBtn.textContent = '더 보기 ▾';
+  moreBtn.style.display = 'none';
+  const moreMenu = document.createElement('div');
+  moreMenu.className = 'bb-more-menu'; moreMenu.hidden = true;
+  document.body.appendChild(moreMenu);
+
+  // 바(막대) 안의 정렬 순서. 숨겨진 칸은 moreMenu 로, 나머지는 이 순서대로 바에 둔다.
+  const BAR_ORDER = [zoom.el, resWrap, checker.w, guides.w, safe.w, gridWrap, snap.w, onionWrap, spacer];
+
+  let _hidden = 0;
+  function _applyHidden(n) {
+    _hidden = n;
+    const hiddenSet = new Set(HIDE_ORDER.slice(0, n));
+    for (const c of BAR_ORDER) c.remove();
+    moreBtn.remove();
+    for (const c of BAR_ORDER) (hiddenSet.has(c) ? moreMenu : el).appendChild(c);
+    if (n > 0) el.appendChild(moreBtn);   // 맨 오른쪽
+    moreBtn.style.display = n > 0 ? '' : 'none';
+    if (n === 0) _closeMore();
+  }
+  // 자연 내용 폭을 잰다. flex 스페이서(flex:1)가 scrollWidth 를 늘 clientWidth 로 가려
+  //   "남는 여유"를 못 재게 하므로, 스페이서를 잠깐 빼고 실제 칸들의 오른쪽 끝으로 잰다.
+  function _measure() {
+    const sd = spacer.style.display; spacer.style.display = 'none';
+    const style = getComputedStyle(el);
+    const elLeft = el.getBoundingClientRect().left;
+    let maxRight = elLeft;
+    for (const c of el.children) {
+      if (c === spacer) continue;
+      const r = c.getBoundingClientRect();
+      if (r.width === 0) continue;
+      if (r.right > maxRight) maxRight = r.right;
+    }
+    spacer.style.display = sd;
+    return { content: (maxRight - elLeft) + (parseFloat(style.paddingRight) || 0), avail: el.clientWidth };
+  }
+  function _reflow() {
+    _applyHidden(_hidden);
+    let m = _measure();
+    // 넘치면 덜 중요한 칸부터 숨긴다.
+    while (_hidden < HIDE_ORDER.length && m.content > m.avail) { _applyHidden(_hidden + 1); m = _measure(); }
+    // 여유(RESTORE_SLACK)가 생기면 되살린다 — 숨김/보임 경계에서 깜빡이지 않게 여유를 둔다.
+    while (_hidden > 0) {
+      _applyHidden(_hidden - 1); m = _measure();
+      if (m.content > m.avail - RESTORE_SLACK) { _applyHidden(_hidden + 1); break; }
+    }
+  }
+
+  // "더 보기" 드롭다운 열고 닫기(다른 드롭다운과 같은 방식).
+  function _closeMore() { if (!moreMenu.hidden) { moreMenu.hidden = true; document.removeEventListener('pointerdown', _onMoreOut, true); } }
+  function _onMoreOut(e) { if (!moreMenu.contains(e.target) && e.target !== moreBtn) _closeMore(); }
+  function _openMore() {
+    moreMenu.hidden = false;
+    const r = moreBtn.getBoundingClientRect();
+    moreMenu.style.left = Math.max(8, Math.min(r.left, window.innerWidth - moreMenu.offsetWidth - 8)) + 'px';
+    // 아래 줄은 화면 아래쪽이라 위로 펼친다.
+    moreMenu.style.bottom = (window.innerHeight - r.top + 4) + 'px';
+    moreMenu.style.top = '';
+    setTimeout(() => document.addEventListener('pointerdown', _onMoreOut, true), 0);
+  }
+  moreBtn.addEventListener('click', (e) => { e.stopPropagation(); moreMenu.hidden ? _openMore() : _closeMore(); });
+
+  _applyHidden(0);
   _syncOnion();
+
+  const ro = new ResizeObserver(() => _reflow());
+  ro.observe(el);
 
   const unsubES = editorState.subscribe((p) => {
     if ('zoom' in p) zoom.sync();
@@ -147,6 +221,7 @@ export function createBottombar(store, editorState) {
 
   function destroy() {
     unsubES(); zoom.destroy?.(); resDd.destroy?.(); gridStepDd.destroy?.(); onionBeforeDd.destroy?.(); onionAfterDd.destroy?.();
+    ro.disconnect(); _closeMore(); moreMenu.remove();
   }
   return { el, destroy };
 }

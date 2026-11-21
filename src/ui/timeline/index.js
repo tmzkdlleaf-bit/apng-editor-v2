@@ -99,7 +99,14 @@ export function initTimeline(timelineEl, store, editorState, playback, deps = {}
   });
 
   const sep = () => { const s = document.createElement('span'); s.className = 'tl-sep'; return s; };
-  head.append(transport, sep(), frameWrap, sep(), loopGroup, sep(), autoKeyBtn, snapCanvasBtn, snapTlBtn, fitBtn, graphBtn, blurBtn, sep(), recBtn);
+  // R33-1: 좁은 화면에서 머리줄이 오른쪽 패널 밑으로 넘치지 않게.
+  //   재생 버튼(transport)과 프레임 표시(frameWrap)는 늘 보이게 고정하고,
+  //   나머지 버튼(반복·자동키·스냅·맞춤·그래프·번짐·기록)은 가로 스크롤 칸(.tl-head-rest)에 담는다.
+  //   가로 스크롤을 고른 이유: 이들은 상태 토글 버튼이라 "더 보기" 드롭다운에 넣으면 켜짐 표시가 가려진다.
+  const headRest = document.createElement('div');
+  headRest.className = 'tl-head-rest';
+  headRest.append(loopGroup, sep(), autoKeyBtn, snapCanvasBtn, snapTlBtn, fitBtn, graphBtn, blurBtn, sep(), recBtn);
+  head.append(transport, sep(), frameWrap, sep(), headRest);
 
   // 레이어 목록(머리 칸에 [+ 레이어] 포함) · 트랙 캔버스 · 그래프 캔버스(겹침)
   const layerList   = initLayerList(layersEl, store, editorState, deps);
