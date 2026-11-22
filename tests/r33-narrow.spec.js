@@ -104,6 +104,35 @@ test('[더 보기 Esc] 더 보기 메뉴를 열고 Esc 를 누르면 닫힌다',
   await expect(page.locator('.bb-more-menu')).toBeHidden();
 });
 
+test('[Esc 전파] 드롭다운·더 보기를 Esc 로 닫아도 레이어 선택은 풀리지 않는다(메뉴 없을 때만 풀림)', async ({ page }) => {
+  await openApp(page, 900, 700);
+  // 레이어 하나 선택
+  await page.evaluate(() => {
+    const id = window.__store.get().order[0];
+    window.__editorState.set({ selection: [id] });
+  });
+  const selLen = () => page.evaluate(() => window.__editorState.get().selection.length);
+  expect(await selLen()).toBe(1);
+
+  // 해상도 드롭다운 열고 Esc → 드롭다운만 닫히고 선택은 유지(keys.js 전역 Esc 로 안 번짐)
+  await page.locator('[aria-label="미리보기 해상도"]').click();
+  await expect(page.locator('.dropdown-list:not([hidden])')).toHaveCount(1);
+  await page.keyboard.press('Escape');
+  await expect(page.locator('.dropdown-list:not([hidden])')).toHaveCount(0);
+  expect(await selLen()).toBe(1);
+
+  // 더 보기 열고 Esc → 메뉴만 닫히고 선택 유지
+  await page.locator('.bb-more').click();
+  await expect(page.locator('.bb-more-menu')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.locator('.bb-more-menu')).toBeHidden();
+  expect(await selLen()).toBe(1);
+
+  // 메뉴가 하나도 안 열렸을 때 Esc → 기존 동작대로 선택 해제
+  await page.keyboard.press('Escape');
+  expect(await selLen()).toBe(0);
+});
+
 test('[되살림] 다시 1400 으로 넓히면 더 보기가 사라지고 칸이 모두 바로 돌아온다', async ({ page }) => {
   await openApp(page, 900, 700);
   await expect(page.locator('.bb-more')).toBeVisible();

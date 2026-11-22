@@ -197,7 +197,8 @@ export function createBottombar(store, editorState) {
     }
   }
   function _onMoreOut(e) { if (!moreMenu.contains(e.target) && e.target !== moreBtn) _closeMore(); }
-  function _onMoreKey(e) { if (e.key === 'Escape') { _closeMore(); moreBtn.focus(); } }
+  // Esc 는 메뉴만 닫고 멈춘다 — keys.js 전역 Esc(레이어 선택 해제)까지 번지지 않게.
+  function _onMoreKey(e) { if (e.key === 'Escape') { e.stopPropagation(); _closeMore(); moreBtn.focus(); } }
   function _openMore() {
     moreMenu.hidden = false;
     const r = moreBtn.getBoundingClientRect();
@@ -205,10 +206,11 @@ export function createBottombar(store, editorState) {
     // 아래 줄은 화면 아래쪽이라 위로 펼친다.
     moreMenu.style.bottom = (window.innerHeight - r.top + 4) + 'px';
     moreMenu.style.top = '';
-    setTimeout(() => {
-      document.addEventListener('pointerdown', _onMoreOut, true);
-      document.addEventListener('keydown', _onMoreKey, true);
-    }, 0);
+    // keydown 은 바로 건다(여는 건 클릭이라 keydown 자기충돌이 없다). Esc 가 keys.js 로
+    //   새어 선택이 풀리지 않게, 이 등록이 늦으면 안 된다.
+    document.addEventListener('keydown', _onMoreKey, true);
+    // pointerdown 은 여는 클릭이 바로 바깥닫기로 되튀지 않게 한 틱 미룬다.
+    setTimeout(() => document.addEventListener('pointerdown', _onMoreOut, true), 0);
   }
   moreBtn.addEventListener('click', (e) => { e.stopPropagation(); moreMenu.hidden ? _openMore() : _closeMore(); });
 

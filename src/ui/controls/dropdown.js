@@ -169,7 +169,8 @@ export function createDropdown({
     else if (e.key === 'Home') { e.preventDefault(); _setActive(0); }
     else if (e.key === 'End') { e.preventDefault(); _setActive(_options.length - 1); }
     else if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); _choose(_activeIndex); }
-    else if (e.key === 'Escape') { e.preventDefault(); close(); el.focus(); }
+    // 닫기만 하고 멈춘다 — keys.js 전역 Esc(레이어 선택 해제)까지 번지지 않게.
+    else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(); el.focus(); }
     else if (e.key === 'Tab') { close(); }
     else if (e.key.length === 1) { _typeAhead(e.key); }
   });
