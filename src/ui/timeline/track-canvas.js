@@ -537,6 +537,7 @@ export function initTrackCanvas(tracksEl, layersEl, store, editorState, playback
     });
   }
 
+  const unsubStore = store.subscribe({ any: true }, requestDraw);
   const unsubES    = editorState.subscribe(requestDraw);
   const ro = new ResizeObserver(() => requestDraw());
   ro.observe(tracksEl);
