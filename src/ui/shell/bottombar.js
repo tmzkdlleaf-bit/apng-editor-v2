@@ -121,6 +121,9 @@ export function createBottombar(store, editorState) {
     const on = !!editorState.get().onion;
     onionBeforeDd.el.style.display = on ? '' : 'none';
     onionAfterDd.el.style.display = on ? '' : 'none';
+    // 앞/뒤 장수 칸이 나타나거나 사라져 아래 줄 내용 폭이 바뀐다. 다시 접고 편다
+    //   (ResizeObserver 는 el 크기만 보므로 내용 폭 변화는 여기서 직접 알린다).
+    _reflow();
   }
 
   // 프레임 위치(1/24)는 재생 줄에만 둔다(R23d item 11) — 오른쪽 공간은 비워 둔다.
@@ -172,6 +175,8 @@ export function createBottombar(store, editorState) {
     return { content: (maxRight - elLeft) + (parseFloat(style.paddingRight) || 0), avail: el.clientWidth };
   }
   function _reflow() {
+    // DOM 에 붙기 전(폭 0)에는 재지 않는다 — 다 숨겨 버리는 것 방지. 붙은 뒤 ResizeObserver 가 부른다.
+    if (!el.isConnected || el.clientWidth === 0) return;
     _applyHidden(_hidden);
     let m = _measure();
     // 넘치면 덜 중요한 칸부터 숨긴다.
@@ -184,8 +189,15 @@ export function createBottombar(store, editorState) {
   }
 
   // "더 보기" 드롭다운 열고 닫기(다른 드롭다운과 같은 방식).
-  function _closeMore() { if (!moreMenu.hidden) { moreMenu.hidden = true; document.removeEventListener('pointerdown', _onMoreOut, true); } }
+  function _closeMore() {
+    if (!moreMenu.hidden) {
+      moreMenu.hidden = true;
+      document.removeEventListener('pointerdown', _onMoreOut, true);
+      document.removeEventListener('keydown', _onMoreKey, true);
+    }
+  }
   function _onMoreOut(e) { if (!moreMenu.contains(e.target) && e.target !== moreBtn) _closeMore(); }
+  function _onMoreKey(e) { if (e.key === 'Escape') { _closeMore(); moreBtn.focus(); } }
   function _openMore() {
     moreMenu.hidden = false;
     const r = moreBtn.getBoundingClientRect();
@@ -193,7 +205,10 @@ export function createBottombar(store, editorState) {
     // 아래 줄은 화면 아래쪽이라 위로 펼친다.
     moreMenu.style.bottom = (window.innerHeight - r.top + 4) + 'px';
     moreMenu.style.top = '';
-    setTimeout(() => document.addEventListener('pointerdown', _onMoreOut, true), 0);
+    setTimeout(() => {
+      document.addEventListener('pointerdown', _onMoreOut, true);
+      document.addEventListener('keydown', _onMoreKey, true);
+    }, 0);
   }
   moreBtn.addEventListener('click', (e) => { e.stopPropagation(); moreMenu.hidden ? _openMore() : _closeMore(); });
 

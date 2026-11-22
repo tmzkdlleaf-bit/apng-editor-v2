@@ -76,6 +76,34 @@ test('[더 보기] 900 에서 숨은 칸이 더 보기에 들어 있고, 거기�
   expect(await page.evaluate(() => !!window.__editorState.get().grid)).toBe(true);
 });
 
+test('[겹침 토글] 1040 에서 겹침을 켜면 앞/뒤 칸이 생겨도 넘치지 않고 겹침이 더 보기로 옮겨간다', async ({ page }) => {
+  await openApp(page, 1040, 760);
+  await page.evaluate(() => window.__editorState.set({ onion: false }));
+  await page.waitForTimeout(400);
+  // 겹침 끔: 아래 줄이 딱 맞아 더 보기가 없다.
+  expect(await page.locator('.bb-more').count()).toBe(0);
+  await assertNoOverflow(page, '1040 겹침끔');
+  // 겹침 켬: 앞/뒤 장수 칸이 나타나 폭이 늘어도 넘치지 않고(_syncOnion 이 _reflow 호출),
+  //   덜 중요한 겹침 칸이 더 보기로 옮겨간다.
+  await page.evaluate(() => window.__editorState.set({ onion: true }));
+  await page.waitForTimeout(400);
+  await assertNoOverflow(page, '1040 겹침켬');
+  await expect(page.locator('.bb-more')).toBeVisible();
+  const onionInMore = await page.evaluate(() => {
+    const menu = document.querySelector('.bb-more-menu');
+    return [...menu.querySelectorAll('.bb-check span')].some((s) => s.textContent === '겹침');
+  });
+  expect(onionInMore).toBe(true);
+});
+
+test('[더 보기 Esc] 더 보기 메뉴를 열고 Esc 를 누르면 닫힌다', async ({ page }) => {
+  await openApp(page, 900, 700);
+  await page.locator('.bb-more').click();
+  await expect(page.locator('.bb-more-menu')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.locator('.bb-more-menu')).toBeHidden();
+});
+
 test('[되살림] 다시 1400 으로 넓히면 더 보기가 사라지고 칸이 모두 바로 돌아온다', async ({ page }) => {
   await openApp(page, 900, 700);
   await expect(page.locator('.bb-more')).toBeVisible();

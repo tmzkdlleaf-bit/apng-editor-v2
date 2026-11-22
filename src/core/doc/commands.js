@@ -38,7 +38,12 @@ function _applyInto(doc, cmd, patches) {
 // 명령 실행 입구(최상위). 중간에 오류가 나면 이미 쌓인 패치를 거꾸로 적용해
 //   doc 를 호출 전과 같게 되돌린 뒤 같은 오류를 다시 던진다(반만 바뀌는 일을 막는다, R33-2).
 //   되감은 뒤 doc 가 원래와 JSON.stringify 기준으로 같은지는 r33-atomic 테스트가 지킨다.
-//   (현재 명령들은 이미 있는 prop 객체의 잎 값만 바꾸므로 _set 이 중간에 빈 {} 를 새로 남기지 않는다.)
+//   대부분의 명령은 이미 있는 prop 객체의 잎 값만 바꿔 되감으면 완전히 같아진다. 다만
+//   예외가 있다: setParamAnim 은 paramAnim 이 없던 효과에 paramAnim[key] 를 쓰면서 중간에
+//   빈 {} 를 새로 만든다(fx-cmds.js:24). 되감기는 그 잎(key)만 지우므로 빈 paramAnim:{} 가
+//   남아, 원래(paramAnim 자체가 없던 상태)와 JSON.stringify 가 달라질 수 있다. 되감기는
+//   "반만 바뀌는 것"을 막는 안전망이지 바이트 단위 완전 복원을 보장하지 않는다(이 중간 {} 는
+//   렌더·저장에 영향 없음). 완전 복원이 필요하면 명령 쪽에서 중간 {} 생성을 피해야 한다.
 export function applyCommand(doc, cmd) {
   const patches = [];
   try {

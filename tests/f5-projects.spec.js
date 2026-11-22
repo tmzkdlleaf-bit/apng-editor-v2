@@ -34,7 +34,8 @@ test('F5-2 — 프로젝트 목록: 메뉴 → 라이브러리 열림', async ({
   await page.click('.project-name-btn');
   await page.click('.project-menu [data-act="library"]');
   await expect(page.locator('.library-modal')).toBeVisible();
-  // 최소 현재 프로젝트 1개 카드
+  // 최소 현재 프로젝트 1개 카드 — 카드가 그려질 때까지 기다린 뒤 센다(비동기 로드라 가끔 0으로 셌음).
+  await expect(page.locator('.library-card').first()).toBeVisible();
   expect(await page.locator('.library-card').count()).toBeGreaterThanOrEqual(1);
 });
 
