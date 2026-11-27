@@ -1,5 +1,6 @@
-// R34a GPU 흐림 비교 — CPU(기준 렌더러) 대비 GPU 결과가 CLAUDE.md 렌더 규칙 2번 허용 기준 안인지.
+// GPU 흐림 비교 — CPU(기준 렌더러) 대비 GPU 결과가 CLAUDE.md 렌더 규칙 2번 허용 기준 안인지.
 //   허용 기준: 채널별 최대 차이 ≤3, 평균 차이 ≤0.5, 99.5% 이상 픽셀이 (픽셀 최대채널차) ≤2.
+//   R34b 에서 CPU·GPU 가 같은 흐림 정의(칸평균 축소+프리멀티 박스+직접 쌍선형)를 쓰게 해 이 기준을 만족한다.
 //   - 같은 렌더러로 두 번 그리면 완전히 같다(GPU 포함).
 //   - 루프: GPU 로 frame 0 과 frame N(=frameCount)이 완전히 같다.
 //   - WebGL2 를 못 받으면 GPU 비교는 건너뛰고, 대체 경로(요청해도 CPU 로 동작·픽셀 동일)만 돈다.
@@ -171,20 +172,20 @@ test('R34a: GPU 흐림 ↔ CPU 허용 기준 · 결정론 · 루프 · 대체 �
   expect(out.loop, 'GPU 루프: frame 0 == frame frameCount(완전히 동일)').toBe(true);
   expect(out.engineUploads, 'GPU bloom 이 실제로 GPU 흐림을 거쳤는지(업로드>0)').toBeGreaterThan(0);
 
-  // ── CLAUDE 허용 기준(최대≤3·평균≤0.5·≤2비율≥99.5%) 대비 측정 ────────────
-  // 결론(R34a 보고): GPU 흐림은 이 기준을 "맞추지 못한다". CPU blurCanvas 가 브라우저
-  //   drawImage('high'/'low') 비공개 리샘플러에 기대는 축소·확대 근사라, 셰이더의 박스/쌍선형
-  //   리샘플과 필터 모양이 달라 반경이 클수록 벌어진다(작은단계 수치가 이를 드러낸다 — 확대 아닌 축소가 원인).
-  //   기준을 느슨하게 바꾸지 않는다(CLAUDE). 대신 수치를 기록하고, 아래는 "회귀 방지" 상한일 뿐
-  //   CLAUDE 허용 기준이 아니다. 전체 전환 시에는 CPU·GPU 가 같은 흐림 정의(동일 분리형 커널)를
-  //   쓰도록 CPU 기준 렌더러를 함께 바꿔야 ±3 안에 든다 — 보고 참조.
-  const meets = out.blur.every((r) => r.maxCh <= 3 && r.avg <= 0.5 && r.pctOk >= 0.995);
-  test.info().annotations.push({ type: 'R34a', description: `GPU 흐림 CLAUDE 허용 기준 ${meets ? '통과' : '초과(원인·대안은 보고 참조)'}` });
-  // 회귀 방지 상한(허용 기준 아님): 지금 측정값에서 더 나빠지면 잡는다.
+  // ── CLAUDE 허용 기준(최대≤3·평균≤0.5·≤2비율≥99.5%)을 실제로 만족해야 한다 ────────────
+  // R34b 결론: CPU blurCanvas/blurToSmall 을 drawImage 리샘플러에서 직접 계산(칸평균 축소 + 프리멀티
+  //   박스 3회 + 직접 쌍선형 확대 + 언프리멀티)으로 바꿔 GPU 셰이더와 "같은 흐림 정의"를 쓰게 했다.
+  //   이제 GPU 결과가 CPU 기준 렌더러와 허용 기준 안에서 일치한다(측정값은 위 로그 참조 — 반경별 최대차 ≤2).
+  //   "예전 파일 픽셀 동일" 규칙의 예외로 흐림 기준을 이번 한 번 다시 정한 결과(사용자 승인).
   for (const row of out.blur) {
-    expect(row.maxCh, `r=${row.r} 회귀 방지 상한(허용 기준 아님)`).toBeLessThanOrEqual(14);
+    expect(row.maxCh, `r=${row.r} 채널 최대차 ≤3`).toBeLessThanOrEqual(3);
+    expect(row.avg, `r=${row.r} 평균차 ≤0.5`).toBeLessThanOrEqual(0.5);
+    expect(row.pctOk, `r=${row.r} (픽셀 최대차 ≤2) 비율 ≥99.5%`).toBeGreaterThanOrEqual(0.995);
   }
-  expect(out.engineBloom.maxCh, 'bloom 회귀 방지 상한(허용 기준 아님)').toBeLessThanOrEqual(60);
+  // 엔진 bloom(투명 가장자리 포함 전체 프레임)도 같은 허용 기준 안이어야 한다.
+  expect(out.engineBloom.maxCh, 'bloom 채널 최대차 ≤3').toBeLessThanOrEqual(3);
+  expect(out.engineBloom.avg, 'bloom 평균차 ≤0.5').toBeLessThanOrEqual(0.5);
+  expect(out.engineBloom.pctOk, 'bloom (픽셀 최대차 ≤2) 비율 ≥99.5%').toBeGreaterThanOrEqual(0.995);
 
   expect(errors, '콘솔 오류 없음').toEqual([]);
 });

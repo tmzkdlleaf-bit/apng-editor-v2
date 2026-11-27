@@ -1,12 +1,16 @@
-// GPU 흐림(R34a) — CPU blur.js 의 blurCanvas/blurToSmall 과 같은 입력·출력(2D 캔버스 in → 2D 캔버스 out).
-//   CPU 파이프라인을 WebGL2 로 재현한다:
-//     ① 축소(면적 평균 d×d ≈ drawImage 'high')  ② 작은 크기에서 분리형 박스 3회(가로→세로)  ③ 확대(쌍선형).
-//   박스 패스가 "가로 → 세로" 두 번 나눠 도는 셰이더다(렌더 규칙 — ctx.filter 금지, 직접 계산).
-//   DOM 없음. 2D 출력 캔버스는 호출자가 준 borrow/release(풀)로만 만든다. 텍스처는 내부 texPool 로만.
+// GPU 흐림(R34a, R34b 재정의) — CPU blur.js 의 blurCanvas/blurToSmall 과 같은 입력·출력(2D 캔버스 in → out).
+//   CPU 파이프라인을 WebGL2 로 그대로 재현한다(축소 배율·박스 반경은 blurDims 한 곳에서 공유):
+//     ① 칸평균 축소(프리멀티 색×알파로 평균 — 투명 가장자리 색 번짐을 막는다)
+//     ② 작은 크기에서 프리멀티 상태로 분리형 박스 3회(가로→세로)
+//     ③ 직접 쌍선형 확대(프리멀티 보간)  ④ 언프리멀티
+//   중간 텍스처는 RGBA8(8비트) — CPU Uint8ClampedArray 와 같은 정밀도.
+//   세로 방향은 uploader 가 FLIP_Y 로 넣고 download 가 되돌린다 → CPU 뒤집기 계산과 같은 좌표계.
+//   DOM 없음. 2D 출력 캔버스는 호출자가 준 borrow/release(풀)로만. 텍스처는 내부 texPool 로만.
 import { createProgram, createQuad, VS_QUAD } from './program.js';
+import { blurDims } from '../blur.js';
 
-// 축소: 출력 텍셀마다 입력 d×d 블록의 평균. CPU drawImage 축소가 프리멀티 공간에서 일어나므로
-//   여기서도 프리멀티(rgb×a)로 평균한 뒤 straight 로 되돌린다(알파가 섞인 자리 색이 CPU 와 맞도록).
+// 축소: 출력 텍셀마다 입력 d×d 블록의 프리멀티 평균. 결과도 프리멀티(rgb=색×알파, a=알파)로 둔다.
+//   가장자리에서 입력 밖 표본은 건너뛰고 유효 개수(cnt)로 나눈다(CPU 와 동일).
 const FS_DOWN = `#version 300 es
 precision highp float;
 uniform sampler2D uTex;
@@ -27,11 +31,10 @@ void main() {
       cnt += 1.0;
     }
   }
-  float a = sa / max(cnt, 1.0);
-  o = vec4(sa > 0.0 ? prgb / sa : vec3(0.0), a);
+  o = vec4(prgb / cnt, sa / cnt); // 프리멀티
 }`;
 
-// 분리형 박스(반경 uR, 가장자리 클램프). CPU applyBlur 의 한 패스(sr/diam, 균등 가중)와 같은 계산.
+// 분리형 박스(반경 uR, 가장자리 클램프). 프리멀티 4채널을 균등 평균 — CPU applyBlur 한 패스와 같은 계산.
 const FS_BOX = `#version 300 es
 precision highp float;
 uniform sampler2D uTex;
@@ -49,9 +52,18 @@ void main() {
   o = sum / float(2 * uR + 1);
 }`;
 
-// 확대: 작은 텍스처의 [0,sw]×[0,sh] 영역을 전체 크기로 쌍선형으로 늘린다.
-//   drawImage(small, 0,0,sw,sh, 0,0,W,H) 'low'(쌍선형) 대응. 쌍선형도 프리멀티 공간에서 해야
-//   투명 가장자리 색이 CPU 와 맞는다 → 하드웨어 LINEAR 대신 셰이더에서 4텍셀 프리멀티 보간.
+// 언프리멀티: 프리멀티 텍스처를 straight 로. blurToSmall 이 작은 캔버스로 내리기 전에 한 번 쓴다.
+const FS_UNPM = `#version 300 es
+precision highp float;
+uniform sampler2D uTex;
+out vec4 o;
+void main() {
+  vec4 t = texelFetch(uTex, ivec2(gl_FragCoord.xy), 0);
+  o = vec4(t.a > 0.0 ? t.rgb / t.a : vec3(0.0), t.a);
+}`;
+
+// 확대: 작은 프리멀티 텍스처의 [0,sw]×[0,sh] 영역을 전체 크기로 쌍선형 보간 후 언프리멀티.
+//   입력이 이미 프리멀티라 4텍셀을 그대로 섞는다(투명 가장자리 색 번짐 없음). CPU 쌍선형과 같은 좌표 규칙.
 const FS_UP = `#version 300 es
 precision highp float;
 uniform sampler2D uTex;
@@ -59,14 +71,14 @@ uniform vec2 uSrc;     // (sw, sh) 유효 영역(텍셀)
 uniform ivec2 uTexI;   // (cw, chh) 작은 텍스처 크기(텍셀, 정수)
 in vec2 vUv;
 out vec4 o;
-vec4 pm(ivec2 c) { vec4 t = texelFetch(uTex, clamp(c, ivec2(0), uTexI - ivec2(1)), 0); return vec4(t.rgb * t.a, t.a); }
+vec4 fetch(ivec2 c) { return texelFetch(uTex, clamp(c, ivec2(0), uTexI - ivec2(1)), 0); }
 void main() {
   vec2 t = vUv * uSrc;
   t = clamp(t, vec2(0.5), uSrc - vec2(0.5));
   vec2 f = t - 0.5;             // 텍셀 중심 기준 좌표
   ivec2 i = ivec2(floor(f));
   vec2 fr = f - vec2(i);
-  vec4 c00 = pm(i), c10 = pm(i + ivec2(1, 0)), c01 = pm(i + ivec2(0, 1)), c11 = pm(i + ivec2(1, 1));
+  vec4 c00 = fetch(i), c10 = fetch(i + ivec2(1, 0)), c01 = fetch(i + ivec2(0, 1)), c11 = fetch(i + ivec2(1, 1));
   vec4 top = mix(c00, c10, fr.x), bot = mix(c01, c11, fr.x);
   vec4 p = mix(top, bot, fr.y);
   o = vec4(p.a > 0.0 ? p.rgb / p.a : vec3(0.0), p.a);
@@ -76,6 +88,7 @@ export function createGpuBlur(gl, texPool, uploader) {
   const quad = createQuad(gl);
   const progDown = createProgram(gl, VS_QUAD, FS_DOWN);
   const progBox  = createProgram(gl, VS_QUAD, FS_BOX);
+  const progUnpm = createProgram(gl, VS_QUAD, FS_UNPM);
   const progUp   = createProgram(gl, VS_QUAD, FS_UP);
 
   const uDown = {
@@ -89,6 +102,7 @@ export function createGpuBlur(gl, texPool, uploader) {
     dir:  gl.getUniformLocation(progBox, 'uDir'),
     r:    gl.getUniformLocation(progBox, 'uR'),
   };
+  const uUnpm = { tex: gl.getUniformLocation(progUnpm, 'uTex') };
   const uUp = {
     tex:  gl.getUniformLocation(progUp, 'uTex'),
     src:  gl.getUniformLocation(progUp, 'uSrc'),
@@ -111,18 +125,16 @@ export function createGpuBlur(gl, texPool, uploader) {
     gl.uniform1i(loc, 0);
   }
 
-  // CPU blurToSmall 과 같은 결과를 texPool 텍스처로 돌려준다: { texObj, sw, sh, cw, chh }(호출자가 release).
+  // ① 축소 + ② 박스 3회 한 "작은 프리멀티" 텍스처를 돌려준다: { texObj, sw, sh, cw, chh }(호출자가 release).
   function _blurToSmallTex(src, r) {
     const W = src.width, H = src.height;
-    const d = Math.max(2, Math.ceil(r / 1.5));
-    const cw = Math.max(1, Math.ceil(W / d)), chh = Math.max(1, Math.ceil(H / d));
-    const R = Math.max(1, Math.round(r / d));
+    const { d, cw, chh, R, sw, sh } = blurDims(W, H, r);
 
     const texSrc = texPool.borrow(W, H);
     uploader.uploadInto(texSrc.tex, src);
 
     _prep();
-    // ① 축소
+    // ① 축소(프리멀티)
     let a = texPool.borrow(cw, chh);
     _bindSrc(texSrc, progDown, uDown.tex);
     gl.uniform1i(uDown.d, d);
@@ -130,7 +142,7 @@ export function createGpuBlur(gl, texPool, uploader) {
     _drawInto(a);
     texPool.release(texSrc);
 
-    // ② 박스 3회(가로→세로)
+    // ② 박스 3회(가로→세로), 프리멀티 상태 유지
     let b = texPool.borrow(cw, chh);
     gl.useProgram(progBox);
     gl.uniform1i(uBox.tex, 0);
@@ -141,16 +153,23 @@ export function createGpuBlur(gl, texPool, uploader) {
       _bindSrc(b, progBox, uBox.tex); gl.uniform2i(uBox.dir, 0, 1); _drawInto(a);
     }
     texPool.release(b);
-    return { texObj: a, sw: W / d, sh: H / d, cw, chh };
+    return { texObj: a, sw, sh, cw, chh };
   }
 
   // 작은 크기 흐림 결과를 "줄인 크기"의 2D 캔버스로 — CPU blurToSmall 과 같은 형태 { canvas, sw, sh }.
   function blurToSmall(src, r, borrow) {
     const sm = _blurToSmallTex(src, r);
-    const out = borrow(sm.cw, sm.chh);
-    texPool.bindTarget(sm.texObj);
-    uploader.downloadTo(out, sm.cw, sm.chh);
+    // 언프리멀티 → straight 작은 텍스처
+    const straight = texPool.borrow(sm.cw, sm.chh);
+    _prep();
+    _bindSrc(sm.texObj, progUnpm, uUnpm.tex);
+    _drawInto(straight);
     texPool.release(sm.texObj);
+
+    const out = borrow(sm.cw, sm.chh);
+    texPool.bindTarget(straight);
+    uploader.downloadTo(out, sm.cw, sm.chh);
+    texPool.release(straight);
     return { canvas: out, sw: sm.sw, sh: sm.sh };
   }
 
@@ -161,7 +180,7 @@ export function createGpuBlur(gl, texPool, uploader) {
     if (!(r > 0.5)) { out.getContext('2d').drawImage(src, 0, 0); return out; }
 
     const sm = _blurToSmallTex(src, r);
-    // ③ 확대
+    // ③ 확대(프리멀티 보간) + ④ 언프리멀티
     const full = texPool.borrow(W, H);
     _prep();
     _bindSrc(sm.texObj, progUp, uUp.tex);
@@ -180,6 +199,7 @@ export function createGpuBlur(gl, texPool, uploader) {
     quad.dispose();
     gl.deleteProgram(progDown);
     gl.deleteProgram(progBox);
+    gl.deleteProgram(progUnpm);
     gl.deleteProgram(progUp);
   }
 
