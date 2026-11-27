@@ -8,6 +8,7 @@
     "test": "playwright test",
     "perf": "playwright test --config=playwright.perf.config.js",
     "perf:gpu": "playwright test --config=playwright.perf.config.js r34-gpu-perf",
+    "perf:gpu:real": "playwright test --config=playwright.gpu.config.js",
     "sheets": "playwright test --config=playwright.sheets.config.js",
     "screens": "playwright test --config=playwright.screens.config.js",
     "visual": "playwright test --config=playwright.visual.config.js",
