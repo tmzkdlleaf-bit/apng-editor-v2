@@ -8,6 +8,10 @@ const _IDENTITY_TR = { x: 0, y: 0, scale: 1, scaleX: 1, scaleY: 1, rotation: 0, 
 import { createPool }  from './pool.js';
 import { createCache } from './cache.js';
 import { renderMask as _renderMask } from './mask.js';
+import { createGLContext }   from './gpu/context.js';
+import { createTexturePool } from './gpu/textures.js';
+import { createUploader }    from './gpu/upload.js';
+import { createGpuBlur }     from './gpu/blur.js';
 
 import { renderImageLayer }    from './layers/image.js';
 import { renderAnimLayer }     from './layers/anim.js';
@@ -24,12 +28,35 @@ import { renderEffectLayer }   from './layers/effect.js';
 //   assets:   { getBitmap, getAnimFrames } (선택)
 //   motions:  Map<motionId, { evaluate }> (선택)
 //   maxCachePx: number (선택, 기본 64MP)
+//   renderer: 'cpu' | 'gpu' (선택, 기본 'cpu') — 'gpu' 인데 WebGL2 가 없으면 조용히 CPU 로 동작한다.
+//     R34a 단계: GPU 는 아직 흐림(blur)만 담당한다. 합성·효과는 CPU. stats().renderer 에 실제 쓴 값을 남긴다.
 export function createRenderEngine(opts = {}) {
-  const { createCanvas, effects, assets, motions, maxCachePx } = opts;
+  const { createCanvas, effects, assets, motions, maxCachePx, renderer } = opts;
   if (!createCanvas) throw new Error('createCanvas 함수가 필요합니다.');
 
   const pool  = createPool(createCanvas);
   const cache = createCache(createCanvas, maxCachePx);
+
+  // R34a: GPU 렌더(시험). 'gpu' 요청 + WebGL2 가능할 때만 _gpu 가 생긴다. 실패·분실 시 CPU 로 동작.
+  let _gpu = null;
+  let _rendererActual = 'cpu';
+  if (renderer === 'gpu') {
+    _gpu = _setupGpu(createCanvas);
+    _rendererActual = _gpu ? 'gpu' : 'cpu';
+  }
+  function _setupGpu(mk) {
+    try {
+      const glctx = createGLContext(mk);
+      if (!glctx) return null;
+      const texPool  = createTexturePool(glctx.gl);
+      const uploader = createUploader(glctx.gl);
+      const blur     = createGpuBlur(glctx.gl, texPool, uploader);
+      return { glctx, texPool, uploader, blur };
+    } catch (err) {
+      if (typeof console !== 'undefined') console.warn('GPU 렌더 준비 실패 — CPU 로 동작합니다.', err);
+      return null;
+    }
+  }
 
   let _totalRenders = 0;
   let _totalHits    = 0;
@@ -38,6 +65,14 @@ export function createRenderEngine(opts = {}) {
   let _lastMs       = 0;
 
   function invalidate(layerId) { cache.invalidate(layerId); }
+
+  // 지금 프레임에 쓸 흐림 서비스. GPU 가 살아 있으면 GPU 흐림, 아니면 null(소비자가 CPU blur.js 사용).
+  //   컨텍스트를 잃었으면 CPU 로 영구 전환(경고는 context.js 가 한 번만 냈다).
+  function _activeBlur() {
+    if (!_gpu) return null;
+    if (_gpu.glctx.isLost()) { _gpu = null; _rendererActual = 'cpu'; return null; }
+    return _gpu.blur;
+  }
 
   async function prepare(_doc) {
     // 에셋 사전 로드, 캐시 준비 등 (현재는 stub)
@@ -160,6 +195,7 @@ export function createRenderEngine(opts = {}) {
       renderScale,
       quality,           // R20-C: draft(절반)·재생 중이면 번짐 samples 를 줄인다
       camScr,            // R8-1: leaf 에서 applyCamera 로 얹는 카메라(가운데 축척+이동)
+      blur:         _activeBlur(), // R34a: GPU 흐림 서비스(없으면 null → CPU blur.js). 효과 env 로도 내려간다.
       renderMask: null,
     };
 
@@ -340,8 +376,14 @@ export function createRenderEngine(opts = {}) {
       lastMs:     _lastMs,
       maxBorrowW,
       maxBorrowH,
+      renderer:     _rendererActual,                   // R34a: 실제로 쓴 렌더러('cpu'|'gpu')
+      gpuUploads:   _gpu ? _gpu.uploader.uploads   : 0, // GPU↔CPU 왕복 횟수(성능 보고용)
+      gpuDownloads: _gpu ? _gpu.uploader.downloads : 0,
     };
   }
 
-  return { renderFrame, invalidate, prepare, stats, pool, cache };
+  // R34a: GPU 왕복 카운터 초기화(성능 측정에서 프레임 묶음마다 다시 센다).
+  function resetGpuStats() { if (_gpu) _gpu.uploader.reset(); }
+
+  return { renderFrame, invalidate, prepare, stats, resetGpuStats, pool, cache };
 }

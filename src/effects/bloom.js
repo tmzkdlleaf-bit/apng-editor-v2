@@ -1,7 +1,7 @@
 // 밝은 곳 번짐(R28c, 블룸) — 소스에서 일정 밝기 이상인 부분만 골라 흐려 빛처럼 더한다.
 //   계산은 절반 크기에서(빠름). 숨쉬기(0 이면 정적)는 정수 횟수로 루프.
 import { TAU, clamp, parseColor } from './_fx-util.js';
-import { blurCanvas } from '../core/render/blur.js';
+import { blurCanvas as cpuBlurCanvas } from '../core/render/blur.js';
 
 export default {
   id: 'bloom',
@@ -21,7 +21,9 @@ export default {
   ],
   scopes: ['full'],
   sources: [{ key: 'below', label: '대상(그림)' }],
-  render(ctx, { f, frameCount, sources, pad = 0, scale = 1, borrow, release }, p) {
+  render(ctx, { f, frameCount, sources, pad = 0, scale = 1, borrow, release, blur }, p) {
+    // R34a: GPU 흐림 서비스가 있으면 그걸로, 없으면 CPU(픽셀 동일 경로).
+    const blurCanvas = blur?.blurCanvas ?? cpuBlurCanvas;
     const src = (sources || []).find((s) => s.key === 'below')?.canvas;
     if (!src) return;
     const W = src.width, H = src.height;

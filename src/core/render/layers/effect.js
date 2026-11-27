@@ -94,6 +94,7 @@ export function renderEffectLayer(outputCtx, layer, worldTr, totalAlpha, rctx) {
     scale: renderScale,
     pad: PAD_PX,           // 소스 캔버스 정렬용(물리 px, scope=full): 소스 doc(0,0)=effect 물리(pad,pad)
     pool,
+    blur: rctx.blur,       // R34a: GPU 흐림 서비스(없으면 null)
   }, evalEffectParams(layer, effect, f));
   for (const c of _sourceCanvases) pool.release(c);
 

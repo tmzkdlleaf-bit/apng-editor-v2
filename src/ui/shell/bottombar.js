@@ -5,9 +5,12 @@
 import { createDropdown } from '../controls/dropdown.js';
 
 const RES_KEY = 'apng2.ws.previewRes';
+const GPU_KEY = 'apng2.ws.gpuPreview';
 
 function _loadRes() { try { const v = localStorage.getItem(RES_KEY); return ['full', 'half', 'quarter', 'auto'].includes(v) ? v : 'auto'; } catch { return 'auto'; } }
 function _saveRes(v) { try { localStorage.setItem(RES_KEY, v); } catch {} }
+function _loadGpu() { try { return localStorage.getItem(GPU_KEY) === '1'; } catch { return false; } }
+function _saveGpu(v) { try { localStorage.setItem(GPU_KEY, v ? '1' : '0'); } catch {} }
 
 // 배율 = 입력 칸 + 목록(프리셋). 직접 입력도 되고 목록에서도 고른다. 하나로 합친 것(R23d item 11).
 function _createZoomCombo(editorState) {
@@ -101,6 +104,10 @@ export function createBottombar(store, editorState) {
   // ── 스냅 ──
   const snap = _check('스냅', 'snap');
 
+  // ── R34a GPU 가속(시험) — 미리보기 전용. WebGL2 없으면 조용히 CPU. 기본 꺼짐. ──
+  const gpu = _check('GPU 가속(시험)', 'gpuPreview');
+  gpu.input.addEventListener('change', () => _saveGpu(gpu.input.checked));
+
   // ── 겹침(온니언): 켜짐 토글 + 앞/뒤 장수(켜졌을 때만 보임) ──
   const onionWrap = document.createElement('div'); onionWrap.className = 'bb-group';
   const onion = _check('겹침', 'onion');
@@ -134,7 +141,7 @@ export function createBottombar(store, editorState) {
   //   덜 중요한 칸부터 숨겨 맨 오른쪽 "더 보기" 드롭다운으로 옮긴다.
   //   숨기는 순서(바꿀 수 있는 기본값): 겹침 → 격자 → 안전 영역 → 가이드 → 투명 격자.
   //   배율·해상도·스냅은 늘 남긴다.
-  const HIDE_ORDER = [onionWrap, gridWrap, safe.w, guides.w, checker.w];
+  const HIDE_ORDER = [gpu.w, onionWrap, gridWrap, safe.w, guides.w, checker.w];
   const RESTORE_SLACK = 16;   // 되살릴 때 여유(깜빡임 방지)
   const moreBtn = document.createElement('button');
   moreBtn.type = 'button'; moreBtn.className = 'bb-more';
@@ -145,7 +152,7 @@ export function createBottombar(store, editorState) {
   document.body.appendChild(moreMenu);
 
   // 바(막대) 안의 정렬 순서. 숨겨진 칸은 moreMenu 로, 나머지는 이 순서대로 바에 둔다.
-  const BAR_ORDER = [zoom.el, resWrap, checker.w, guides.w, safe.w, gridWrap, snap.w, onionWrap, spacer];
+  const BAR_ORDER = [zoom.el, resWrap, checker.w, guides.w, safe.w, gridWrap, snap.w, onionWrap, gpu.w, spacer];
 
   let _hidden = 0;
   function _applyHidden(n) {
@@ -231,10 +238,13 @@ export function createBottombar(store, editorState) {
     if ('onion' in p) { onion.input.checked = !!editorState.get().onion; _syncOnion(); }
     if ('onionBefore' in p) onionBeforeDd.setValue?.(String(editorState.get().onionBefore ?? 1));
     if ('onionAfter' in p) onionAfterDd.setValue?.(String(editorState.get().onionAfter ?? 1));
+    if ('gpuPreview' in p) gpu.input.checked = !!editorState.get().gpuPreview;
   });
 
   // 처음 값 반영(작업 공간 저장값 → previewRes). checker 기본 켜짐(투명 격자는 늘 보이던 기본).
   editorState.set({ previewRes: _loadRes() });
+  // R34a: 저장된 GPU 가속(시험) 값 반영(기본 꺼짐).
+  editorState.set({ gpuPreview: _loadGpu() });
 
   function destroy() {
     unsubES(); zoom.destroy?.(); resDd.destroy?.(); gridStepDd.destroy?.(); onionBeforeDd.destroy?.(); onionAfterDd.destroy?.();

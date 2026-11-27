@@ -38,6 +38,9 @@ export function createEditorState(initial = {}) {
     checker: true,
     guides: false,
     safeArea: false,
+    // R34a GPU 가속(시험) — 미리보기 엔진만 renderer:'gpu'(WebGL2 없으면 조용히 CPU). 기본 꺼짐.
+    //   미리보기 전용 — 내보내기는 계속 CPU. 문서에 저장하지 않는다.
+    gpuPreview: false,
   };
 
   for (const k of Object.keys(initial)) {

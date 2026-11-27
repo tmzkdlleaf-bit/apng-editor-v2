@@ -25,6 +25,7 @@ export function runEffect(def, ctx, env, params) {
     pad: env.pad ?? 0,
     borrow: _borrow,
     release: _release,
+    blur: env.blur ?? null, // R34a: GPU 흐림 서비스(없으면 null → 효과가 CPU blur.js 사용)
   };
 
   // R27 "밝은 배경용": 꺼져 있으면(기본) 예전과 똑같이 ctx 에 바로 그린다(픽셀 동일).

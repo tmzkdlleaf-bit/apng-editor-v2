@@ -32,16 +32,24 @@ export function initStage(containerEl, store, editorState) {
     requestScene();
   });
 
-  const engine = createRenderEngine({
-    createCanvas: (w, h) => {
-      const c = document.createElement('canvas');
-      c.width = w; c.height = h;
-      return c;
-    },
-    effects: effectsRegistry,
-    motions: motionRegistry,
-    assets,
-  });
+  const _createCanvas = (w, h) => {
+    const c = document.createElement('canvas');
+    c.width = w; c.height = h;
+    return c;
+  };
+  // R34a: 미리보기 엔진. "GPU 가속(시험)"이 켜져 있으면 renderer:'gpu'(WebGL2 없으면 조용히 CPU).
+  //   내보내기 엔진은 건드리지 않는다(계속 CPU). 토글하면 엔진을 다시 만든다(_rebuildEngine).
+  function _buildEngine() {
+    return createRenderEngine({
+      createCanvas: _createCanvas,
+      effects: effectsRegistry,
+      motions: motionRegistry,
+      assets,
+      renderer: editorState.get().gpuPreview ? 'gpu' : 'cpu',
+    });
+  }
+  let engine = _buildEngine();
+  function _rebuildEngine() { engine = _buildEngine(); requestScene(); }
 
   let _sceneRenderCount = 0;
   let _sceneReq  = false;
@@ -411,6 +419,7 @@ export function initStage(containerEl, store, editorState) {
   });
 
   editorState.subscribe((patch) => {
+    if ('gpuPreview' in patch) { _rebuildEngine(); return; } // 엔진을 다시 만들고 바로 다시 그린다
     const needsScene = 'zoom' in patch || 'panX' in patch || 'panY' in patch || 'f' in patch
       || 'onion' in patch || 'onionBefore' in patch || 'onionAfter' in patch
       || 'playing' in patch || 'loopMode' in patch || 'previewVariantId' in patch
@@ -454,7 +463,7 @@ export function initStage(containerEl, store, editorState) {
   return {
     sceneCanvas,
     overlayCanvas,
-    engine,
+    get engine() { return engine; }, // R34a: GPU 토글로 다시 만들어질 수 있어 게터로 노출
     assets,
     docToScreen:  _docToScreen,
     screenToDoc:  _screenToDoc,

@@ -42,7 +42,7 @@ function _maxBleed(layer, ids, effects) {
 // 물리 캔버스(doc 영역이 [pad,pad,dW*k,dH*k])에 효과를 순서대로 적용한다. canvas 를 제자리에서 바꾼다.
 // env: { f, frameCount, pool, effects, k, dW, dH, pad }
 export function runFxStack(canvas, env, layer) {
-  const { f, frameCount, pool, effects, k, dW, dH, pad, fps = 12 } = env;
+  const { f, frameCount, pool, effects, k, dW, dH, pad, fps = 12, blur = null } = env;
   const ids = activeFxIds(layer, effects);
   if (!ids.length) return;
   const ctx = canvas.getContext('2d');
@@ -73,13 +73,13 @@ export function runFxStack(canvas, env, layer) {
       ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
       ctx.clearRect(0, 0, W, H);
       const key = def.sources[0]?.key ?? 'below';
-      runEffect(def, ctx, { f, frameCount, fps, w: dW, h: dH, seed: fx.seed, scale: k, pad, sources: [{ key, canvas: src }], pool }, params);
+      runEffect(def, ctx, { f, frameCount, fps, w: dW, h: dH, seed: fx.seed, scale: k, pad, sources: [{ key, canvas: src }], pool, blur }, params);
       pool.release(src);
     } else {
       // 내용 위에 그린다 — ctx 를 doc 좌표(k 배율, pad 오프셋)로.
       ctx.setTransform(k, 0, 0, k, pad, pad);
       ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
-      runEffect(def, ctx, { f, frameCount, fps, w: dW, h: dH, seed: fx.seed, scale: k, pad, sources: [], pool }, params);
+      runEffect(def, ctx, { f, frameCount, fps, w: dW, h: dH, seed: fx.seed, scale: k, pad, sources: [], pool, blur }, params);
     }
 
     ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -120,7 +120,7 @@ function _resolveK(worldTr, dW, dH) {
 //   (마스크는 R17a 범위 밖 — 해당 조합은 드묾).
 export function drawLeafWithFx(outputCtx, buildContent, geom, layer, worldTr, totalAlpha, rctx) {
   const { dW, dH, ox, oy } = geom;
-  const { pool, effects, f, frameCount, fps = 12 } = rctx;
+  const { pool, effects, f, frameCount, fps = 12, blur = null } = rctx;
   const ids = activeFxIds(layer, effects);
   const k = _resolveK(worldTr, dW, dH);
   const bleed = _maxBleed(layer, ids, effects);
@@ -135,7 +135,7 @@ export function drawLeafWithFx(outputCtx, buildContent, geom, layer, worldTr, to
   wc.drawImage(content.canvas, 0, 0, content.srcCw, content.srcCh, pad, pad, cwk, chk);
   content.release?.();
 
-  runFxStack(work, { f, frameCount, fps, pool, effects, k, dW, dH, pad }, layer);
+  runFxStack(work, { f, frameCount, fps, pool, effects, k, dW, dH, pad, blur }, layer);
 
   // R21: 가리기(masks) — 효과 다음, 변형 전. 레이어 자체 좌표에서 내용 알파를 자른다.
   if (hasActiveMasks(layer)) {
