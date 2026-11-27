@@ -1,7 +1,10 @@
 // 그림자(R28c) — 소스 모양대로 그림자를 깔고 그 위에 소스를 그린다. 거리·방향·흐림·퍼짐·색·불투명도.
 //   정적(값에 키를 넣어 움직일 수 있음). 흐림은 core/render/blur.js 공용.
+//   R34b: 전체 크기 직접 흐림(blurCanvas)으로 통일 — 늘리기를 drawImage 리샘플러에 맡기지 않고
+//   직접 쌍선형으로 계산한 뒤 1:1 평행이동으로만 그린다(엔진·플랫폼이 달라도 같은 픽셀).
+//   GPU 흐림 서비스(env.blur)가 있으면 그걸로, 없으면 CPU(픽셀 동일 경로).
 import { clamp, parseColor, rgba } from './_fx-util.js';
-import { blurToSmall } from '../core/render/blur.js';
+import { blurCanvas as cpuBlurCanvas } from '../core/render/blur.js';
 
 export default {
   id: 'drop-shadow',
@@ -21,7 +24,8 @@ export default {
   ],
   scopes: ['full'],
   sources: [{ key: 'below', label: '대상(그림)' }],
-  render(ctx, { sources, pad = 0, scale = 1, borrow, release }, p) {
+  render(ctx, { sources, pad = 0, scale = 1, borrow, release, blur }, p) {
+    const blurCanvas = blur?.blurCanvas ?? cpuBlurCanvas;
     const src = (sources || []).find((s) => s.key === 'below')?.canvas;
     if (!src) return;
     const W = src.width, H = src.height;
@@ -48,10 +52,9 @@ export default {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.globalAlpha = clamp(p.opacity ?? 0.55, 0, 1);
     if (r > 0.5) {
-      const b = blurToSmall(sil, r, borrow);  // 줄인 크기에서 흐려 바로 늘려 그린다(큰 캔버스 작업 1번)
-      ctx.imageSmoothingEnabled = true;
-      ctx.drawImage(b.canvas, 0, 0, b.sw, b.sh, pad + dx, pad + dy, W, H);
-      release(b.canvas);
+      const b = blurCanvas(sil, r, borrow, release); // 전체 크기 직접 흐림 → 1:1 평행이동만(리샘플 없음)
+      ctx.drawImage(b, pad + dx, pad + dy);
+      release(b);
     } else ctx.drawImage(sil, pad + dx, pad + dy);
     ctx.globalAlpha = 1;
     if (!p.only) ctx.drawImage(src, pad, pad);

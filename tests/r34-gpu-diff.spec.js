@@ -114,10 +114,26 @@ test('R34a: GPU 흐림 ↔ CPU 허용 기준 · 결정론 · 루프 · 대체 �
       doc.layers[fx.id] = fx; doc.order.push(fx.id);
       return doc;
     }
+    // 그림자 문서 — 숨긴 모양을 소스로, drop-shadow(흐림)를 건다. drop-shadow 도 GPU 흐림을 탄다.
+    function shadowDoc() {
+      const doc = createDoc({ width: 240, height: 180, fps: 12, frameCount: 24 });
+      const shp = createLayer('shape', { name: 'src' });
+      shp.shape = { kind: 'rect', w: 110, h: 80, fill: '#e03020', stroke: null };
+      shp.transform.x.value = 120; shp.transform.y.value = 90;
+      shp.visible = false;
+      doc.layers[shp.id] = shp; doc.order.push(shp.id);
+      const fx = createLayer('effect', { name: 'shadow', effectId: 'drop-shadow' });
+      fx.params = {}; for (const d of (effects.get('drop-shadow').params ?? [])) fx.params[d.key] = d.default;
+      fx.params.blur = 18; fx.params.distance = 16; fx.params.spread = 3;
+      fx.sources = [{ key: 'below', sourceId: shp.id }];
+      doc.layers[fx.id] = fx; doc.order.push(fx.id);
+      return doc;
+    }
     const draw = (eng, doc, f) => { const c = mk(doc.meta.width, doc.meta.height); eng.renderFrame(c.getContext('2d'), doc, f, {}); return c; };
 
     const engCpu = createRenderEngine({ createCanvas: mk, effects });
     const cpuA = draw(engCpu, bloomDoc(), 6);
+    const cpuS = draw(engCpu, shadowDoc(), 6);
 
     if (glctx) {
       const engGpu = createRenderEngine({ createCanvas: mk, effects, renderer: 'gpu' });
@@ -128,6 +144,11 @@ test('R34a: GPU 흐림 ↔ CPU 허용 기준 · 결정론 · 루프 · 대체 �
       const d = bloomDoc();
       result.loop = identical(draw(engGpu, d, 0), draw(engGpu, d, d.meta.frameCount));
       result.engineUploads = engGpu.stats().gpuUploads;
+      // drop-shadow: GPU 흐림을 거쳐야(업로드>0) 하고 CPU 와 허용 기준 안이어야 한다.
+      engGpu.resetGpuStats?.();
+      const gpuS = draw(engGpu, shadowDoc(), 6);
+      result.engineShadow = compare(cpuS, gpuS);
+      result.engineShadowUploads = engGpu.stats().gpuUploads;
     }
 
     // 대체 경로: WebGL2 를 거부하는 캔버스를 주입 → 'gpu' 요청해도 CPU 로 동작, 픽셀은 CPU 와 동일.
@@ -153,6 +174,7 @@ test('R34a: GPU 흐림 ↔ CPU 허용 기준 · 결정론 · 루프 · 대체 �
       console.log(`  r=${row.r}: 최대채널차=${row.maxCh}, 평균차=${row.avg.toFixed(3)}, ≤2비율=${(row.pctOk * 100).toFixed(2)}%  [기준 ${pass ? '통과' : '초과'}]  (작은단계 최대=${row.smallMax}, 평균=${row.smallAvg.toFixed(3)})`);
     }
     if (out.engineBloom) console.log(`  엔진 bloom(전체 프레임): 최대채널차=${out.engineBloom.maxCh}, 평균차=${out.engineBloom.avg.toFixed(3)}, ≤2비율=${(out.engineBloom.pctOk * 100).toFixed(2)}%`);
+    if (out.engineShadow) console.log(`  엔진 drop-shadow(전체 프레임): 최대채널차=${out.engineShadow.maxCh}, 평균차=${out.engineShadow.avg.toFixed(3)}, ≤2비율=${(out.engineShadow.pctOk * 100).toFixed(2)}%  (업로드 ${out.engineShadowUploads})`);
   }
   console.log('R34a 대체 경로:', JSON.stringify(out.fallback));
 
@@ -186,6 +208,12 @@ test('R34a: GPU 흐림 ↔ CPU 허용 기준 · 결정론 · 루프 · 대체 �
   expect(out.engineBloom.maxCh, 'bloom 채널 최대차 ≤3').toBeLessThanOrEqual(3);
   expect(out.engineBloom.avg, 'bloom 평균차 ≤0.5').toBeLessThanOrEqual(0.5);
   expect(out.engineBloom.pctOk, 'bloom (픽셀 최대차 ≤2) 비율 ≥99.5%').toBeGreaterThanOrEqual(0.995);
+
+  // drop-shadow 도 GPU 흐림을 거치고(업로드>0) 같은 허용 기준 안이어야 한다.
+  expect(out.engineShadowUploads, 'drop-shadow 가 GPU 흐림을 거쳤는지(업로드>0)').toBeGreaterThan(0);
+  expect(out.engineShadow.maxCh, 'drop-shadow 채널 최대차 ≤3').toBeLessThanOrEqual(3);
+  expect(out.engineShadow.avg, 'drop-shadow 평균차 ≤0.5').toBeLessThanOrEqual(0.5);
+  expect(out.engineShadow.pctOk, 'drop-shadow (픽셀 최대차 ≤2) 비율 ≥99.5%').toBeGreaterThanOrEqual(0.995);
 
   expect(errors, '콘솔 오류 없음').toEqual([]);
 });
